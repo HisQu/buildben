@@ -49,11 +49,11 @@ def main():
         sys.exit("💥  Project name must be a valid Python identifier")
 
     ### Resolve path to project root
-    proj_root: Path = Path(args.target_dir).expanduser().resolve() / args.name
+    pr_root: Path = Path(args.target_dir).expanduser().resolve() / args.name
     # > Warn user if project root already exists
-    if proj_root.exists():
+    if pr_root.exists():
         answer = input(
-            f"⚠️  {proj_root} exists and files may be overwritten. Continue? [y/N] "
+            f"⚠️  {pr_root} exists and files may be overwritten. Continue? [y/N] "
         ).lower()
         if answer not in {"y", "yes"}:
             sys.exit("Aborted by user")
@@ -63,15 +63,15 @@ def main():
     # =================================================================
 
     directories: list[Path] = [
-        proj_root / "tests",
-        proj_root / "assets",
-        proj_root / "examples",
-        proj_root / "experiments",
-        proj_root / ".github" / "workflows",
-        proj_root / ".github" / "workflows_inactive",
-        proj_root / "src" / args.name,
-        proj_root / "src" / args.name / "data",
-        proj_root / "src" / args.name / "images",
+        pr_root / "tests",
+        pr_root / "assets",
+        pr_root / "examples",
+        pr_root / "experiments",
+        pr_root / ".github" / "workflows",
+        pr_root / ".github" / "workflows_inactive",
+        pr_root / "src" / args.name,
+        pr_root / "src" / args.name / "data",
+        pr_root / "src" / args.name / "images",
     ]
     for dir in directories:
         dir.mkdir(parents=True, exist_ok=True)
@@ -84,17 +84,18 @@ def main():
 
     # > {<_template_filename>: <destination_filepath>}
     copies: dict[str, Path] = {
-        "_README.md": proj_root / "README.md",
-        "_gitignore": proj_root / ".gitignore",
-        "_pyproject.toml": proj_root / "pyproject.toml",
-        "_envrc": proj_root / ".envrc",
-        "_justfile": proj_root / "justfile",
-        "_flowchart.mmd": proj_root / "assets" / "flowchart.mmd",
-        "_classdiagram.mmd": proj_root / "assets" / "classdiagram.mmd",
-        "_codecov.yml": proj_root
+        "_README.md": pr_root / "README.md",
+        "_gitignore": pr_root / ".gitignore",
+        "_pyproject.toml": pr_root / "pyproject.toml",
+        "_envrc": pr_root / ".envrc",
+        "_justfile": pr_root / "justfile",
+        "_flowchart.mmd": pr_root / "assets" / "flowchart.mmd",
+        "_classdiagram.mmd": pr_root / "assets" / "classdiagram.mmd",
+        "_codecov.yml": pr_root
         / ".github"
         / "workflows_inactive"
         / "codecov.yml",
+        "_main.py": pr_root / "src" / args.name / "main.py",
     }
 
     for tmpl_fn, dst_fp in copies.items():
@@ -129,11 +130,11 @@ def main():
     # === Optional git init
     # =================================================================
     if args.git:
-        subprocess.run(["git", "init"], cwd=proj_root, check=True)
-        subprocess.run(["git", "add", "."], cwd=proj_root, check=True)
+        subprocess.run(["git", "init"], cwd=pr_root, check=True)
+        subprocess.run(["git", "add", "."], cwd=pr_root, check=True)
         subprocess.run(
             ["git", "commit", "-m", "Initial scaffold from buildben"],
-            cwd=proj_root,
+            cwd=pr_root,
             check=True,
         )
 
@@ -145,7 +146,7 @@ def main():
             f"""
             ✅  {args.name} scaffold complete!
 
-                cd "{proj_root}"
+                cd "{pr_root}"
                 direnv allow        # trust .envrc
                 just venv-reset     # set up .venv via direnv
             

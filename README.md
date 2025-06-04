@@ -10,14 +10,15 @@ Build-benedictions (or short `buildben`) is a collection of scripts to automate 
 - etc.
 
 ### Tools used:
-- `pipx`: Keeps the OS-Python clean, and as a *redundancy* for:
-  - When vscode is too dumb to find the .venv
-  - For projects that don't have build-tools in their venv-requirements. 
+- `pipx`: The recommended home for `buildben` to keep the OS-Python clean, but have a system-wide venv with dev-tools for all your projects. But `buildben` should also work with any `pip`.
+  - Installed along with `buildben`:
+  - `pip-tools`:  Used to re-compute the venv requirements.
 - `just`: For running tasks & managing build tools.
 - `direnv` (optional): Auto-loads project-specific env vars and auto-activates the venv when you cd into the repo.
 
 <hr>
 
+<!-- == Installation ============================================== -->
 ## 📦 Installation
 
 ### Prerequisites:
@@ -44,7 +45,8 @@ pipx upgrade-all                  # !! Never run pipx with sudo !!
 2. Clone & install `buildben`:
 ```bash
 git clone https://github.com/markur4/buildben.git
-pipx install -e buildben   # Editable for direct modifications.
+cd buildben         # Needed
+pipx install -e .   # Editable for direct modifications.
 ```
 
 3. Install `just`:
@@ -77,16 +79,31 @@ fi
 
 ### Verify installation:
 ```bash
-buildben-init-proj -- help
+buildben-init-proj --help
 ```
 
 <hr>
 
+
+<!-- == Usage ====================================================== -->
 ## 🚀 Usage:
-### Initialize project scaffold:
+
+### Initialize project scaffold & create venv
 ```bash
+# Initialize project scaffold:
 buildben-init-proj -n <my_project_name> -t ./ -u <my_github_username>
+cd <my_project_name> # Change directory to project root
 ```
+You will be prompted by direnv to allow the venv to activate. Say yes.
+
+### Include .direnv in vscode:
+- Copy the path to the path to the python executable (sth like: `<my_project_name>/.direnv/python-3.12.3`). 
+- Open the vscode commands palette (Ctrl+Shift+P), search for "Python: Select Interpreter".
+- Click "Search on workspace level", then "Enter interpreter path"
+- Paste the path.
+
+
+
 
 
 

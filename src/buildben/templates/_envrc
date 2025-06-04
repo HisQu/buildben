@@ -1,9 +1,22 @@
 #!/bin/bash
-# > will be copied to <my_project>/.envrc
 export PROJECT_NAME=$(basename "$PWD")
+echo "Project name: $PROJECT_NAME"
 
-layout python         # > create & activate .venv under .direnv/
-# layout python3      # => Whatever python is called in your $PATH
+#?? This is a direnv auto function. We don't use it
+layout python3 # > create & activate .venv under .direnv/
+
+# === venv ============================================================
+
+# ### Define the python executable to use:
+# export PYTHON_EXE=python3.9
+
+# ### Create .venv on first entry
+# if [[ ! -d .venv ]]; then
+#   python3 -m venv .venv              # or `uv venv` / `python -m venv`
+# fi
+# source .venv/bin/activate # > activate it
+
+# export VIRTUAL_ENV=.venv
 
 # > Uncomment to pin tool versions and forbid global pip
 # export PIP_REQUIRE_VIRTUALENV=1

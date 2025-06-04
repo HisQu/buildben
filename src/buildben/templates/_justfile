@@ -1,9 +1,12 @@
 # copied to <my_project>/justfile
+
+
 venv-reset:
     rm -rf .venv
     direnv reload
 
 deps-upgrade:
-    pip-compile requirements.in dev-requirements.in
+    pip-compile pyproject.toml
     pip-sync
+
 

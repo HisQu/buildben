@@ -3,26 +3,25 @@
 <!-- This is a comment -->
 
 <!-- == Header ==================================================== -->
+# `{my_project}`: A Template
 
-# `{my_project}`: A Cool Template
 
 <div align="center">
-<!-- <img src="https://raw.githubusercontent.com/markur4/plotastic/main/IMAGES/LOGO/plotastic_logo_3.png" width="700px" alt="logo">  -->
+<img src="https://raw.githubusercontent.com/markur4/plotastic/main/IMAGES/LOGO/plotastic_logo_3.png" width="700px" alt="logo"> 
     
 <!-- ### Badges -->
 [![Code style:
 black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-
 </div>
-
+<br>
 
 
 <!-- == Short Infos =============================================== -->
 
-{my_project} is a [command line tool, package, library, python tool,
+`{my_project}` is a [command line tool, package, library, python tool,
 etc.] to automate X. It does X, Y and Z.
 
-
+`{my_project}` was created by the [HisQu](https://hisqu.de)-team.
 
 ### Features:
 - Lorem ipsum dolor sit amet, consectetur adipiscing elit
@@ -30,7 +29,7 @@ etc.] to automate X. It does X, Y and Z.
 - Ipsum blabla bla
 
 
-<hr>
+<br>
 
 
 ## 📦 Installation
@@ -50,7 +49,7 @@ pip install -e {my_project} # Editable install (use venv)
 ```bash
 python -m {my_project} --help
 ```
-<hr>
+<br>
 
 <!-- == Usage =============================================== -->
 ## 🚀 Usage
@@ -71,7 +70,7 @@ Present a minimal example of the most important feature!
 
 <!-- == Examples =============================================== -->
 
-<hr>
+<br>
 <details><summary> <h2> 📚 <i> More Examples </i> </h2> </summary>
 <blockquote>
 
@@ -85,9 +84,17 @@ If available, link to files (e.g. .ipynb) in the examples folder!
 python -m {my_project} sample_data.csv --output plot.png
 ```
 
+<hr>
+
+### Example 2:
+```bash
+# Generate a quick plot from sample_data.csv
+python -m {my_project} sample_data.csv --output plot.png
+```
+
 </blockquote></details>
 
-
+<br>
 
 <!-- == Development ============================================= -->
 
@@ -100,6 +107,7 @@ If you found bugs or issues, please open an issue on GitHub!
 ### Hints for Devs:
 Feel free to PR anytime!
 
+<hr>
 
 ### Testing:
 !! Pytest not yet Implemented!
@@ -107,6 +115,8 @@ Feel free to PR anytime!
 pip install -e <myproject>[dev] # Install testing dependencies from pyproject.toml
 pytest                # Run tests
 ```
+
+<hr>
 
 ### Class Diagram:
 <!-- <img src="https://raw.githubusercontent.com/markur4/plotastic/main/class_diagram.svg" alt="logo"> -->

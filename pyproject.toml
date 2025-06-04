@@ -46,20 +46,23 @@ where = ["src"]                       # < Scan only src/ for packages
 # Most shall run on the std-lib!
 dependencies = [
     "pip-tools>=7.4",   # < Dependency management: pip-compile
-]
-
-# === Optional “extras” ==========  (for pip install .[dev])
-[project.optional-dependencies]
-dev = [
-    # --- Testing ----------------------
     "pytest>=8.2",
     "pytest-xdist",     # < Multi-core testing
     "pytest-cov",       # < Code-Coverage
-    # --- Linting / formatting ---------
-    # "black>=25.1",
-    # "ruff>=0.4",
-    # "mypy>=1.10",
 ]
+
+# === Optional “extras” ==========  (for pip install .[dev])
+# [project.optional-dependencies]
+# dev = [
+#     # --- Testing ----------------------
+#     "pytest>=8.2",
+#     "pytest-xdist",     # < Multi-core testing
+#     "pytest-cov",       # < Code-Coverage
+#     # --- Linting / formatting ---------
+#     # "black>=25.1",
+#     # "ruff>=0.4",
+#     # "mypy>=1.10",
+# ]
 
 # =====================================================================
 # === console-script entry points
