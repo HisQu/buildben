@@ -1,0 +1,138 @@
+---
+config:
+    title: Docker Container Architecture
+    theme: base
+    themeVariables:
+        fontSize: 20px
+        
+        # Nodes
+        primaryTextColor: "#000000"      # Black
+        primaryColor: "#999999"          # Grey
+        primaryBorderColor: "#00000099"  # Black transparent
+        
+        # Links
+        lineColor: "#0e467bee"        # Dark Blue transparent
+        secondaryColor: "#0e467b03"   # Dark Blue transparent
+        
+        # Subgraphs
+        tertiaryTextColor: "#ffffff"  # White
+        tertiaryColor: "#99999999"    # Grey transparent
+        tertiaryBorderColor: "#00000000" # Fully transparent
+---
+
+%% => Only Nodes have borders, 
+%% => Subgraphs are transparent and borderless
+%% => Subgraph color is the same as node fill color with opacity
+%% =>   (append 70 or 90 to hex color, the lower, the more transparent)
+%% => stroke widths must be set in classes at the end
+
+flowchart TB
+
+    
+    %%## System Dependencies
+    subgraph Dependencies
+        django["Django"]
+        mysqlclient["mysqlclient, pkg-config, libmariadb-dev"]
+    end
+    
+    %%## Container installed by Docker-Services
+    subgraph Docker-Services
+
+    
+        %%##Volumes
+        subgraph SharedVolumes
+            images[("images")]
+        end
+
+        
+        %%## Docker services
+        subgraph Frontend
+            direction LR
+            wikibase["wikibase"]
+            mediawiki["mediawiki"]
+            jobrunner["wikibase-jobrunner"]
+        end
+
+        subgraph Databases
+            db_wb[("db_wb")]
+            db_mw[("db_mw")]
+        end
+
+        subgraph Backend
+            holyapp["holyapp"]
+        end
+
+        subgraph WebUI-Tools
+            adminer["Adminer"]
+            WDQS["WDQS"]
+        end
+    end
+
+    subgraph ExternalVolumes
+        dbvolume[("dbvolume")]
+        db_wb_volume[("db_wb_volume")]
+    end
+    
+    wikibase["wikibase"]
+    mediawiki["mediawiki"]
+    jobrunner["wikibase-jobrunner"]
+
+
+
+    %% === Links ======================================================
+    
+    mediawiki --> db_mw
+    wikibase --> db_wb
+    
+    jobrunner -.-> wikibase 
+    
+    holyapp -. maintain .-> Databases
+    
+    holyapp <-- HTML views --> mediawiki
+    holyapp <-- API --> wikibase
+    django -.-> holyapp
+    mysqlclient -.-> holyapp
+    
+    WDQS -. query .-> db_wb
+    adminer -. inspect .-> Databases
+    
+    %% db_wb_volume -- bind mount --o db_wb
+    %% dbvolume -- bind mount --o db_mw
+    
+    db_mw --o dbvolume
+    db_wb --o db_wb_volume
+    
+    %% Shared volumes
+    %% mediawiki --o SharedVolumes
+    %% wikibase --o SharedVolumes
+    %% holyapp --o SharedVolumes
+    
+    %% === Styles ======================================================
+    
+    %% ## Links
+    %% !! Must be at end, otherwise it will not work
+
+    %% > Default
+    linkStyle default stroke-width:4px, color:#ffffff, font-size:17px, font-style:italic;
+    
+    %% > Select links by Index
+    linkStyle 10,11 stroke: #7eb8f0
+
+
+    %% ## Node styles (primary color
+    classDef docker fill: #7eb8f0,  stroke-width:2px;
+    classDef dependency stroke-width:2px;
+    classDef flow_docker fill: #7eb8f0, stroke-width:2px;
+    
+    %% > Assign class to nodes
+    class adminer,WDQS,jobrunner,mediawiki,holyapp,db_mw,db_wb,images,wikibase,dbvolume,db_wb_volume docker;
+    class django,mysqlclient dependency;
+
+
+
+    %% ## Subgraph styles (tertiary)
+    classDef subgraph_default stroke-width:2px;
+    classDef subgraph_blue fill: #7eb8f070, stroke-width:0px;
+    
+    class Dependencies,ExternalVolumes subgraph_default;
+    class Docker-Services,Frontend,Databases,Backend,WebUI-Tools,SharedVolumes subgraph_blue;

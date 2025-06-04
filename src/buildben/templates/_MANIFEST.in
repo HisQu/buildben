@@ -1,0 +1,13 @@
+
+### include the same patterns so sdist ≃ wheel
+
+### Inside src (Usually handled by pyproject.toml, still put it here)
+recursive-include src/<my_project>/data *.xlsx
+recursive-include src/<my_project>/images *.png *.jpg
+
+### Outside src (project root):
+include examples/*.ipynb
+include experiments/*.ipynb
+include config/*.ini
+
+# TODO: Explore tools that replace this, like hatchling or uv

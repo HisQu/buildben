@@ -1,0 +1,91 @@
+---
+config:
+    title: llm_tool
+    theme: base
+    themeVariables:
+        fontSize: 20px
+        
+        # Nodes
+        primaryTextColor: "#000000"      # Black
+        primaryColor: "#999999"          # Grey
+        primaryBorderColor: "#00000099"  # Black transparent
+        
+        # Links
+        lineColor: "#0e467bee"        # Dark Blue transparent
+        secondaryColor: "#0e467b03"   # Dark Blue transparent
+        
+        # Subgraphs
+        tertiaryTextColor: "#ffffff"  # White
+        tertiaryColor: "#99999999"    # Grey transparent
+        tertiaryBorderColor: "#00000000" # Fully transparent
+---
+
+
+
+classDiagram 
+    
+
+    class LLMClient{
+        api_key: str
+        api_url: str
+        model: str
+        ...
+        from_env() -> LLMClient
+        prompt() -> str | None
+        ...()
+    }
+    
+    class LLMTool{
+        llm_client: LLMClient
+        context_provider:ContextProvider
+        ...()
+    }
+    
+
+    class CloisterIdentifier{
+        prompt_default: str
+        ...
+        execute(input) -> str | None
+        ...()
+    }
+    
+    class ContextProvider{
+        provide_context(input) -> str
+        ...()
+    }
+    
+    
+    class PseudoRAG{
+        ...
+        ...()
+    }
+    
+    class RAG{
+        ...
+        ...()
+    }
+    
+    
+    %% ## Connections
+    %% > Inheritance: "is-a", Empty arrow: <|--, Points towards the parent
+    %% > Composition: "part-of", Filled diamond: --*, Points towards the whole
+    %% > Aggregation: "used-by", Open diamond: --o, Points towards the user
+    %% > Dependency: "depends-on", Dotted line: ..>, Points towards the dependency
+    
+    LLMClient --* LLMTool : "part-of"
+    ContextProvider --o LLMTool : "used-by"
+    
+    ContextProvider <|-- PseudoRAG : "is-a"
+    ContextProvider <|-- RAG : "is-a"
+    
+    LLMTool <|-- CloisterIdentifier : "is-a"
+    LLMTool <|-- Tool1 : "is-a"
+    LLMTool <|-- Tool2 : "is-a"
+    LLMTool <|-- Tool3 : "is-a"
+    
+    %% ?? I want the arrow stroke width to be thicker, but that works only in Flowcharts, not classDiagram
+    %% linkStyle default stroke-width:4px, color:#ffffff, font-size:17px, font-style:italic;
+    %% linkStyle default font-style:italic,
+    %% linkStyle default color:#ffffff,
+        %% > Default
+    

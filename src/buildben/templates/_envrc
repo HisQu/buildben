@@ -1,0 +1,10 @@
+#!/bin/bash
+# > will be copied to <my_project>/.envrc
+export PROJECT_NAME=$(basename "$PWD")
+
+layout python         # > create & activate .venv under .direnv/
+# layout python3      # => Whatever python is called in your $PATH
+
+# > Uncomment to pin tool versions and forbid global pip
+# export PIP_REQUIRE_VIRTUALENV=1
+# export PIPX_HOME=$PWD/.build-tools

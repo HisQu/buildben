@@ -1,0 +1,78 @@
+# =====================================================================
+# === Build backend & settings
+# =====================================================================
+[build-system]
+requires      = ["setuptools>=68", "wheel"]        # or "hatchling", "flit_core", etc.
+build-backend = "setuptools.build_meta"
+
+# =====================================================================
+# === Project metadata (PEP 621)
+# =====================================================================
+[project]
+name        = "buildben"          # < will be replaced by scaffold script
+version     = "0.1.0"
+description = "Developer CLI helpers (init-project, etc.)"
+authors     = [{ name = "markur4", email = "you@example.com" }]
+readme      = "README.md"
+license     = "MIT"
+requires-python = ">=3.12"
+
+
+# =====================================================================
+# === Packaging
+# =====================================================================
+
+# === src-layout switches =======
+[tool.setuptools]
+package-dir = { "" = "src" }          # < Root package lives in src/
+
+[tool.setuptools.packages.find]
+where = ["src"]                       # < Scan only src/ for packages
+# namespaces = true                     # < Implicit namespace packages ok
+
+# === Include data *inside* the package =======
+[tool.setuptools.package-data]
+"buildben" = [
+    "**/*.sh",         # src/buildben/**/*.sh/
+    "templates/**/*",  # src/buildben/templates/**/*
+    ]
+
+
+# =====================================================================
+# === Dependencies 
+# =====================================================================
+
+# === Runtime dependencies =======  (will land in requirements.txt)
+# Most shall run on the std-lib!
+dependencies = [
+    "pip-tools>=7.4",   # < Dependency management: pip-compile
+]
+
+# === Optional “extras” ==========  (for pip install .[dev])
+[project.optional-dependencies]
+dev = [
+    # --- Testing ----------------------
+    "pytest>=8.2",
+    "pytest-xdist",     # < Multi-core testing
+    "pytest-cov",       # < Code-Coverage
+    # --- Linting / formatting ---------
+    # "black>=25.1",
+    # "ruff>=0.4",
+    # "mypy>=1.10",
+]
+
+# =====================================================================
+# === console-script entry points
+# =====================================================================
+
+[project.scripts]
+buildben-init-proj = "buildben.init_proj:main"
+
+
+# =====================================================================
+# === Tool configurations
+# =====================================================================
+
+[tool.pip-tools]
+generate-hashes = true
+requirement-files = ["requirements.txt"]

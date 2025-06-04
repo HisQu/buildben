@@ -1,0 +1,132 @@
+# =====================================================================
+# === Build backend & settings
+# =====================================================================
+[build-system]
+requires      = ["setuptools>=68", "wheel"]        # or "hatchling", "flit_core", etc.
+build-backend = "setuptools.build_meta"
+
+# =====================================================================
+# === Project metadata (PEP 621)
+# =====================================================================
+[project]
+name        = "<my_project>"          # < will be replaced by scaffold script
+version     = "0.1.0"
+description = "Short, one-line summary."
+authors     = [{ name = "<github_username>", email = "you@example.com" }]
+readme      = "README.md"
+license     = { text = "MIT" }
+requires-python = ">=3.12"
+
+
+# =====================================================================
+# === Packaging
+# =====================================================================
+
+# === src-layout switches =======
+[tool.setuptools]
+package-dir = { "" = "src" }          # < Root package lives in src/
+
+[tool.setuptools.packages.find]
+where = ["src"]                       # < Scan only src/ for packages
+# namespaces = true                     # < Implicit namespace packages ok
+
+# === Include data *inside* the package =======
+
+[tool.setuptools.package-data]
+"<my_project>" = [
+    "data/**/*.xlsx",         # src/<my_project>/data/
+    "images/**/*.{png,jpg}",  # src/<my_project>/images/
+    ]
+
+# === Include data *outside* the package (e.g. top-level docs/) ====
+# > Installs into <sys.prefix>/share/<my_project>
+# !! Requires a MANIFEST.in! 
+# TODO: Find solution to get rid of MANIFEST.in (hatchling..?)
+# [tool.setuptools.data-files]
+# "share/<my_project>/experiments" = ["experiments/*.ipynb"]
+# "share/<my_project>/examples" = ["examples/*.ipynb"]
+# "share/<my_project>/config"   = ["config/*.ini"]
+
+# =====================================================================
+# === Dependencies
+# =====================================================================
+
+# === Runtime dependencies =======  (will land in requirements.txt)
+dependencies = [
+    # --- Core packages ------------------
+    "ipykernel",
+    "dotenv",        # < Loads .env files
+    "tqdm",          # < Progress bars
+    # --- Numerical ----------------------
+    "numpy",
+    "openpyxl",      # < Opens excel files
+    "pandas",
+    # --- Plotting -----------------------
+    "matplotlib",
+    "seaborn",
+    # "plotastic",
+    # "scipy",
+    # --- Machine learning --------------
+    # "scikit-learn",
+    # "tiktoken",
+    # "openai",
+    # "torch",
+]
+
+# === Optional “extras” ==========  (for pip install .[dev])
+[project.optional-dependencies]
+dev = [
+    # --- Testing ----------------------
+    "pytest>=8.2",
+    "pytest-xdist",     # < Multi-core testing
+    "pytest-cov",       # < Code-Coverage
+    # --- Linting / formatting ---------
+    "black>=25.1",
+    # "ruff>=0.4",
+    # "mypy>=1.10",
+    # --- Packaging helpers ------------
+    "pip-tools>=7.4",   # < Dependency management: pip-compile
+]
+
+# =====================================================================
+# === Tool configurations
+# =====================================================================
+
+# Black code-formatter defaults
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+exclude = '''
+/(
+    \.venv
+  | \.direnv
+  | build
+  | dist
+)/
+'''  # TOML uses single quotes for regex; see Black docs
+
+# Ruff (linter) – keep rules in sync with Black
+# [tool.ruff]
+# line-length = 88
+# unsafe-fixes = true
+
+# Pytest: minimal example
+[tool.pytest.ini_options]
+# addopts = "-ra -q"   # < run tests quietly, show only errors and warnings
+testpaths = ["tests"]
+
+# Pip-tools behaviour (only respected when you call pip-compile)
+[tool.pip-tools]
+generate-hashes = true
+requirement-files = [
+    "requirements.txt",            # pins runtime deps
+    "dev-requirements.txt",        # pins extras.dev
+]
+
+# Just – optional, but makes 'just --list' self-documenting
+[tool.just]
+shell = "bash"
+
+# ===========================
+# End of file
+# ===========================
