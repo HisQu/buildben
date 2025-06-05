@@ -33,6 +33,9 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 `buildben` is a collection of scripts to integrate common developer tools
 (e.g. `just`) and automate tasks.
 
+<hr>
+</div>
+
 #### Features:
 <!-- Summarize the top 3 features -->
 - Automate development workflows
@@ -44,8 +47,7 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 - **`pip-tools`**: Used to re-compute the venv requirements and sync them.
 - **`direnv`**: Auto-loads project-specific env vars and provides useful one-liners for environment management.
 - **`just`**: For running tasks & managing build tools.
-<hr>
-</div>
+  
 <br>
 
 <!-- ============================================================== -->
