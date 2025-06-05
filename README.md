@@ -27,7 +27,8 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 <div style="width: 85%; margin: 2rem auto; text-align: justify;">
 <hr>
 
-`buildben` is a collection of scripts to automate developer tasks like.
+`buildben` is a collection of scripts to integrate common developer tools
+(e.g. `just`) and automate tasks.
 
 #### Features:
 <!-- Summarize the top 3 features -->
