@@ -1,22 +1,20 @@
 #!/bin/bash
+# Template from buildben copied to <my_project>/.envrc
+# !! This script is executes EVERY TIME you enter the directory !!
+
+# === Environment Variables ===========================================
+
 export PROJECT_NAME=$(basename "$PWD")
 echo "Project name: $PROJECT_NAME"
+
+# === direnv / venv ===================================================
 
 #?? This is a direnv auto function. We don't use it
 layout python3 # > create & activate .venv under .direnv/
 
-# === venv ============================================================
-
-# ### Define the python executable to use:
-# export PYTHON_EXE=python3.9
-
-# ### Create .venv on first entry
-# if [[ ! -d .venv ]]; then
-#   python3 -m venv .venv              # or `uv venv` / `python -m venv`
-# fi
-# source .venv/bin/activate # > activate it
-
-# export VIRTUAL_ENV=.venv
+# > Check if pip-tools is installed, if not, install it
+python -m pip show pip-tools >/dev/null 2>&1 ||
+    python -m pip install --quiet "pip-tools>=7.4"
 
 # > Uncomment to pin tool versions and forbid global pip
 # export PIP_REQUIRE_VIRTUALENV=1

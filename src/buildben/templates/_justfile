@@ -1,12 +1,38 @@
-# copied to <my_project>/justfile
+# Template from buildben copied to <my_project>/justfile
+# This is a collection of recipes callable from the CLI
+# e.g.: > just ve-install
+# Just ask ChatGPT for recipes, or see https://just.systems/man/en/
+# Dependencies: python3, direnv
+
+# Allow `just deps-sync --upgrade --dry-run` pattern
+set shell := ["bash", "-cu"]
+
+# === Virtual-env helpers =============================================
+
+reset:
+    rm -rf .direnv        
+    direnv reload      # direnv will rebuild on reload
+    direnv exec . just install-deps  # Make requirements.txt & install deps
 
 
-venv-reset:
-    rm -rf .venv
-    direnv reload
+# === Dependency management ===========================================
 
-deps-upgrade:
-    pip-compile pyproject.toml
-    pip-sync
+# Creates or refreshes the venv that `layout python` manages.
+# Freeze/lock → install requirements.txt + dev-requirements.txt
+install-deps *ARGS:
+    pip-compile pyproject.toml -o requirements.txt {{ARGS}}
+    pip-compile --extra dev pyproject.toml -o dev-requirements.txt {{ARGS}}
+    pip-sync requirements.txt dev-requirements.txt  
 
 
+# Upgrade all pins in-place
+upgrade:                        
+    pip-compile --extra dev --upgrade pyproject.toml \
+                --output-file requirements.txt
+    pip-sync  requirements.txt
+
+
+# === Shortcuts / CI entrypoint =======================================
+
+# Runs when you type just
+# default: install-deps             

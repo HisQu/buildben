@@ -16,6 +16,26 @@ authors     = [{ name = "<github_username>", email = "you@example.com" }]
 readme      = "README.md"
 license     = { text = "MIT" }
 requires-python = ">=3.12"
+dependencies = [ # (will land in requirements.txt)
+    # --- Core packages ------------------
+    "ipykernel",
+    "dotenv",        # < Loads .env files
+    "tqdm",          # < Progress bars
+    # --- Numerical ----------------------
+    "numpy",
+    "openpyxl",      # < Opens excel files
+    "pandas",
+    # --- Plotting -----------------------
+    "matplotlib",
+    "seaborn",
+    # "plotastic",
+    # "scipy",
+    # --- Machine learning --------------
+    # "scikit-learn",
+    # "tiktoken",
+    # "openai",
+    # "torch",
+]
 
 
 # =====================================================================
@@ -51,31 +71,13 @@ where = ["src"]                       # < Scan only src/ for packages
 # === Dependencies
 # =====================================================================
 
-# === Runtime dependencies =======  (will land in requirements.txt)
-dependencies = [
-    # --- Core packages ------------------
-    "ipykernel",
-    "dotenv",        # < Loads .env files
-    "tqdm",          # < Progress bars
-    # --- Numerical ----------------------
-    "numpy",
-    "openpyxl",      # < Opens excel files
-    "pandas",
-    # --- Plotting -----------------------
-    "matplotlib",
-    "seaborn",
-    # "plotastic",
-    # "scipy",
-    # --- Machine learning --------------
-    # "scikit-learn",
-    # "tiktoken",
-    # "openai",
-    # "torch",
-]
+
 
 # === Optional “extras” ==========  (for pip install .[dev])
 [project.optional-dependencies]
 dev = [
+    # --- Packaging helpers ------------
+    "pip-tools>=7.4",   # < Dependency management: pip-compile
     # --- Testing ----------------------
     "pytest>=8.2",
     "pytest-xdist",     # < Multi-core testing
@@ -84,8 +86,6 @@ dev = [
     "black>=25.1",
     # "ruff>=0.4",
     # "mypy>=1.10",
-    # --- Packaging helpers ------------
-    "pip-tools>=7.4",   # < Dependency management: pip-compile
 ]
 
 # =====================================================================
@@ -115,13 +115,6 @@ exclude = '''
 # addopts = "-ra -q"   # < run tests quietly, show only errors and warnings
 testpaths = ["tests"]
 
-# Pip-tools behaviour (only respected when you call pip-compile)
-[tool.pip-tools]
-generate-hashes = true
-requirement-files = [
-    "requirements.txt",            # pins runtime deps
-    "dev-requirements.txt",        # pins extras.dev
-]
 
 # Just – optional, but makes 'just --list' self-documenting
 [tool.just]
