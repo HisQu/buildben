@@ -1,0 +1,96 @@
+---
+config:
+    title: build-ben runtime helpers
+    theme: base
+    themeVariables:
+        fontSize: 20px
+        
+        # Nodes
+        primaryTextColor: "#000000"      # Black
+        primaryColor: "#999999"          # Grey
+        primaryBorderColor: "#00000099"  # Black transparent
+        
+        # Links
+        lineColor: "#0e467bee"        # Dark Blue transparent
+        secondaryColor: "#0e467b03"   # Dark Blue transparent
+        
+        # Subgraphs
+        tertiaryTextColor: "#ffffff"  # White
+        tertiaryColor: "#99999999"    # Grey transparent
+        tertiaryBorderColor: "#00000000" # Fully transparent
+---
+
+
+
+classDiagram
+    %% ───────────────────────────  Classes  ───────────────────────────
+    
+    class buildben{
+        +templates for justfile, .envrc, 
+        +init-project()
+        +deps()
+        +reset-direnv()
+        ...
+    }
+
+    class direnv{
+        +layout python()
+        +exec()
+    }
+
+    class pip-tools{
+        +pip-compile()
+        +pip-sync()
+    }
+
+    class OS-pip-pipx{
+        +install()
+
+    }
+
+    class just{
+        +recipes()
+        +variables()
+    }
+    
+    class venv{
+    }
+    
+    class venv-pip{
+    }
+    
+    class justfile{
+    }
+    
+    class envrc{
+    }
+    
+    class requirements_txt{
+    }
+
+    %% ─────────────────────────── Relationships ───────────────────────
+    
+    %% ## Connections
+    %% > Inheritance: "is-a", Empty arrow: <|--, Points towards the parent
+    %% > Composition: "part-of", Filled diamond: --*, Points towards the whole
+    %% > Aggregation: "used-by", Open diamond: --o, Points towards the user
+    %% > Dependency: "depends-on", Dotted line: ..>, Points from the dependent to the supplier (supplier=dependency)
+    
+    %% BuildBen uses each helper
+    OS-pip-pipx <.. buildben : "installed by"
+    buildben ..> direnv : 
+    direnv ..> venv : "auto-creates and activates"
+    buildben ..> just : 
+    buildben ..> pip-tools : 
+    
+    venv-pip o-- venv
+    justfile o-- venv
+    envrc o-- venv
+    requirements_txt o-- venv
+    
+    pip-tools <.. requirements_txt : "created by"
+    
+    %% helpers depend on each other at run-time
+    %% pip-tools ..> direnv : "runs inside venv"
+    just ..> direnv : "recipes call direnv exec"
+    %% OS-pip-pipx ..> pip-tools : "option B: python -m piptools"

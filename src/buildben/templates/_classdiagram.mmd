@@ -70,7 +70,7 @@ classDiagram
     %% > Inheritance: "is-a", Empty arrow: <|--, Points towards the parent
     %% > Composition: "part-of", Filled diamond: --*, Points towards the whole
     %% > Aggregation: "used-by", Open diamond: --o, Points towards the user
-    %% > Dependency: "depends-on", Dotted line: ..>, Points towards the dependency
+    %% > Dependency: "depends-on", Dotted line: ..>, Points from the dependent to the supplier (supplier=dependency)
     
     LLMClient --* LLMTool : "part-of"
     ContextProvider --o LLMTool : "used-by"
