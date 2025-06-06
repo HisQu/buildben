@@ -41,6 +41,9 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 - Automate development workflows
 - Standardized project setup
 - Dependency management tools
+
+
+
 #### Main dependencies:
 <!-- List your main dependencies here and explain why they're important. -->
 - **`pipx`**: The recommended home for `buildben` to keep the OS-Python clean
@@ -49,6 +52,11 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 - **`just`**: For running tasks & managing build tools.
   
 <br>
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/HisQu/buildben/main/assets/flowchart.svg" 
+       width="800px" alt="Management of Virtual Environments & Dependencies" >
+</div>
 
 <!-- ============================================================== -->
 <!-- == Installation ============================================== -->
