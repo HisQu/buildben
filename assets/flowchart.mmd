@@ -35,37 +35,33 @@ flowchart TD
         PIP[pip_or_pipx]
         J[just]
 
-        
         PIP -->|installs| B
     end
     
     B -->|provides template scaffold| ProjectDirectory
-    D -->|is used by| ERC
-    J -->|is used by | JF
-    D -->|is called by| JF
+    D -->|executes| ERC
+    J -->|executes | JF
+    D -->|applies environment| JF
     
     subgraph VirtualEnvironment
         PT[pip-tools]
         PD[python_dependencies]
+        
         PT -->|installs| PD
     end
 
     subgraph ProjectDirectory
         JF[justfile]
         RE[requirements.txt dev_requirements.txt]
-        
         ERC[.envrc]
         PPRT[pyproject.toml]
     end
 
+    ERC -->|interacts| JF
     ERC-->|creates & activates| VirtualEnvironment
-    %% PPRT -->|installs dependencies| VirtualEnvironment
-    
-   
-    %% D-->|resets| VirtualEnvironment
-    JF -->|calls| PT -->|creates| RE 
+    JF -->|runs commands| PT -->|compiles & syncs| RE 
     PPRT -->|is read by| PT
-    ERC-->|installs| PT
+    ERC -->|installs| PT
     %% PT -->|reads| PPRT
     %% PT -->|creates| RE
     %% PT -->|creates| RED
@@ -97,8 +93,8 @@ flowchart TD
     
     %% %% > Select links by Index
     linkStyle 1 stroke: #7eb8f0, stroke-width:5px;
-    linkStyle 5,8,9 stroke: #7ef089
-    linkStyle 0,5,10 stroke:#7eb8f0
+    linkStyle 0,5,11 stroke: #7eb8f0
+    linkStyle 9,10 stroke: #7ef089
 
 
     %% %% ## Node styles (primary color
