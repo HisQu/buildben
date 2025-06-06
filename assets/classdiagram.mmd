@@ -25,48 +25,59 @@ config:
 classDiagram
     %% ───────────────────────────  Classes  ───────────────────────────
     
-    class buildben{
-        +templates for justfile, .envrc, 
-        +init-project()
-        +deps()
-        +reset-direnv()
-        ...
-    }
+    subgraph globalenvironment
+        class buildben{
+            +templates for justfile, .dot_envrc, 
+            +init-project()
+            +init-experiment()
+            ...
+            }
 
-    class direnv{
-        +layout python()
-        +exec()
-    }
+        class direnv{
+            +layout python()
+            +exec()
+        }
 
-    class pip-tools{
-        +pip-compile()
-        +pip-sync()
-    }
+        class pip_or_pipx{
+            +install()
+        }
 
-    class OS-pip-pipx{
-        +install()
+        class just{
+            +recipes()
+            +variables()
+        }
+    
+    end
+    
+        
+    namespace virtual_environment{
+        class pip-tools{
+            +pip-compile()
+            +pip-sync()
+        }
 
-    }
-
-    class just{
-        +recipes()
-        +variables()
+        class python_dependencies{
+        }
+        
     }
     
-    class venv{
+    namespace project_directory{
+        class venv{
+        }
+        class justfile{
+            +reset-venv()
+            +install-deps()
+        }
+        
+        class dot_envrc{
+        }
+        
+        class requirements_txt{
+        }
+        
     }
     
-    class venv-pip{
-    }
-    
-    class justfile{
-    }
-    
-    class envrc{
-    }
-    
-    class requirements_txt{
-    }
+
 
     %% ─────────────────────────── Relationships ───────────────────────
     
@@ -77,20 +88,40 @@ classDiagram
     %% > Dependency: "depends-on", Dotted line: ..>, Points from the dependent to the supplier (supplier=dependency)
     
     %% BuildBen uses each helper
-    OS-pip-pipx <.. buildben : "installed by"
-    buildben ..> direnv : 
-    direnv ..> venv : "auto-creates and activates"
-    buildben ..> just : 
-    buildben ..> pip-tools : 
+    %% pip_or_pipx <.. buildben : "installed by"
+    %% pip_or_pipx <.. buildben : "installed by"
+    %% buildben ..> direnv : 
+    dot_envrc <.. venv : "auto-creates and activates"
+    %% buildben ..> just : 
+    %% buildben ..> pip-tools : 
     
-    venv-pip o-- venv
-    justfile o-- venv
-    envrc o-- venv
-    requirements_txt o-- venv
     
-    pip-tools <.. requirements_txt : "created by"
+    %% dot_envrc ..> direnv
+    %% venv o-- pip-tools
     
-    %% helpers depend on each other at run-time
-    %% pip-tools ..> direnv : "runs inside venv"
-    just ..> direnv : "recipes call direnv exec"
-    %% OS-pip-pipx ..> pip-tools : "option B: python -m piptools"
+
+    %% just ..> direnv : "recipes call direnv exec"
+    %% just <.. justfile
+    %% justfile ..> direnv
+    %% justfile ..> pip-tools
+
+    
+    %% requirements_txt ..> justfile : created by
+
+
+    %% relationships
+    buildben ..> direnv
+    buildben ..> just
+    pip_or_pipx  ..> buildben : "installed by"
+
+    %% direnv ..> virtual_environment.Venv : "creates/activates"
+    %% project_directory -->* virtual_environment.Venv : ".direnv/"
+    %% venv *-- pip-tools
+    %% venv *-- python_dependencies
+
+    dot_envrc ..> direnv
+    justfile ..> direnv
+    justfile ..> pip-tools
+    dot_envrc <.. pip-tools : "installed by"
+    just <.. justfile
+    requirements_txt ..> justfile : "generated from"

@@ -1,0 +1,119 @@
+---
+config:
+    title: Management of Virtual Environments & Dependencies
+    theme: base
+    themeVariables:
+        fontSize: 20px
+        
+        # Nodes
+        primaryTextColor: "#000000"      # Black
+        primaryColor: "#999999"          # Grey
+        primaryBorERCrColor: "#00000099"  # Black transparent
+        
+        # Links
+        lineColor: "#0e467bee"        # Dark Blue transparent
+        secondaryColor: "#0e467b03"   # Dark Blue transparent
+        
+        # Subgraphs
+        tertiaryTextColor: "#ffffff"  # White
+        tertiaryColor: "#99999999"    # Grey transparent
+        tertiaryBorERCrColor: "#00000000" # Fully transparent
+---
+
+%% => Only Nodes have borders, 
+%% => Subgraphs are transparent and borderless
+%% => Subgraph color is the same as node fill color with opacity
+%% =>   (append 70 or 90 to hex color, the lower, the more transparent)
+%% => stroke widths must be set in classes at the end
+
+
+flowchart TD
+    subgraph GlobalEnvironment
+        %% B[buildben] -->|uses| D[direnv]
+        D[direnv]
+        B[buildben]
+        PIP[pip_or_pipx]
+        J[just]
+
+        
+        PIP -->|installs| B
+    end
+    
+    B -->|provides template scaffold| ProjectDirectory
+    D -->|is used by| ERC
+    J -->|is used by | JF
+    D -->|is called by| JF
+    
+    subgraph VirtualEnvironment
+        PT[pip-tools]
+        PD[python_dependencies]
+        PT -->|installs| PD
+    end
+
+    subgraph ProjectDirectory
+        JF[justfile]
+        RE[requirements.txt dev_requirements.txt]
+        
+        ERC[.envrc]
+        PPRT[pyproject.toml]
+    end
+
+    ERC-->|creates & activates| VirtualEnvironment
+    %% PPRT -->|installs dependencies| VirtualEnvironment
+    
+   
+    %% D-->|resets| VirtualEnvironment
+    JF -->|calls| PT -->|creates| RE 
+    PPRT -->|is read by| PT
+    ERC-->|installs| PT
+    %% PT -->|reads| PPRT
+    %% PT -->|creates| RE
+    %% PT -->|creates| RED
+    
+    
+    
+    %% === Styles ======================================================
+
+    style B fill:#7eb8f0
+    %% style D fill:#666,stroke:#000
+    %% style J fill:#666,stroke:#000
+    %% style PIP fill:#999,stroke:#000
+    %% style V fill:#ccc,stroke:#000
+    %% style PT fill:#ccc,stroke:#000
+    %% style JF fill:#eee,stroke:#000
+    %% style RE fill:#eee,stroke:#000
+    %% style ERC fill:#eee,stroke:#000
+
+
+
+
+
+    
+    %% %% ## Links
+    %% %% !! Must be at end, otherwise it will not work
+
+    %% %% > default
+    linkStyle default stroke-width:2px, color:#ffffff, font-size:17px, font-style:italic;
+    
+    %% %% > Select links by Index
+    linkStyle 1 stroke: #7eb8f0, stroke-width:5px;
+    linkStyle 5,8,9 stroke: #7ef089, stroke-width:2px;
+
+
+    %% %% ## Node styles (primary color
+    %% classdef docker fill: #7eb8f0,  stroke-width:2px;
+    %% classdef dependency stroke-width:2px;
+    %% classdef flow_docker fill: #7eb8f0, stroke-width:2px;
+    
+    %% %% > Assign class to nodes
+    %% class adminer,WDQS,jobrunner,mediawiki,holyapp,db_mw,db_wb,images,wikibase,dbvolume,db_wb_volume docker;
+    %% class django,mysqlclient dependency;
+
+
+
+    %% %% ## Subgraph styles (tertiary)
+    %% classdef subgraph_ERCfault stroke-width:2px;
+    %% classdef subgraph_blue fill: #7eb8f070, stroke-width:0px;
+    
+    %% class dependencies,ExternalVolumes subgraph_default;
+    %% class Docker-Services,Frontend,Databases,Backend,WebUI-Tools,SharedVolumes subgraph_blue;
