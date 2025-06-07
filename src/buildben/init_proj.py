@@ -84,18 +84,21 @@ def main():
 
     # > {<_template_filename>: <destination_filepath>}
     copies: dict[str, Path] = {
-        "_README.md": pr_root / "README.md",
         "_gitignore": pr_root / ".gitignore",
         "_pyproject.toml": pr_root / "pyproject.toml",
         "_envrc": pr_root / ".envrc",
         "_justfile": pr_root / "justfile",
-        "_flowchart.mmd": pr_root / "assets" / "flowchart.mmd",
-        "_classdiagram.mmd": pr_root / "assets" / "classdiagram.mmd",
         "_codecov.yml": pr_root
         / ".github"
         / "workflows_inactive"
         / "codecov.yml",
         "_main.py": pr_root / "src" / args.name / "main.py",
+        ### These are git-ignored until manually renamed (marked by bb_template.)
+        "_README.md": pr_root / "README.bb_template.md",
+        "_flowchart.mmd": pr_root / "assets" / "flowchart.bb_template.mmd",
+        "_classdiagram.mmd": pr_root
+        / "assets"
+        / "classdiagram.bb_template.mmd",
     }
 
     for tmpl_fn, dst_fp in copies.items():

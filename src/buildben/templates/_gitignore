@@ -7,6 +7,9 @@ db/
 .alt/
 .old/
 
+# === buildben templates ===============================================
+*.bb_template*
+
 # === Development ======================================================
 .devtools/
 .vscode/
