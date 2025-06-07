@@ -2,43 +2,64 @@
 set -euo pipefail # < safer bash
 
 # === Update APT & install zsh ========================================
-sudo apt update
-sudo apt install -y zsh git curl direnv
+sudo apt update || echo "apt update didn't work"
+sudo apt install -y zsh git curl || echo "not installing zsh git curl"
 
-### Install Oh-My-Zsh (non-interactive)
-export RUNZSH=no # < do not start zsh automatically
-export CHSH=no   # < don’t try to chsh inside a script
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" --unanattended
 
-# === Install Plugins =================================================
+
+# === Install Oh-My-Zsh (non-interactive) ============================
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" 
+
+
+# === Locate plugin folder and .zshrc ====================================
+ZSH_CUSTOM="${ZSH_CUSTOM:-${ZSH:-$HOME/.oh-my-zsh}/custom}"
+ZDOT="${ZDOTDIR:-$HOME}" # < respect ZDOTDIR if user set it
+RCFILE="$ZDOT/.zshrc"
+
+
+# ======================================================================
+# ======================================================================
+
+
+# ===  Theme  =================================================
 ### Define where custom stuff lives
 # > $ZSH is set by the installer (default: ~/.oh-my-zsh)
-ZSH_CUSTOM="${ZSH_CUSTOM:-${ZSH:-$HOME/.oh-my-zsh}/custom}"
 
 ### Install powerlevel10k theme
 git clone --depth=1 https://github.com/romkatv/powerlevel10k.git \
     "$ZSH_CUSTOM/themes/powerlevel10k"
 
+
+### Set Theme
+grep -q '^ZSH_THEME="powerlevel10k/powerlevel10k"' "$RCFILE" ||
+    sed -i '' 's/^ZSH_THEME=.*/ZSH_THEME="powerlevel10k\/powerlevel10k"/' "$RCFILE"
+
+# => RESTART THE TERMINAL AND GO THROUGH THE SETUP
+
+
+# === Syntax Highlighting ==========================
+
 ### Install zsh-syntax-highlighting plugin
 git clone --depth=1 https://github.com/zsh-users/zsh-syntax-highlighting.git \
     "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting"
 
-# === Enable the theme & plugins in ~/.zshrc ==========================
-ZDOT="${ZDOTDIR:-$HOME}" # < respect ZDOTDIR if user set it
-RCFILE="$ZDOT/.zshrc"
 
-### Add the theme if not present
-grep -q '^ZSH_THEME="powerlevel10k/powerlevel10k"' "$RCFILE" ||
-    sed -i 's/^ZSH_THEME=.*/ZSH_THEME="powerlevel10k\/powerlevel10k"/' "$RCFILE"
-
-### Add plugin to plugins=(...) list (idempotent)
+### Add plugin to plugins=(...) list 
 if ! grep -q 'zsh-syntax-highlighting' "$RCFILE"; then
-    sed -i 's/^plugins=(/plugins=(zsh-syntax-highlighting /' "$RCFILE"
+    sed -i '' 's/^plugins=(/plugins=(zsh-syntax-highlighting /' "$RCFILE"
 fi
 
-### Add direnv plugin (or just the hook) if missing
+
+
+
+# ===  direnv =================================================
+
+### Install direnv
+sudo apt install -y direnv || brew install direnv
+
+### Add plugin to plugins=(...) list 
 if ! grep -q 'direnv ' "$RCFILE"; then
-    sed -i 's/^plugins=(/plugins=(direnv /' "$RCFILE"
+    sed -i '' 's/^plugins=(/plugins=(direnv /' "$RCFILE"
 fi
 # > Fallback: ensure the hook line is present even without the plugin
 if ! grep -q 'direnv hook zsh' "$RCFILE"; then
