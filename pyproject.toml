@@ -69,7 +69,7 @@ dependencies = [
 # =====================================================================
 
 [project.scripts]
-buildben-init-proj = "buildben.init_proj:main"
+buildben = "buildben.cli:main"
 
 
 # =====================================================================
