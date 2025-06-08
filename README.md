@@ -118,6 +118,13 @@ if ! grep -q 'direnv hook zsh' "$RCFILE"; then
 fi
 ```
 
+1. For drawing PlantUML-diagrams, we need Java (e.g.`temurin`) & `graphviz`:
+```bash
+sudo apt-get install temurin-21-jdk graphviz     # For Ubuntu
+# brew install temurin graphviz                  # For MacOS
+# winget install EclipseAdoptium.Temurin.21.JDK  # Windows 
+winget install -e --id Graphviz.Graphviz
+```
 
 ### Verify installation:
 ```bash
