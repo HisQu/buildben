@@ -54,7 +54,7 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 <br>
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/HisQu/buildben/main/assets/flowchart.svg" 
+  <img src="https://raw.githubusercontent.com/HisQu/buildben/main/assets/diagram/diagram.svg" 
        width="800px" alt="Management of Virtual Environments & Dependencies" >
 </div>
 
