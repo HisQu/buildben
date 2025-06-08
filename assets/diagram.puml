@@ -4,16 +4,17 @@ left to right direction
 
 ' === Global look & feel =============
 skinparam defaultFontSize 20
-skinparam BackgroundColor #bcbcbc15
+' skinparam BackgroundColor #00000010
+skinparam BackgroundColor transparent
 skinparam package {
-    BackgroundColor #99999999
-    BorderColor #99999999
+    BackgroundColor #99999966
+    BorderColor #99999966
     BorderWidth 2
     FontColor   #ffffff
 }
 skinparam class {
-    BackgroundColor #999999
-    BorderColor     #00000099
+    BackgroundColor #99999999
+    BorderColor     #000000
 }
 
 
@@ -27,12 +28,12 @@ package "Global Environment" as GE {
         +init-proj()
         +init-experiment()
     }
-    class "pip / pipx"    as PIP <<CLI>>{
+    interface "pip / pipx"    as PIP <<CLI>>{
         +install()
     }
     
-    class "just"          as J   <<CLI>>
-    class "Direnv"        as D   <<CLI>>{
+    interface "just"          as J   <<CLI>>
+    interface "Direnv"        as D   <<CLI>>{
         +layout()
         +direnv reload()
         +direnv exec()
@@ -45,7 +46,7 @@ package "Project Directory" as PDIR {
     
     class "pyproject.toml"                          as PPRT <<File>>
     
-    interface "justfile"                                as JF  <<File>> {
+    class "justfile"                                as JF  <<File>> {
         +reset()
         +install-deps()
         +...()
@@ -61,7 +62,7 @@ package "Project Directory" as PDIR {
 
 ' === Package: Virtual Environment =============
 package "Virtual Environment" as VENV {
-    class "pip-tools"               as PT  <<Tool>>{
+    interface "pip-tools"               as PT  <<Tool>>{
         +pip-compile()
         +pip-sync()
     }
@@ -70,15 +71,16 @@ package "Virtual Environment" as VENV {
 }
 
 
-' ============================================================
+' =====================================================================
 
 ' === Straight Arrows =============
 
 <style>
 arrow {
-    LineColor #6da0d0
-    FontColor #6da0d0
+    LineColor #00A2FF
     LineThickness 2.5
+    FontColor #00A2FF
+    FontStyle italic
     
     ' !! Not Working
     .test {
@@ -98,13 +100,13 @@ PT  --> RE     : compiles \n& syncs
 ' === SPecial Straight Arrows =============
 <style>
 arrow {
-    LineColor #6dd089
-    FontColor #6dd089
+    LineColor #61D836
+    FontColor #61D836
 
 }
 </style>
 
-ERC --> VENV     : creates \n& activates
+ERC --> VENV : creates \n& activates
 JF --> VENV : manages
 
 
@@ -113,8 +115,8 @@ JF --> VENV : manages
 <style>
 arrow {
     LineStyle 10-5
-    LineColor #0e467bee
-    FontColor #0e467bee
+    LineColor #EE220C
+    FontColor #EE220C
 }
 </style>
 
