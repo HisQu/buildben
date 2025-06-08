@@ -115,15 +115,7 @@ def main():
         "{github_username}": args.github_username,
     }
 
-    ### Specify files to edit (or just gather them all)
-    copies_edit: list[Path] = list(copies.values())
-    # copies_edit: list[Path] = [
-    #     proj_root / "README.md",
-    #     proj_root / ".envrc",
-    #     proj_root / "justfile",
-    # ]
-
-    for fp in copies_edit:
+    for fp in list(copies.values()):
         text = fp.read_text(encoding="utf-8")
         for old, new in placeholders.items():
             text = text.replace(old, new)
