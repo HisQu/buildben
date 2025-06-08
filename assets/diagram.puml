@@ -4,7 +4,7 @@ left to right direction
 
 ' === Global look & feel =============
 skinparam defaultFontSize 20
-skinparam BackgroundColor transparent
+skinparam BackgroundColor #99999910
 skinparam package {
     BackgroundColor #99999999
     BorderColor #99999999
