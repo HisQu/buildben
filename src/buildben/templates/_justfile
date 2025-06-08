@@ -7,6 +7,8 @@
 # Allow `just deps-sync --upgrade --dry-run` pattern
 set shell := ["bash", "-cu"]
 
+default: just --list
+
 # === Virtual-env helpers =============================================
 
 reset:
