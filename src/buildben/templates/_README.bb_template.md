@@ -34,24 +34,35 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 <div style="width: 85%; margin: 2rem auto; text-align: justify;">
 <hr>
 
-`{my_project}` is a *[command line tool, package, library, python tool, ...]* 
-to automate [development tasks, source desambiguation, ...]. 
 
-
-#### Features:
+####  `{my_project}` ...
 <!-- Summarize the top 3 features -->
-- Lorem ipsum dolor
-- Dolor sit amet dolor blah bla
-- Ipsum dolor sit amet 
+- ... integrates cool things like lorem ipsum dolor
+- ... standardizes Dolor sit amet dolor blah bla
+- ... Ipsum dolor sit amet 
 
 
 #### Main dependencies:
 <!-- List your main dependencies here and explain why they're important. -->
-- **`pandas`**: Automate data wrangling
-- **`matplotlib` (optional)**: 
+- **`pandas`**: Lorem Ipsum dolor
+- **`matplotlib` (optional)**: Dolor sit amet
 
 <hr>
 </div>
+
+
+<!-- Graphical Abstract goes here: -->
+<!-- 
+<div align="center">
+  <img src="https://raw.githubusercontent.com/HisQu/buildben/main/assets/diagram/diagram.svg" 
+       width="800px" alt="Management of Virtual Environments & Dependencies" >
+  <p><em> 
+  <b> Graphical Abstract: </b> 
+  Management of Virtual Environments & Dependencies. Red dashed lines are Dependencies.
+  </em></p>
+</div> 
+-->
+
 
 
 
@@ -69,7 +80,6 @@ to automate [development tasks, source desambiguation, ...].
 4. [📚  Examples / Documentation](#--examples--documentation)
 
 <!-- tocstop -->
-
 <!-- /toc -->
 
 <br>
@@ -82,22 +92,21 @@ to automate [development tasks, source desambiguation, ...].
 - Python >= 3.11 (preferrably venv)
 
 ### Install with `pip`:
-1. Install system dependencies:
+#### 1. Install system dependencies:
 ``` bash
 apt update
 apt install python3.12
 ```
-2. Cone & Install `{my_project}`:
+#### 2. Clone & Install `{my_project}`:
 ``` bash
 git clone https://github.com/{github_username}/{my_project}.git
 pip install -e {my_project} # Editable install (use venv)
 ```
 
-### Verify installation:
+### ✅ Verify installation:
 ```bash
-python -m {my_project} --help
+python3 -m {my_project}
 ```
-
 
 
 <br>

@@ -28,35 +28,53 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 <hr>
 
 <blockquote> <i> A <b> benediction </b>(Latin: bene, 'well' + dicere, 'to speak') is a short invocation for divine help, blessing and guidance, usually at the end of worship service. </i> <sup> <a href="https://en.wikipedia.org/wiki/Benediction"> Wikipedia </a></sup> </blockquote>
-<br>
 
-`buildben` is a collection of scripts to integrate common developer tools
-(e.g. `just`) and automate tasks.
 
-<hr>
-</div>
-
-#### Features:
+#### `buildben` ...
 <!-- Summarize the top 3 features -->
-- Automate development workflows
-- Standardized project setup
-- Dependency management tools
-
+- ... standardizes project setup with template scaffolds `src` layout
+- ... integrates common developer tools (e.g. `pipx`, `direnv`)
+- ... collects development workflows & scripts
 
 
 #### Main dependencies:
 <!-- List your main dependencies here and explain why they're important. -->
-- **`pipx`**: The recommended home for `buildben` to keep the OS-Python clean
-- **`pip-tools`**: Used to re-compute the venv requirements and sync them.
-- **`direnv`**: Auto-loads project-specific env vars and provides useful one-liners for environment management.
-- **`just`**: For running tasks & managing build tools.
+- **[`pipx`](https://pipx.pypa.io)**: The recommended home for `buildben`, baking ii accessible globally while keeping the OS-Python clean
+- **[`pip-tools`](https://github.com/jazzband/pip-tools)**: Used to re-compute the venv requirements and sync them.
+- **[`direnv`](https://direnv.net/)**: Auto-loads project-specific environment and provides  one-liners for environment management.
+- **[`just`](https://github.com/casey/just)**: For running tasks to manage build tools & the virtual environment.
+
+
+<hr>
+</div>
   
-<br>
+
+
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/HisQu/buildben/main/assets/diagram/diagram.svg" 
        width="800px" alt="Management of Virtual Environments & Dependencies" >
+  <p><em> 
+  <b> Graphical Abstract: </b>
+  Management of Virtual Environments & Dependencies. Red dashed lines are Dependencies.
+  </em></p>
 </div>
+
+<br>
+
+### Table of Contents
+
+<!-- toc -->
+
+1. [📦 Installation](#-installation)
+2. [❓Optional Installs](#optional-installs)
+3. [🚀 Usage](#-usage)
+4. [📚  Examples / Documentation](#--examples--documentation)
+
+<!-- tocstop -->
+<!-- /toc -->
+
+<br>
 
 <!-- ============================================================== -->
 <!-- == Installation ============================================== -->
@@ -66,17 +84,16 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 - Python installed on your OS (and you know its executable in your `$PATH`)
 - A Package manager (`apt`, `brew`, `winget`, etc.)
 
-### Install with `pip`:
-`buildben` still requires `direnv` and `just` to work, but any pip
-install will do:
+### 🏃Quick & Dirty:
 ```bash
 git clone https://github.com/markur4/buildben.git
-pip install -e buildben   # Installs editable for direct modifications.
+pip install -e buildben    # venv recommended
 ```
 
-### Install with `pipx` (how it's meant to be used):
+### 🏗️ Full Install (recommended): 
 
-1. Install `pipx` according to their official [docs](https://pipx.pypa.io/stable/installation/):
+#### 1. Install [`pipx`](https://pipx.pypa.io/stable/installation/):
+To use `buildben`  globally and to keep the OS-python clean, we recommend `pipx`.
 ```bash
 sudo apt install pipx        # For Ubuntu
 # brew install pipx          # For MacOS
@@ -85,14 +102,14 @@ pipx ensurepath                   # Add pipx to PATH, if not already done
 pipx upgrade-all                  # !! Never run pipx with sudo !!
 ```
 
-2. Clone & install `buildben`:
+#### 2. Clone & install `buildben`:
 ```bash
 git clone https://github.com/markur4/buildben.git
-cd buildben         # Needed
+cd buildben         # Needed, `pipx install buildben` does NOT work!
 pipx install -e .   # Editable for direct modifications.
 ```
 
-3. Install [`just`](https://github.com/casey/just):
+#### 3. Install [`just`](https://github.com/casey/just):
 ```bash
 sudo apt install just     # For Ubuntu
 # brew install just       # For MacOS
@@ -100,7 +117,7 @@ sudo apt install just     # For Ubuntu
 ```
 
 
-4. Install `direnv` & hook it into your shell: 
+#### 4. Install [`direnv`](https://direnv.net/) & hook it into your shell: 
    - *Either* follow the instructions for [install](https://direnv.net/docs/installation.html) & [hook](https://direnv.net/docs/hook.html),
    - *Or* run `src/buildben/setup_zsh.sh` to install both `zsh` & other useful plugins, including `direnv`.
 
@@ -112,50 +129,200 @@ RCFILE="${ZDOTDIR:-$HOME}/.zshrc" # Respect ZDOTDIR if user set it
 if ! grep -q 'direnv ' "$RCFILE"; then
     sed -i 's/^plugins=(/plugins=(direnv /' "$RCFILE"
 fi
-# Fallback: Ensure the hook line is present even without the plugin
-if ! grep -q 'direnv hook zsh' "$RCFILE"; then
-    echo 'eval "$(direnv hook zsh)"' >>"$RCFILE"
-fi
 ```
 
-1. For drawing PlantUML-diagrams, we need Java (e.g.`temurin`) & `graphviz`:
+
+### ✅ Verify installation:
+```bash
+buildben init-proj --help
+```
+
+<br>
+
+
+<!-- ============================================================== -->
+<!-- == Optionals ================================================= -->
+
+## ❓Optional Installs
+
+### Use `direnv` & `just` in VS Code:
+
+#### Select Python Interpreter:
+1. Copy the path to the path to the python executable (`<my_project_name>/.direnv/python-3.12.3`). 
+2. Open the vscode commands palette (Ctrl+Shift+P), search & select "Python: Select Interpreter".
+3. Select "Search on workspace level".
+4. "Enter interpreter path" & paste the path.
+
+#### Install VS Code Extensions:
+```bash
+code --install-extension mkhl.direnv 
+code --install-extension nefrob.vscode-just
+```
+
+<br>
+
+### [`Mermaid`](https://mermaid.js.org/) - For Quick & Dirty Diagrams
+
+#### Install VS Code Extension:
+```bash
+code --install-extension vstirbu.vscode-mermaid-preview
+```
+``Mermaid`` runs natively in GitHub & Markdown-tools.
+
+
+### [`PlantUML`](https://plantuml.com/) - For Big Figures
+
+#### Install [`graphviz`](https://github.com/graphp/graphviz?tab=readme-ov-file#install) & Java (e.g. [`temurin`](https://adoptium.net/de/)):
+
 ```bash
 sudo apt-get install temurin-21-jdk graphviz     # For Ubuntu
 # brew install temurin graphviz                  # For MacOS
 # winget install EclipseAdoptium.Temurin.21.JDK  # Windows 
-winget install -e --id Graphviz.Graphviz
+# winget install -e --id Graphviz.Graphviz       # Windows
 ```
-
-### Verify installation:
+#### Install VS Code Extension:
 ```bash
-buildben-init-proj --help
+code --install-extension jebbs.plantuml
+```
+<br>
+
+
+
+
+<!-- ============================================================== -->
+<!-- == Usage ===================================================== -->
+## 🚀 Usage
+
+### Initialize project scaffold:
+```bash
+# Initialize project scaffold:
+buildben init-proj \
+  -n my_project \
+  -t ./target_dir \
+  -u your_github_username
 ```
 
-### (Optional) Set up vscode:
-1. Copy the path to the path to the python executable (sth like: `<my_project_name>/.direnv/python-3.12.3`). 
-2. Open the vscode commands palette (Ctrl+Shift+P), search & select "Python: Select Interpreter".
-3. Select "Search on workspace level".
-4. "Enter interpreter path" & paste the path.
-5. Optional, install extension [direnv](https://marketplace.visualstudio.com/items?itemName=mkhl.direnv)
-5. Optional, install extension [vscode-just](https://marketplace.visualstudio.com/items?itemName=nefrob.vscode-just-syntax)
+### Create virtual environment (``/.direnv``):
+
+```bash
+cd <my_project_name> # Changing directory will auto-create the venv
+# You will be prompted to allow the venv to activate
+```
+
+### Install dependencies & create ``(dev-)requirements.txt`` :
+```bash
+just install-deps # Executes `pip-compile` & `pip-sync` from pip-tools
+```
+  - ``just `` auto-navigates to the directory of the justfile (project root).
+  - **`pip-compile`:** Resolves environment defined by dependencies listed in `pyproject.toml`. Similair to `pip freeze`, this creates ``requirements.txt`` and ``dev-requirements.txt``, including all versions of dependencies.
+  - **`pip-sync`:** Installs all dependencies from ``requirements.txt`` and ``dev-requirements.txt``
+
+### Reset virtual environment:
+```bash
+just reset-venv # Deletes & re-creates `.direnv`. Runs `just install-deps` and editable project installer
+```
 
 <br>
 
 <!-- ============================================================== -->
-<!-- == Usage ====================================================== -->
-## 🚀 Usage:
+<!-- == Examples ================================================== -->
 
-### Initialize project scaffold & create venv
-```bash
-# Initialize project scaffold:
-buildben-init-proj -n <my_project_name> -t ./ -u <my_github_username>
-cd <my_project_name> # Change directory to project root
+
+## 📚  Examples / Documentation 
+
+### Diagrams
+
+| **Feature**       | **``Mermaid``**                                         | **``PlantUML``**                                                   |
+| ----------------- | --------------------------------------------------- | -------------------------------------------------------------- |
+| **Ease of Use**   | 🟢 Simple, Markdown-like syntax; quick to learn and use  | 🟢  Easy to learn; DSL based on Graphviz’s DOT            |
+| **Integration**   | 🟢 Native to GitHub and Markdown-tools, no extra installs      | 🟡  Requires `Java`+`Graphviz`; either install it or use their server |
+| **Functionality** | 🔴 Limited styling and diagram types                     | 🟢 Extensive theming (`skinparam`, CSS); supports UML, BPMN, C4, etc.  |
+
+
+
+
+
+
+#### `Mermaid`  flowchart (code inside `README.md`):
+
+```mermaid
+flowchart LR
+    %% Nodes
+        A("fab:fa-youtube Starter Guide")
+        B("fab:fa-youtube Make Flowchart")
+        n1@{ icon: "fa:gem", pos: "b", h: 24}
+        C("fa:fa-book-open Learn More")
+        D{"Use the editor"}
+        n2(Many shapes)@{ shape: delay}
+        E(fa:fa-shapes Visual Editor)
+        F("fa:fa-chevron-up Add node in toolbar")
+        G("fa:fa-comment-dots AI chat")
+        H("fa:fa-arrow-left Open AI in side menu")
+        I("fa:fa-code Text")
+        J(fa:fa-arrow-left Type Mermaid syntax)
+
+    %% Edge connections between nodes
+        A <--> B --> C --> n1 & D & n2
+        D -- Build and Design --> E --> F
+        D -- Use AI --> G --> H
+        D -- Mermaid js --> I --> J
+
+    %% Individual node styling. Try the visual editor toolbar for easier styling!
+        style E color:#FFFFFF, fill:#AA00FF, stroke:#AA00FF
+        style G color:#FFFFFF, stroke:#00C853, fill:#00C853
+        style I color:#FFFFFF, stroke:#2962FF, fill:#2962FF
 ```
-You will be prompted by direnv to allow the venv to activate. Say **yes**.
+
+####  `Mermaid`  Class Diagram (code inside `README.md`):
+```mermaid
+classDiagram 
+direction LR
+  
+  %% Class Mammals
+  class Heart {
+    // Organ
+    -health: float
+    -beat() -> None
+  }
+  
+  class Leg {
+    // Body part
+    +walk() -> None
+  }
+  <<Interface>> Leg
+  
+  class Mammal {
+    -heart: Heart
+    +leg: tuple[Leg]
+  }
+  <<Abstract>> Mammal
+  
+  %% Class Humans
+  class Arm {
+    // Body part
+  }
+  <<Interface>> Arm
+  
+  class Clothes {
+    +type: str
+  }
+  
+  class Human {
+    // Mammal
+    +arm: tuple[Arm]
+    +clothes: Clothes
+  }
+  
+  %% Edge connections
+  Heart --* Mammal : "1" (composition)
+  Leg --* Mammal : "2 or 4" (composition)
 
 
+  Mammal <|-- Human : (is a)
+  Arm --* Human : "2" (composition)
+  Clothes --o Human : "0..*" (aggregation)
 
-
+```
 
 
 
