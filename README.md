@@ -217,9 +217,9 @@ just install-deps # Executes `pip-compile` & `pip-sync` from pip-tools
   - **`pip-compile`:** Resolves environment defined by dependencies listed in `pyproject.toml`. Similair to `pip freeze`, this creates ``requirements.txt`` and ``dev-requirements.txt``, including all versions of dependencies.
   - **`pip-sync`:** Installs all dependencies from ``requirements.txt`` and ``dev-requirements.txt``
 
-### Reset virtual environment:
+### List & try available recipes:
 ```bash
-just reset-venv # Deletes & re-creates `.direnv`. Runs `just install-deps` and editable project installer
+just --list # Or just `just`, default recipe is `just --list` anyways
 ```
 
 <br>
