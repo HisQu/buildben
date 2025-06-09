@@ -7,15 +7,20 @@
 export PROJECT_NAME=$(basename "$PWD")
 echo "Project name: $PROJECT_NAME"
 
+# > hard-fail if someone runs pip outside the venv
+export PIP_REQUIRE_VIRTUALENV=1
+
+# > Uncomment to pin tool versions
+# export PIPX_HOME=$PWD/.build-tools
+
 # === direnv / venv ===================================================
 
 #?? This is a direnv auto function. We don't use it
 layout python3 # > create & activate .venv under .direnv/
 
-# > Check if pip-tools is installed, if not, install it
-python -m pip show pip-tools >/dev/null 2>&1 ||
-    python -m pip install --quiet "pip-tools>=7.4"
+# === Install pip-tools ===============================================
 
-# > Uncomment to pin tool versions and forbid global pip
-# export PIP_REQUIRE_VIRTUALENV=1
-# export PIPX_HOME=$PWD/.build-tools
+python -m pip show pip-tools >/dev/null 2>&1 || (
+    echo "Installing pip-tools!" &&
+        python -m pip install --quiet "pip-tools>=7.4"
+)

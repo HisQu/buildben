@@ -1,14 +1,4 @@
 #!/usr/bin/env python3
-"""Scaffold a new src-layout Python project.
-
-Usage:
-    init_project.py -n <project_name> [-t <target_dir>] [-g]
-
-Options:
-    -n   Name of the project (required, must be valid import name)
-    -t   Target directory to create the new project in. [default: .]
-    -g   Initialise a git repository and create the first commit.
-"""
 
 from __future__ import annotations
 import argparse
@@ -20,28 +10,37 @@ from pathlib import Path
 from textwrap import dedent
 
 
-def main():
-    # =================================================================
-    # === CLI parsing
-    # =================================================================
-    parser = argparse.ArgumentParser(description="Scaffold a Python project")
-    parser.add_argument("-n", "--name", required=True, help="project name")
-    parser.add_argument(
+def add_parser(subparsers: argparse._SubParsersAction) -> None:
+    """Attach the init-proj sub-parser to the CLI aggregator."""
+
+    DOC = """Scaffold a new src-layout Python project."""
+
+    p: argparse.ArgumentParser = subparsers.add_parser(
+        "init-proj",  # < the command name typed on the shell
+        help=DOC,
+        description=DOC,
+    )
+    p.add_argument("-n", "--name", required=True, help="Project name")
+    p.add_argument(
         "-t",
         "--target-dir",
         default=".",
-        help="directory in which to create project",
+        help="Directory in which to create project",
     )
-    parser.add_argument(
-        "-g", "--git", action="store_true", help="initialise git repo"
+    p.add_argument(
+        "-g", "--git", action="store_true", help="Initialise git repo"
     )
-    parser.add_argument(
+    p.add_argument(
         "-u",
-        "--github-username",
-        default="github-username",
+        "--github-user",
+        default="github-user",
         help="Github Username",
     )
-    args: argparse.Namespace = parser.parse_args()
+
+    p.set_defaults(func=_run)  # !! call _run(args) when chosen
+
+
+def _run(args: argparse.Namespace) -> None:
 
     ### Validate project name
     IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -83,23 +82,20 @@ def main():
     tmpl_dir = script_dir / "templates"
 
     # > {<_template_filename>: <destination_filepath>}
+    # fmt: off
     copies: dict[str, Path] = {
         "_gitignore": pr_root / ".gitignore",
         "_pyproject.toml": pr_root / "pyproject.toml",
         "_envrc": pr_root / ".envrc",
         "_justfile": pr_root / "justfile",
-        "_codecov.yml": pr_root
-        / ".github"
-        / "workflows_inactive"
-        / "codecov.yml",
+        "_codecov.yml": pr_root / ".github" / "workflows_inactive" / "codecov.yml",
         "_main.py": pr_root / "src" / args.name / "main.py",
         ### These are git-ignored until manually renamed (marked by bb_template.)
-        "_README.md": pr_root / "README.bb_template.md",
-        "_flowchart.mmd": pr_root / "assets" / "flowchart.bb_template.mmd",
-        "_classdiagram.mmd": pr_root
-        / "assets"
-        / "classdiagram.bb_template.mmd",
+        "_README.bb_template.md": pr_root / "README.bb_template.md",
+        "_flowchart.bb_template.mmd": pr_root / "assets" / "flowchart.bb_template.mmd",
+        "_classdiagram.bb_template.mmd": pr_root / "assets" / "classdiagram.bb_template.mmd",
     }
+    # fmt: on
 
     for tmpl_fn, dst_fp in copies.items():
         tmpl_fp = tmpl_dir / tmpl_fn
@@ -111,8 +107,8 @@ def main():
     placeholders = {
         "<my_project>": args.name,
         "{my_project}": args.name,
-        "<github_username>": args.github_username,
-        "{github_username}": args.github_username,
+        "<github_username>": args.github_user,
+        "{github_username}": args.github_user,
     }
 
     for fp in list(copies.values()):
@@ -151,5 +147,3 @@ def main():
     )
 
 
-if __name__ == "__main__":
-    main()
