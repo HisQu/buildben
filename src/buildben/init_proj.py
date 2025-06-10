@@ -79,7 +79,7 @@ def _run(args: argparse.Namespace) -> None:
     # === Copy template files
     # =================================================================
     script_dir = Path(__file__).resolve().parent
-    tmpl_dir = script_dir / "templates"
+    tmpl_dir = script_dir / "_templates"
 
     # > {<_template_filename>: <destination_filepath>}
     # fmt: off
@@ -90,7 +90,7 @@ def _run(args: argparse.Namespace) -> None:
         "_justfile": pr_root / "justfile",
         "_codecov.yml": pr_root / ".github" / "workflows_inactive" / "codecov.yml",
         "_main.py": pr_root / "src" / args.name / "main.py",
-        ### These are git-ignored until manually renamed (marked by bb_template.)
+        ### .bb_template - Files are git-ignored until manually renamed:
         "_README.bb_template.md": pr_root / "README.bb_template.md",
         "_flowchart.bb_template.mmd": pr_root / "assets" / "flowchart.bb_template.mmd",
         "_classdiagram.bb_template.mmd": pr_root / "assets" / "classdiagram.bb_template.mmd",
