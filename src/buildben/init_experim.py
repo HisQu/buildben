@@ -25,7 +25,7 @@ def add_parser(subparsers: argparse._SubParsersAction) -> None:
         description=DOC,
     )
     p.add_argument("-n", "--name", default="", help="Experiment Name (e.g. validation, benchmark, etc.)")
-    p.add_argument("--no-venv", action="store_true", help="skip .venv creation")
+    p.add_argument("--no-venv", action="store_true", help="Skip venv creation")
     p.add_argument(
         "--no-freeze", action="store_true", help="Skip pip-compile lock"
     )
@@ -95,49 +95,49 @@ def _run(args: argparse.Namespace) -> None:
     # === Optional .venv + dependency freeze 
     # =================================================================
 
-#     if not args.no_freeze:
-#         _freeze_reqs(EXP_ROOT)
-#     if not args.no_venv:
-#         _create_venv(EXP_ROOT)
+    if not args.no_freeze:
+        _freeze_reqs(EXP_ROOT)
+    if not args.no_venv:
+        _create_venv(EXP_ROOT)
 
-#     print(
-#         dedent(
-#             f"""
-#         ✅  experiment created at  {EXP_ROOT}
-#             cd experiments/{today}_{args.name}
-#             direnv allow          # trust .envrc
-#             just install          # compile & install deps (optionally)
-#     """
-#         )
-#     )
-
-
-# # ================================================================== #
-# # === helpers                                                        #
-# # ================================================================== #
-# def _freeze_reqs(root: Path) -> None:
-#     req_in = root / "env" / "requirements.in"
-#     req_out = root / "env" / "requirements.txt"
-#     pip_compile = shutil.which("pip-compile")
-#     if pip_compile is None:
-#         print("∙ Skipping freeze (pip-compile not on PATH)")
-#         return
-#     subprocess.run([pip_compile, req_in, "-o", req_out], check=True)
-#     print("✓  requirements.txt frozen")
+    print(
+        dedent(
+            f"""
+        ✅  experiment created at  {EXP_ROOT}
+            cd experiments/{today}_{args.name}
+            direnv allow          # trust .envrc
+            just install          # compile & install deps (optionally)
+    """
+        )
+    )
 
 
-# def _create_venv(root: Path) -> None:
-#     import venv, sys as _sys
+# ================================================================== #
+# === helpers                                                        #
+# ================================================================== #
+def _freeze_reqs(root: Path) -> None:
+    req_in = root / "env" / "requirements.in"
+    req_out = root / "env" / "requirements.txt"
+    pip_compile = shutil.which("pip-compile")
+    if pip_compile is None:
+        print("∙ Skipping freeze (pip-compile not on PATH)")
+        return
+    subprocess.run([pip_compile, req_in, "-o", req_out], check=True)
+    print("✓  requirements.txt frozen")
 
-#     print("⏳  creating .venv …")
-#     venv.EnvBuilder(with_pip=True).create(root / ".venv")
-#     pip = root / ".venv" / "bin" / "pip"
-#     subprocess.run(
-#         [pip, "install", "-r", root / "env/requirements.in"], check=False
-#     )
-#     print(
-#         "✓  .venv ready (activate with 'direnv reload' or '. .venv/bin/activate')"
-#     )
+
+def _create_venv(root: Path) -> None:
+    import venv, sys as _sys
+
+    print("⏳  creating .venv …")
+    venv.EnvBuilder(with_pip=True).create(root / ".venv")
+    pip = root / ".venv" / "bin" / "pip"
+    subprocess.run(
+        [pip, "install", "-r", root / "env/requirements.in"], check=False
+    )
+    print(
+        "✓  .venv ready (activate with 'direnv reload' or '. .venv/bin/activate')"
+    )
 
 
 # # ================================================================== #

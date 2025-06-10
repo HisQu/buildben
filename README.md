@@ -32,9 +32,9 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 
 #### `buildben` ...
 <!-- Summarize the top 3 features -->
-- ... standardizes project setup with template scaffolds `src` layout
-- ... integrates common developer tools (e.g. `pipx`, `direnv`)
-- ... collects development workflows & scripts
+- ... standardizes project setups with template scaffolds
+- ... integrates common developer tools (e.g. `pipx`, `direnv`, `just`)
+- ... collects development workflows, scripts & recipes
 
 
 #### Main dependencies:
