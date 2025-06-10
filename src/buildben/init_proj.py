@@ -79,7 +79,7 @@ def _run(args: argparse.Namespace) -> None:
     # === Copy template files
     # =================================================================
     script_dir = Path(__file__).resolve().parent
-    tmpl_dir = script_dir / "_templates"
+    tmpl_dir = script_dir / "_templates_proj"
 
     # > {<_template_filename>: <destination_filepath>}
     # fmt: off
@@ -90,11 +90,11 @@ def _run(args: argparse.Namespace) -> None:
         "_justfile": pr_root / "justfile",
         "_codecov.yml": pr_root / ".github" / "workflows_inactive" / "codecov.yml",
         "_main.py": pr_root / "src" / args.name / "main.py",
-        ### .bb_template - Files are git-ignored until manually renamed:
-        "_README.bb_template.md": pr_root / "README.bb_template.md",
-        "_flowchart.bb_template.mmd": pr_root / "assets" / "flowchart.bb_template.mmd",
-        "_classdiagram.bb_template.mmd": pr_root / "assets" / "classdiagram.bb_template.mmd",
-        "_diagram.bb_template.puml": pr_root / "assets" / "diagram.bb_template.puml",
+        ### .IGNORE - Files are git-ignored until manually renamed:
+        "_README.IGNORE.md": pr_root / "README.IGNORE.md",
+        "_flowchart.IGNORE.mmd": pr_root / "assets" / "flowchart.IGNORE.mmd",
+        "_classdiagram.IGNORE.mmd": pr_root / "assets" / "classdiagram.IGNORE.mmd",
+        "_diagram.IGNORE.puml": pr_root / "assets" / "diagram.IGNORE.puml",
     }
     # fmt: on
 

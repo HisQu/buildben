@@ -8,7 +8,9 @@ db/
 .old/
 
 # === buildben templates ===============================================
+# These are ignored until renamed to prevent premature publishing
 *.bb_template*
+*.IGNORE*
 
 # === Development ======================================================
 .devtools/

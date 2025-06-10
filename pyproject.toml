@@ -34,7 +34,7 @@ where = ["src"]                       # < Scan only src/ for packages
 [tool.setuptools.package-data]
 "buildben" = [
     "**/*.sh",         # src/buildben/**/*.sh/
-    "_templates/**/*",  # src/buildben/templates/**/*
+    "_templates_proj/**/*",  # src/buildben/templates/**/*
     "_templates_experiment/**/*",  # src/buildben/templates/**/*
     ]
 
