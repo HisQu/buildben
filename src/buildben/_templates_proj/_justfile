@@ -37,15 +37,18 @@ reset-venv:
 
 # === Installation ====================================================
 
-# Creates or refreshes the venv that `layout python` manages.
-# Freeze/lock → install requirements.txt + dev-requirements.txt
+
+# Compiles & Installs: requirements.txt & <my_project> in editable mode
 install *ARGS:
     just _venv-guard
-    pip-compile pyproject.toml -o requirements.txt {{ARGS}}
-    pip-compile --extra dev pyproject.toml -o dev-requirements.txt {{ARGS}}
+    just compile_requirements
     pip-sync requirements.txt dev-requirements.txt  
     {{PY}} -m pip install -e .[dev]
 
+# Freeze/lock → Create requirements.txt + dev-requirements.txt
+compile_requirements *ARGS:
+    pip-compile pyproject.toml -o requirements.txt {{ARGS}}
+    pip-compile --extra dev pyproject.toml -o dev-requirements.txt {{ARGS}}
 
 # Reinstall the project itself, editable mode
 reinstall-proj:
