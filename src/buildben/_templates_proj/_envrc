@@ -3,8 +3,9 @@
 # !! This script is executes EVERY TIME you enter the directory !!
 
 # === Environment Variables ===========================================
-
+### direnv changes into directory of .envrc and runs subshell, so $PWD is always project root.
 export PROJECT_NAME=$(basename "$PWD")
+export PROJECT_ROOT=$PWD
 echo "Project name: $PROJECT_NAME"
 
 # > hard-fail if someone runs pip outside the venv

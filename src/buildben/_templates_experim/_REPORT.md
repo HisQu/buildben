@@ -1,5 +1,5 @@
-# Experiment – {exp_name}
-*Date created:* {today}
+# Experiment – {experiment_name}
+*Date created:* {bb_today}
 
 ## Goal
 Describe **what question you are answering** here.
