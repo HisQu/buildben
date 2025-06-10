@@ -17,13 +17,14 @@ default:
 
 # === Virtual-environment =============================================
 
+### Store python executable from virtual environment
 PY := "${VIRTUAL_ENV-}/bin/python"
 
 # Hidden helper that must succeed first
 [private]
 _venv-guard:
     @test -n "${VIRTUAL_ENV-}" || { \
-        echo "✗ Virtual environment inactive — run 'direnv reload' first" >&2; \
+        echo "✗ VIRTUAL_ENV is not set, Virtual environment inactive — run 'direnv reload' first" >&2; \
         exit 1; \
     }
     
@@ -36,14 +37,6 @@ reset-venv:
 
 # === Installation ====================================================
 
-# Reinstall the project itself, editable mode
-reinstall-proj:
-    ### Make sure .direnv is active or venv
-    just _venv-guard
-    {{PY}} -m pip uninstall -y "${PROJECT_NAME}"
-    {{PY}} -m pip install -e .[dev]
-    
-
 # Creates or refreshes the venv that `layout python` manages.
 # Freeze/lock → install requirements.txt + dev-requirements.txt
 install *ARGS:
@@ -52,6 +45,14 @@ install *ARGS:
     pip-compile --extra dev pyproject.toml -o dev-requirements.txt {{ARGS}}
     pip-sync requirements.txt dev-requirements.txt  
     {{PY}} -m pip install -e .[dev]
+
+
+# Reinstall the project itself, editable mode
+reinstall-proj:
+    just _venv-guard
+    {{PY}} -m pip uninstall -y "${PROJECT_NAME}"
+    {{PY}} -m pip install -e .[dev]
+    
 
 
 # Upgrade all pins in-place

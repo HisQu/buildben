@@ -13,10 +13,12 @@ default:
 
 # === Installation ====================================================
 
+# Uninstalls buildben and re-installs it from pyproject.toml
 reinstall:
     pipx uninstall buildben
     pipx install -e .
-    
+
+# Removes old test-project (bla_a); Re-Creates it
 test_init_proj:
     [ -d "../bla_a" ] && rm -rf "../bla_a"
     echo "Creating ../bla_a"
