@@ -4,16 +4,23 @@ from . import init_proj
 from . import init_experim
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="buildben", description="Buildben CLI")
-    subparsers = parser.add_subparsers(dest="cmd", required=True)
+    ### Init parsers
+    # > Create a top-level parser
+    PARSER = argparse.ArgumentParser(
+        prog="buildben", description="Buildben CLI"
+    )
+    # > Create subparser, will be modified in place to include script-parsers
+    subparsers: argparse._SubParsersAction = PARSER.add_subparsers(
+        dest="cmd", required=True
+    )
 
-    ### Wire up every command you want to support
+    ### Edit subparser in place to include script-specific parsers
     init_proj.add_parser(subparsers)
-    init_experim.add_parser(subparsers)   # when you refactor the next one
-    
+    init_experim.add_parser(subparsers)
+
     ### Parse args and run the command
-    args = parser.parse_args()
-    args.func(args)          # ⚠ pass the Namespace to the handler
+    args = PARSER.parse_args()
+    args.func(args)  # < ⚠ pass the Namespace to the handler
 
 if __name__ == "__main__":
     main()
