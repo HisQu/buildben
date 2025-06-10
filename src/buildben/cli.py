@@ -1,6 +1,7 @@
 # buildben/cli.py
 import argparse
-from . import init_proj     # each sub-command module
+from . import init_proj
+from . import init_experim
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="buildben", description="Buildben CLI")
@@ -8,7 +9,7 @@ def main() -> None:
 
     ### Wire up every command you want to support
     init_proj.add_parser(subparsers)
-    # init_experiment.add_parser(subparsers)   # when you refactor the next one
+    init_experim.add_parser(subparsers)   # when you refactor the next one
     
     ### Parse args and run the command
     args = parser.parse_args()

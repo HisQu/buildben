@@ -10,13 +10,16 @@ from pathlib import Path
 from textwrap import dedent
 
 
+# ================================================================== #
+# === CLI wiring                                                     #
+# ================================================================== #
 def add_parser(subparsers: argparse._SubParsersAction) -> None:
     """Attach the init-proj sub-parser to the CLI aggregator."""
 
     DOC = """Scaffold a new src-layout Python project."""
 
     p: argparse.ArgumentParser = subparsers.add_parser(
-        "init-proj",  # < the command name typed on the shell
+        "init-proj",
         help=DOC,
         description=DOC,
     )
@@ -31,15 +34,15 @@ def add_parser(subparsers: argparse._SubParsersAction) -> None:
         "-g", "--git", action="store_true", help="Initialise git repo"
     )
     p.add_argument(
-        "-u",
-        "--github-user",
-        default="github-user",
-        help="Github Username",
+        "-u", "--github-user", default="github-user", help="Github Username"
     )
 
     p.set_defaults(func=_run)  # !! call _run(args) when chosen
 
 
+# ================================================================== #
+# === implementation                                                 #
+# ================================================================== #
 def _run(args: argparse.Namespace) -> None:
 
     ### Validate project name
@@ -146,5 +149,3 @@ def _run(args: argparse.Namespace) -> None:
             """
         )
     )
-
-
