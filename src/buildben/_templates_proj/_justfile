@@ -41,11 +41,17 @@ reset-venv:
 # Compiles & Installs: requirements.txt & <my_project> in editable mode
 install *ARGS:
     just _venv-guard
-    just compile_requirements
+    just compile_requirements {{ARGS}}
     pip-sync requirements.txt dev-requirements.txt  
     {{PY}} -m pip install -e .[dev]
 
-# Freeze/lock → Create requirements.txt + dev-requirements.txt
+# Only Installs: requirements.txt & <my_project> in editable mode
+install-without-recompile *ARGS:
+    just _venv-guard
+    pip-sync requirements.txt dev-requirements.txt  
+    {{PY}} -m pip install -e .[dev]
+
+# Resolves dependency versions and creates requirements.txt + dev-requirements.txt
 compile_requirements *ARGS:
     pip-compile pyproject.toml -o requirements.txt {{ARGS}}
     pip-compile --extra dev pyproject.toml -o dev-requirements.txt {{ARGS}}
