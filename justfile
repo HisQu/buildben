@@ -13,7 +13,7 @@ default:
 
 # === Installation ====================================================
 
-# Uninstalls buildben and re-installs it from pyproject.toml
+# Use pipx to uninstalls buildben and re-installs it from pyproject.toml
 reinstall:
     pipx uninstall buildben
     pipx install -e .
