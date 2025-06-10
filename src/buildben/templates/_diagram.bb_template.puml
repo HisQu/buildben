@@ -1,0 +1,133 @@
+@startuml
+left to right direction
+' top to bottom direction
+
+' === Global look & feel =============
+skinparam defaultFontSize 20
+' skinparam BackgroundColor #00000010
+skinparam BackgroundColor transparent
+skinparam package {
+    BackgroundColor #99999966
+    BorderColor #99999966
+    BorderWidth 2
+    FontColor   #ffffff
+}
+skinparam class {
+    BackgroundColor #99999999
+    BorderColor     #000000
+}
+
+
+' =====================================================================
+
+
+' === Package: Global Environment =============
+package "Global Environment" as GE {
+    
+    interface "buildben"      as B   <<CLI>>{
+        +init-proj()
+        +init-experiment()
+    }
+    interface "pip / pipx"    as PIP <<CLI>>{
+        +install()
+    }
+    
+    interface "just"          as J   <<CLI>>
+    interface "Direnv"        as D   <<CLI>>{
+        +layout()
+        +direnv reload()
+        +direnv exec()
+    }
+    
+}
+
+' === Package: Project Directory =============
+package "Project Directory" as PDIR {
+    
+    class "pyproject.toml"                          as PPRT <<File>>
+    
+    class "justfile"                                as JF  <<File>> {
+        +reset()
+        +install-deps()
+        +...()
+    }
+    
+    class ".envrc"                                  as ERC  <<Config>>{
+        +PROJECT_NAME
+        +ENV_VARS
+    }
+    
+    class "requirements.txt \n+ dev_requirements.txt" as RE   <<File>>
+}
+
+' === Package: Virtual Environment =============
+package "Virtual Environment" as VENV {
+    interface "pip-tools"               as PT  <<Tool>>{
+        +pip-compile()
+        +pip-sync()
+    }
+    class "python dependencies"     as PD  <<Pkg>>
+    ' VE o-- PD : contains
+}
+
+
+' =====================================================================
+
+' === Straight Arrows =============
+
+<style>
+arrow {
+    LineColor #00A2FF
+    LineThickness 2.5
+    FontColor #00A2FF
+    FontStyle italic
+    
+    ' !! Not Working
+    .test {
+        LineColor #b35e5e
+    }
+}
+</style>
+
+' PT --> PD <<test>> : installs 
+PT --> PD : installs
+PIP --> B : installs 
+B --> PDIR   : creates scaffold
+ERC --> PT     : installs 
+PT  --> RE     : compiles \n& syncs
+
+
+' === SPecial Straight Arrows =============
+<style>
+arrow {
+    LineColor #61D836
+    FontColor #61D836
+
+}
+</style>
+
+ERC --> VENV : creates \n& activates
+JF --> VENV : manages
+
+
+' === Dependencies =============
+
+<style>
+arrow {
+    LineStyle 10-5
+    LineColor #EE220C
+    FontColor #EE220C
+}
+</style>
+
+
+D   <-- ERC 
+J   <-- JF     
+D   <-- JF     
+
+JF  --> PT     
+PT --> PPRT
+
+' ERC -left-  JF     : interacts
+' PPRT ..> PT    : read by
+@enduml

@@ -94,6 +94,7 @@ def _run(args: argparse.Namespace) -> None:
         "_README.bb_template.md": pr_root / "README.bb_template.md",
         "_flowchart.bb_template.mmd": pr_root / "assets" / "flowchart.bb_template.mmd",
         "_classdiagram.bb_template.mmd": pr_root / "assets" / "classdiagram.bb_template.mmd",
+        "_diagram.bb_template.puml": pr_root / "assets" / "diagram.bb_template.puml",
     }
     # fmt: on
 
