@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 from textwrap import dedent
 
+from . import utils
+
 
 # ================================================================== #
 # === CLI wiring                                                     #
@@ -50,30 +52,25 @@ def _run(args: argparse.Namespace) -> None:
     if not IDENT_RE.match(args.name):
         sys.exit("💥  Project name must be a valid Python identifier")
 
-    ### Resolve path to project root
-    pr_root: Path = Path(args.target_dir).expanduser().resolve() / args.name
-    # > Warn user if project root already exists
-    if pr_root.exists():
-        answer = input(
-            f"⚠️  {pr_root} exists and files may be overwritten. Continue? [y/N] "
-        ).lower()
-        if answer not in {"y", "yes"}:
-            sys.exit("Aborted by user")
+    ### Project root
+    # > .envrc and PROJ_ROOT do not exist yet, it's defined by user input:
+    PR_ROOT: Path = Path(args.target_dir).expanduser().resolve() / args.name
+    utils.warn_dir_overwrite(PR_ROOT)
 
     # =================================================================
     # === Directory tree
     # =================================================================
 
     directories: list[Path] = [
-        pr_root / "tests",
-        pr_root / "assets",
-        pr_root / "examples",
-        pr_root / "experiments",
-        pr_root / ".github" / "workflows",
-        pr_root / ".github" / "workflows_inactive",
-        pr_root / "src" / args.name,
-        pr_root / "src" / args.name / "data",
-        pr_root / "src" / args.name / "images",
+        PR_ROOT / "tests",
+        PR_ROOT / "assets",
+        PR_ROOT / "examples",
+        PR_ROOT / "experiments",
+        PR_ROOT / ".github" / "workflows",
+        PR_ROOT / ".github" / "workflows_inactive",
+        PR_ROOT / "src" / args.name,
+        PR_ROOT / "src" / args.name / "data",
+        PR_ROOT / "src" / args.name / "images",
     ]
     for dir in directories:
         dir.mkdir(parents=True, exist_ok=True)
@@ -81,29 +78,26 @@ def _run(args: argparse.Namespace) -> None:
     # =================================================================
     # === Copy template files
     # =================================================================
-    script_dir = Path(__file__).resolve().parent
-    tmpl_dir = script_dir / "_templates_proj"
 
     # > {<_template_filename>: <destination_filepath>}
     # fmt: off
-    copies: dict[str, Path] = {
-        "_gitignore": pr_root / ".gitignore",
-        "_pyproject.toml": pr_root / "pyproject.toml",
-        "_envrc": pr_root / ".envrc",
-        "_justfile": pr_root / "justfile",
-        "_codecov.yml": pr_root / ".github" / "workflows_inactive" / "codecov.yml",
-        "_main.py": pr_root / "src" / args.name / "main.py",
+    transfers: dict[str, Path] = {
+        "_gitignore": PR_ROOT / ".gitignore",
+        "_pyproject.toml": PR_ROOT / "pyproject.toml",
+        "_envrc": PR_ROOT / ".envrc",
+        "_justfile": PR_ROOT / "justfile",
+        "_codecov.yml": PR_ROOT / ".github" / "workflows_inactive" / "codecov.yml",
+        "_main.py": PR_ROOT / "src" / args.name / "main.py",
         ### .IGNORE - Files are git-ignored until manually renamed:
-        "_README.IGNORE.md": pr_root / "README.IGNORE.md",
-        "_flowchart.IGNORE.mmd": pr_root / "assets" / "flowchart.IGNORE.mmd",
-        "_classdiagram.IGNORE.mmd": pr_root / "assets" / "classdiagram.IGNORE.mmd",
-        "_diagram.IGNORE.puml": pr_root / "assets" / "diagram.IGNORE.puml",
+        "_README.IGNORE.md": PR_ROOT / "README.IGNORE.md",
+        "_flowchart.IGNORE.mmd": PR_ROOT / "assets" / "flowchart.IGNORE.mmd",
+        "_classdiagram.IGNORE.mmd": PR_ROOT / "assets" / "classdiagram.IGNORE.mmd",
+        "_diagram.IGNORE.puml": PR_ROOT / "assets" / "diagram.IGNORE.puml",
     }
     # fmt: on
 
-    for tmpl_fn, dst_fp in copies.items():
-        tmpl_fp = tmpl_dir / tmpl_fn
-        shutil.copy2(tmpl_fp, dst_fp, follow_symlinks=False)
+    tmpl_dir = Path(__file__).resolve().parent / "_templates_proj"
+    utils.copy_templates(transfers=transfers, tmpl_dir=tmpl_dir)
 
     # =================================================================
     # === Placeholder substitution
@@ -115,21 +109,19 @@ def _run(args: argparse.Namespace) -> None:
         "{github_username}": args.github_user,
     }
 
-    for fp in list(copies.values()):
-        text = fp.read_text(encoding="utf-8")
-        for old, new in placeholders.items():
-            text = text.replace(old, new)
-        fp.write_text(text, encoding="utf-8")
+    utils.substitute_placeholders(
+        filepaths=list(transfers.values()), placeholders=placeholders
+    )
 
     # =================================================================
     # === Optional git init
     # =================================================================
     if args.git:
-        subprocess.run(["git", "init"], cwd=pr_root, check=True)
-        subprocess.run(["git", "add", "."], cwd=pr_root, check=True)
+        subprocess.run(["git", "init"], cwd=PR_ROOT, check=True)
+        subprocess.run(["git", "add", "."], cwd=PR_ROOT, check=True)
         subprocess.run(
             ["git", "commit", "-m", "Initial scaffold from buildben"],
-            cwd=pr_root,
+            cwd=PR_ROOT,
             check=True,
         )
 
@@ -141,7 +133,7 @@ def _run(args: argparse.Namespace) -> None:
             f"""
             ✅  {args.name} scaffold complete!
 
-                cd "{pr_root}"
+                cd "{PR_ROOT}"
                 direnv allow        # trust .envrc
                 just venv-reset     # set up .venv via direnv
             
