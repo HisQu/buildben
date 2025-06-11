@@ -6,7 +6,7 @@
 ### direnv changes into directory of .envrc and runs subshell, so $PWD is always project root.
 export PROJECT_NAME=$(basename "$PWD")
 export PROJECT_ROOT=$PWD
-echo "Project name: $PROJECT_NAME"
+
 
 # > hard-fail if someone runs pip outside the venv
 export PIP_REQUIRE_VIRTUALENV=1
@@ -25,3 +25,13 @@ python -m pip show pip-tools >/dev/null 2>&1 || (
     echo "Installing pip-tools!" &&
         python -m pip install --quiet "pip-tools>=7.4"
 )
+
+
+# === Echo all env vars and info ==================================
+echo
+echo "PROJECT_NAME: $PROJECT_NAME"
+echo "PROJECT_ROOT: $PROJECT_ROOT"
+echo "PIP_REQUIRE_VIRTUALENV: $PIP_REQUIRE_VIRTUALENV"
+echo "VIRTUAL_ENV:" $VIRTUAL_ENV
+echo "pip-tools: {$(python -m pip show pip-tools | grep Version)}"
+echo 
