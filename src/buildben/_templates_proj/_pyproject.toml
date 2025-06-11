@@ -42,9 +42,11 @@ dependencies = [ # (will land in requirements.txt)
 # === Packaging
 # =====================================================================
 
-# === src-layout switches =======
+# === Define import paths to packages =======
+# > import <my_project>          {"" = "src"}
+# > import <my_project>.utils"   {"<my_project>/utils" = "src/utils"}
 [tool.setuptools]
-package-dir = { "" = "src" }          # < Root package lives in src/
+package-dir = { "" = "src", "<my_project>/utils" = "src/utils"  }
 
 [tool.setuptools.packages.find]
 where = ["src"]                       # < Scan only src/ for packages
