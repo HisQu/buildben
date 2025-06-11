@@ -67,7 +67,6 @@ def _run(args: argparse.Namespace) -> None:
     transfers: dict[str, Path] = {
         "_REPORT.md": EXP_ROOT / "REPORT.md",
         "_run.py": EXP_ROOT / "run.py",
-        "_exp-requirements.in": EXP_ROOT / "env" /"exp-requirements.in",
     }
     # fmt: on
 
@@ -95,49 +94,49 @@ def _run(args: argparse.Namespace) -> None:
     # === Optional .venv + dependency freeze 
     # =================================================================
 
-    if not args.no_freeze:
-        _freeze_reqs(EXP_ROOT)
-    if not args.no_venv:
-        _create_venv(EXP_ROOT)
+#     if not args.no_freeze:
+#         _freeze_reqs(EXP_ROOT)
+#     if not args.no_venv:
+#         _create_venv(EXP_ROOT)
 
-    print(
-        dedent(
-            f"""
-        ✅  experiment created at  {EXP_ROOT}
-            cd experiments/{today}_{args.name}
-            direnv allow          # trust .envrc
-            just install          # compile & install deps (optionally)
-    """
-        )
-    )
-
-
-# ================================================================== #
-# === helpers                                                        #
-# ================================================================== #
-def _freeze_reqs(root: Path) -> None:
-    req_in = root / "env" / "requirements.in"
-    req_out = root / "env" / "requirements.txt"
-    pip_compile = shutil.which("pip-compile")
-    if pip_compile is None:
-        print("∙ Skipping freeze (pip-compile not on PATH)")
-        return
-    subprocess.run([pip_compile, req_in, "-o", req_out], check=True)
-    print("✓  requirements.txt frozen")
+#     print(
+#         dedent(
+#             f"""
+#         ✅  experiment created at  {EXP_ROOT}
+#             cd experiments/{today}_{args.name}
+#             direnv allow          # trust .envrc
+#             just install          # compile & install deps (optionally)
+#     """
+#         )
+#     )
 
 
-def _create_venv(root: Path) -> None:
-    import venv, sys as _sys
+# # ================================================================== #
+# # === helpers                                                        #
+# # ================================================================== #
+# def _freeze_reqs(root: Path) -> None:
+#     req_in = root / "env" / "requirements.in"
+#     req_out = root / "env" / "requirements.txt"
+#     pip_compile = shutil.which("pip-compile")
+#     if pip_compile is None:
+#         print("∙ Skipping freeze (pip-compile not on PATH)")
+#         return
+#     subprocess.run([pip_compile, req_in, "-o", req_out], check=True)
+#     print("✓  requirements.txt frozen")
 
-    print("⏳  creating .venv …")
-    venv.EnvBuilder(with_pip=True).create(root / ".venv")
-    pip = root / ".venv" / "bin" / "pip"
-    subprocess.run(
-        [pip, "install", "-r", root / "env/requirements.in"], check=False
-    )
-    print(
-        "✓  .venv ready (activate with 'direnv reload' or '. .venv/bin/activate')"
-    )
+
+# def _create_venv(root: Path) -> None:
+#     import venv, sys as _sys
+
+#     print("⏳  creating .venv …")
+#     venv.EnvBuilder(with_pip=True).create(root / ".venv")
+#     pip = root / ".venv" / "bin" / "pip"
+#     subprocess.run(
+#         [pip, "install", "-r", root / "env/requirements.in"], check=False
+#     )
+#     print(
+#         "✓  .venv ready (activate with 'direnv reload' or '. .venv/bin/activate')"
+#     )
 
 
 # # ================================================================== #

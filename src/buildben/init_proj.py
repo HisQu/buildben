@@ -65,7 +65,7 @@ def _run(args: argparse.Namespace) -> None:
         PR_ROOT / "tests",
         PR_ROOT / "assets",
         PR_ROOT / "examples",
-        PR_ROOT / "experiments",
+        # PR_ROOT / "experiments",
         PR_ROOT / ".github" / "workflows",
         PR_ROOT / ".github" / "workflows_inactive",
         PR_ROOT / "src" / args.name,
