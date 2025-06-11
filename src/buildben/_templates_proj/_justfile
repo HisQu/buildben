@@ -32,32 +32,32 @@ _venv_guard:
 reset-venv:
     rm -rf .direnv        
     direnv reload   # direnv will rebuild on reload
-    direnv exec . just install  # Make requirements.txt & install deps
+    direnv exec . just install_and_compile  # Make requirements.txt & install deps
 
 
 # === Installation ====================================================
-
-
-# Compiles & Installs: requirements.txt & <my_project> in editable mode
-install *ARGS:
-    just _venv_guard
-    just compile_requirements {{ARGS}}
-    pip-sync requirements.txt dev-requirements.txt  
-    {{PY}} -m pip install -e .[dev]
-
-# Only Installs: requirements.txt & <my_project> in editable mode
-install_without_recompile *ARGS:
-    just _venv_guard
-    pip-sync requirements.txt dev-requirements.txt  
-    {{PY}} -m pip install -e .[dev]
 
 # Resolves dependency versions and creates requirements.txt + dev-requirements.txt
 compile_requirements *ARGS:
     pip-compile pyproject.toml -o requirements.txt {{ARGS}}
     pip-compile --extra dev pyproject.toml -o dev-requirements.txt {{ARGS}}
 
-# Reinstall the project itself, editable mode
-reinstall-proj:
+# Compiles & Installs: requirements.txt & bla_a in editable mode
+compile_install *ARGS:
+    just _venv_guard
+    just compile_requirements {{ARGS}}
+    just install
+
+# Only Installs: requirements.txt & bla_a in editable mode
+install:
+    just _venv_guard
+    if ! [[ -e requirements.txt ]]; then echo "✗ Didn't find requirements.txt! Run 'just compile_install'!" >&2; exit 1; fi
+    pip-sync requirements.txt dev-requirements.txt  
+    {{PY}} -m pip install -e .[dev]
+
+
+# Uninstalls <my_project>, and installs it in editable mode
+reinstall:
     just _venv_guard
     {{PY}} -m pip uninstall -y "${PROJECT_NAME}"
     {{PY}} -m pip install -e .[dev]
@@ -66,6 +66,6 @@ reinstall-proj:
 
 # Upgrade all pins in-place
 upgrade:                        
-    just install --upgrade
+    just compile_install --upgrade
 
 
