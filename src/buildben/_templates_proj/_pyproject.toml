@@ -68,13 +68,12 @@ where = ["src"]                       # < Scan only src/ for packages
 # "share/<my_project>/config"   = ["config/*.ini"]
 
 # =====================================================================
-# === Dependencies
+# === Extra Dependencies
 # =====================================================================
 
 
-
-# === Optional “extras” ==========  (for pip install .[dev])
 [project.optional-dependencies]
+### pip install -e .[dev]
 dev = [
     # --- Packaging helpers ------------
     "pip-tools>=7.4",   # < Dependency management: pip-compile
@@ -89,16 +88,25 @@ dev = [
 ]
 
 # =====================================================================
+# === Terminal entry points
+# =====================================================================
+
+# [project.scripts]
+# <my_project> = "<my_project>.cli:main" # !! No template yet for cli.py
+
+
+# =====================================================================
 # === Tool configurations
 # =====================================================================
 
 # Black code-formatter defaults
 [tool.black]
-line-length = 88
-target-version = ["py311"]
+line-length = 80
+target-version = ["py312"]
 exclude = '''
 /(
     \.venv
+  | \venv
   | \.direnv
   | build
   | dist

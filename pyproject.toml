@@ -16,6 +16,12 @@ authors     = [{ name = "markur4", email = "you@example.com" }]
 readme      = "README.md"
 license     = "MIT"
 requires-python = ">=3.12"
+dependencies = [        ### Most shall run on the std-lib!
+    # "pip-tools>=7.4",   # < Installed in .direnv venv
+    # "pytest>=8.2",
+    # "pytest-xdist",     # < Multi-core testing
+    # "pytest-cov",       # < Code-Coverage
+]
 
 
 # =====================================================================
@@ -40,21 +46,14 @@ where = ["src"]                       # < Scan only src/ for packages
 
 
 # =====================================================================
-# === Dependencies 
+# === Extra Dependencies 
 # =====================================================================
 
-# === Runtime dependencies =======  (will land in requirements.txt)
-# Most shall run on the std-lib!
-dependencies = [
-    "pip-tools>=7.4",   # < Dependency management: pip-compile
-    "pytest>=8.2",
-    "pytest-xdist",     # < Multi-core testing
-    "pytest-cov",       # < Code-Coverage
-]
-
-# === Optional “extras” ==========  (for pip install .[dev])
 # [project.optional-dependencies]
+### pip install -e .[dev]
 # dev = [
+#     # --- Packaging helpers ------------
+#     "pip-tools>=7.4",   # < Installed in .direnv venv
 #     # --- Testing ----------------------
 #     "pytest>=8.2",
 #     "pytest-xdist",     # < Multi-core testing
@@ -66,7 +65,7 @@ dependencies = [
 # ]
 
 # =====================================================================
-# === console-script entry points
+# === Terminal entry points
 # =====================================================================
 
 [project.scripts]
