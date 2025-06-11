@@ -22,7 +22,7 @@ PY := "${VIRTUAL_ENV-}/bin/python"
 
 # Hidden helper that must succeed first
 [private]
-_venv-guard:
+_venv_guard:
     @test -n "${VIRTUAL_ENV-}" || { \
         echo "✗ VIRTUAL_ENV is not set, Virtual environment inactive — run 'direnv reload' first" >&2; \
         exit 1; \
@@ -40,14 +40,14 @@ reset-venv:
 
 # Compiles & Installs: requirements.txt & <my_project> in editable mode
 install *ARGS:
-    just _venv-guard
+    just _venv_guard
     just compile_requirements {{ARGS}}
     pip-sync requirements.txt dev-requirements.txt  
     {{PY}} -m pip install -e .[dev]
 
 # Only Installs: requirements.txt & <my_project> in editable mode
-install-without-recompile *ARGS:
-    just _venv-guard
+install_without_recompile *ARGS:
+    just _venv_guard
     pip-sync requirements.txt dev-requirements.txt  
     {{PY}} -m pip install -e .[dev]
 
@@ -58,7 +58,7 @@ compile_requirements *ARGS:
 
 # Reinstall the project itself, editable mode
 reinstall-proj:
-    just _venv-guard
+    just _venv_guard
     {{PY}} -m pip uninstall -y "${PROJECT_NAME}"
     {{PY}} -m pip install -e .[dev]
     
