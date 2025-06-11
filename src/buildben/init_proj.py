@@ -68,6 +68,7 @@ def _run(args: argparse.Namespace) -> None:
         PR_ROOT / "experiments",
         PR_ROOT / ".github" / "workflows",
         PR_ROOT / ".github" / "workflows_inactive",
+        PR_ROOT / "src" / "utils",
         PR_ROOT / "src" / args.name,
         PR_ROOT / "src" / args.name / "data",
         PR_ROOT / "src" / args.name / "images",
@@ -88,6 +89,7 @@ def _run(args: argparse.Namespace) -> None:
         "_justfile": PR_ROOT / "justfile",
         "_codecov.yml": PR_ROOT / ".github" / "workflows_inactive" / "codecov.yml",
         "_main.py": PR_ROOT / "src" / args.name / "main.py",
+        "_utils_stdlib.py": PR_ROOT / "src" / "utils" / "stdlib.py",
         ### .IGNORE - Files are git-ignored until manually renamed:
         "_README.IGNORE.md": PR_ROOT / "README.IGNORE.md",
         "_flowchart.IGNORE.mmd": PR_ROOT / "assets" / "flowchart.IGNORE.mmd",
