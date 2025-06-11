@@ -55,14 +55,12 @@ install:
     pip-sync requirements.txt dev-requirements.txt  
     {{PY}} -m pip install -e .[dev]
 
-
 # Uninstalls <my_project>, and installs it in editable mode
 reinstall:
     just _venv-guard
     {{PY}} -m pip uninstall -y "${PROJECT_NAME}"
     {{PY}} -m pip install -e .[dev]
     
-
 
 # Upgrade all pins in-place
 upgrade:                        
