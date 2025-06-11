@@ -22,7 +22,7 @@ PY := "${VIRTUAL_ENV-}/bin/python"
 
 # Hidden helper that must succeed first
 [private]
-_venv_guard:
+_venv-guard:
     @test -n "${VIRTUAL_ENV-}" || { \
         echo "✗ VIRTUAL_ENV is not set, Virtual environment inactive — run 'direnv reload' first" >&2; \
         exit 1; \
@@ -32,33 +32,33 @@ _venv_guard:
 reset-venv:
     rm -rf .direnv        
     direnv reload   # direnv will rebuild on reload
-    direnv exec . just install_recompile  # Make requirements.txt & install deps
+    direnv exec . just install-recompile  # Make requirements.txt & install deps
 
 
 # === Installation ====================================================
 
 # Resolves dependency versions and creates requirements.txt + dev-requirements.txt
-compile_requirements *ARGS:
+compile-requirements *ARGS:
     pip-compile pyproject.toml -o requirements.txt {{ARGS}}
     pip-compile --extra dev pyproject.toml -o dev-requirements.txt {{ARGS}}
 
 # Compiles all requirements & installs <my_project> in editable mode
-install_compile *ARGS:
-    just _venv_guard
-    just compile_requirements {{ARGS}}
+install-compile *ARGS:
+    just _venv-guard
+    just compile-requirements {{ARGS}}
     just install
 
 # Only Installs: requirements.txt & <my_project> in editable mode
 install:
-    just _venv_guard
-    if ! [[ -e requirements.txt ]]; then echo "✗ Didn't find requirements.txt! Run 'just install_recompile'!" >&2; exit 1; fi
+    just _venv-guard
+    if ! [[ -e requirements.txt ]]; then echo "✗ Didn't find requirements.txt! Run 'just install-recompile'!" >&2; exit 1; fi
     pip-sync requirements.txt dev-requirements.txt  
     {{PY}} -m pip install -e .[dev]
 
 
 # Uninstalls <my_project>, and installs it in editable mode
 reinstall:
-    just _venv_guard
+    just _venv-guard
     {{PY}} -m pip uninstall -y "${PROJECT_NAME}"
     {{PY}} -m pip install -e .[dev]
     
@@ -66,6 +66,6 @@ reinstall:
 
 # Upgrade all pins in-place
 upgrade:                        
-    just install_recompile --upgrade
+    just install-recompile --upgrade
 
 
