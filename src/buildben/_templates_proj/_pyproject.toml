@@ -39,6 +39,30 @@ dependencies = [
 
 
 # =====================================================================
+# === Extra Dependencies
+# =====================================================================
+
+[project.optional-dependencies]
+### pip install -e .[dev]
+dev = [
+    # --- Packaging helpers ------------
+    "pip-tools>=7.4",   # < Dependency management: pip-compile
+    # --- Testing ----------------------
+    "pytest>=8.2",
+    "pytest-xdist",     # < Multi-core testing
+    "pytest-cov",       # < Code-Coverage
+    # --- Linting / formatting ---------
+    "black>=25.1",
+    # "ruff>=0.4",
+    # "mypy>=1.10",
+    # --- Plotting -----------------------
+    "matplotlib",
+    "seaborn",
+    # "plotastic",
+    # "scipy",
+]
+
+# =====================================================================
 # === Packaging
 # =====================================================================
 
@@ -69,30 +93,6 @@ where = ["src"]                       # < Scan only src/ for packages
 # "share/<my_project>/examples" = ["examples/*.ipynb"]
 # "share/<my_project>/config"   = ["config/*.ini"]
 
-# =====================================================================
-# === Extra Dependencies
-# =====================================================================
-
-
-[project.optional-dependencies]
-### pip install -e .[dev]
-dev = [
-    # --- Packaging helpers ------------
-    "pip-tools>=7.4",   # < Dependency management: pip-compile
-    # --- Testing ----------------------
-    "pytest>=8.2",
-    "pytest-xdist",     # < Multi-core testing
-    "pytest-cov",       # < Code-Coverage
-    # --- Linting / formatting ---------
-    "black>=25.1",
-    # "ruff>=0.4",
-    # "mypy>=1.10",
-    # --- Plotting -----------------------
-    "matplotlib",
-    "seaborn",
-    # "plotastic",
-    # "scipy",
-]
 
 # =====================================================================
 # === Terminal entry points
