@@ -152,6 +152,14 @@ buildben init-proj --help
 2. Open the vscode commands palette (Ctrl+Shift+P), search & select "Python: Select Interpreter".
 3. Select "Search on workspace level".
 4. "Enter interpreter path" & paste the path.
+5. Add this to your ``settings.json``:
+
+```json
+// look one level down inside .direnv
+"python.venvPath": ".direnv",
+// optional: add the name so global scans also catch ~/.direnv
+"python.venvFolders": [ ".direnv" ],
+```
 
 #### Install VS Code Extensions:
 ```bash
