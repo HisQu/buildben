@@ -16,37 +16,39 @@ from typing import Callable
 # =====================================================================
 
 # %%
-def deep_get(d: dict, *keys, default=None) -> Any:
-    """Safely get a nested key: deep_get(cfg, 'db', 'host')."""
+def deep_get(d: dict, keypath: tuple, default=None) -> Any:
+    """Safely get a nested key by providing a path of keys: deep_get(cfg, 'db', 'host')."""
     try:
-        return reduce(getitem, keys, d)
+        return reduce(getitem, keypath, d)
     except (KeyError, TypeError):
         return default
     
-def deep_set(d: dict, value, *keys) -> None:
+def deep_set(d: dict, keypath:tuple, value: Any,) -> None:
     """Set a nested key, creating dictionaries on the way."""
-    for k in keys[:-1]:
+    for k in keypath[:-1]:
         d = d.setdefault(k, {})
-    d[keys[-1]] = value
+    d[keypath[-1]] = value
     
-def deep_merge(a: dict, b: dict) -> dict:
+def deep_right_merge(a: dict, b: dict) -> dict:
     """Recursively merge dict *b* into copy of *a* (right-bias)."""
     out = a.copy()
     for k, v in b.items():
         if isinstance(v, dict) and isinstance(out.get(k), dict):
-            out[k] = deep_merge(out[k], v)
+            out[k] = deep_right_merge(out[k], v)
         else:
             out[k] = v
     return out
 
 
 if __name__ == "__main__":
-    _test_dict = {"a": {"b": 1, "c": 2}, "d": {"e": 3}}
-    print(deep_get(_test_dict, "a", "b", "x", default=None))
-    print(deep_set(_test_dict, 4, "a", "b"))
+    _test_dict = {"a": {"_b": 1, "_c": 2}, "d": {"_e": 3}}
+    print(deep_get(_test_dict, keypath=("a", "_b"), default=None))
     
-    _test_dict2 = {"a": 1, "b": 2, "c": {"d": 3}}
-    print(deep_merge(_test_dict,_test_dict2))
+    deep_set(_test_dict, keypath=("a", "_b"), value="new")
+    print(_test_dict)
+    
+    _test_dict2 = {"a": 1, "b": 2, "c": {"_d": 3}}
+    print(deep_right_merge(_test_dict, _test_dict2))
 
 
 # =====================================================================
