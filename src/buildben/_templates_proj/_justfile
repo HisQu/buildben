@@ -28,11 +28,11 @@ _venv_guard:
         exit 1; \
     }
     
-# Deletes .direnv, recreates it, installs deps+dev and project (editable)
+# Deletes .direnv, recreates it, installs all requirements and <my_project> (editable)
 reset-venv:
     rm -rf .direnv        
     direnv reload   # direnv will rebuild on reload
-    direnv exec . just install_and_compile  # Make requirements.txt & install deps
+    direnv exec . just install_recompile  # Make requirements.txt & install deps
 
 
 # === Installation ====================================================
@@ -42,16 +42,16 @@ compile_requirements *ARGS:
     pip-compile pyproject.toml -o requirements.txt {{ARGS}}
     pip-compile --extra dev pyproject.toml -o dev-requirements.txt {{ARGS}}
 
-# Compiles & Installs: requirements.txt & bla_a in editable mode
-compile_install *ARGS:
+# Compiles all requirements & installs <my_project> in editable mode
+install_compile *ARGS:
     just _venv_guard
     just compile_requirements {{ARGS}}
     just install
 
-# Only Installs: requirements.txt & bla_a in editable mode
+# Only Installs: requirements.txt & <my_project> in editable mode
 install:
     just _venv_guard
-    if ! [[ -e requirements.txt ]]; then echo "✗ Didn't find requirements.txt! Run 'just compile_install'!" >&2; exit 1; fi
+    if ! [[ -e requirements.txt ]]; then echo "✗ Didn't find requirements.txt! Run 'just install_recompile'!" >&2; exit 1; fi
     pip-sync requirements.txt dev-requirements.txt  
     {{PY}} -m pip install -e .[dev]
 
@@ -66,6 +66,6 @@ reinstall:
 
 # Upgrade all pins in-place
 upgrade:                        
-    just compile_install --upgrade
+    just install_recompile --upgrade
 
 

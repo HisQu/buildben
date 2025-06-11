@@ -89,3 +89,9 @@ def warn_dir_overwrite(dir: Path) -> None:
         answer = input(_m).lower()
         if answer not in {"y", "yes"}:
             sys.exit("Aborted by user")
+
+
+# %% 
+def create__init__(dir: Path):
+    """Create __init__.py files in a subdirectory"""
+    (dir / "__init__.py").touch(exist_ok=True)

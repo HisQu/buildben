@@ -16,7 +16,7 @@ authors     = [{ name = "<github_username>", email = "you@example.com" }]
 readme      = "README.md"
 license     = { text = "MIT" }
 requires-python = ">=3.12"
-dependencies = [ # (will land in requirements.txt)
+dependencies = [
     # --- Core packages ------------------
     "ipykernel",
     "dotenv",        # < Loads .env files
@@ -26,8 +26,8 @@ dependencies = [ # (will land in requirements.txt)
     "openpyxl",      # < Opens excel files
     "pandas",
     # --- Plotting -----------------------
-    "matplotlib",
-    "seaborn",
+    # "matplotlib",
+    # "seaborn",
     # "plotastic",
     # "scipy",
     # --- Machine learning --------------
@@ -43,17 +43,17 @@ dependencies = [ # (will land in requirements.txt)
 # =====================================================================
 
 # === Define import paths to packages =======
-# > import <my_project>          {"" = "src"}
-# > import <my_project>.utils"   {"<my_project>/utils" = "src/utils"}
+# !! Best practice: ONE import package with same name as project!
 [tool.setuptools]
-package-dir = { "" = "src", "<my_project>/utils" = "src/utils"  }
+package-dir = { "" = "src"}
 
+# > Autodiscovery:
 [tool.setuptools.packages.find]
 where = ["src"]                       # < Scan only src/ for packages
-# namespaces = true                     # < Implicit namespace packages ok
+# namespaces = false                     # < Implicit namespace packages ok
+
 
 # === Include data *inside* the package =======
-
 [tool.setuptools.package-data]
 "<my_project>" = [
     "data/**/*.xlsx",         # src/<my_project>/data/
@@ -87,6 +87,11 @@ dev = [
     "black>=25.1",
     # "ruff>=0.4",
     # "mypy>=1.10",
+    # --- Plotting -----------------------
+    "matplotlib",
+    "seaborn",
+    # "plotastic",
+    # "scipy",
 ]
 
 # =====================================================================
