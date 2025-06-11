@@ -39,7 +39,7 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 
 #### Main dependencies:
 <!-- List your main dependencies here and explain why they're important. -->
-- **[`pipx`](https://pipx.pypa.io)**: The recommended home for `buildben`, baking ii accessible globally while keeping the OS-Python clean
+- **[`pipx`](https://pipx.pypa.io)**: The recommended home for `buildben`, making it accessible globally while keeping the OS-Python clean
 - **[`pip-tools`](https://github.com/jazzband/pip-tools)**: Used to re-compute the venv requirements and sync them.
 - **[`direnv`](https://direnv.net/)**: Auto-loads project-specific environment and provides  one-liners for environment management.
 - **[`just`](https://github.com/casey/just)**: For running tasks to manage build tools & the virtual environment.
