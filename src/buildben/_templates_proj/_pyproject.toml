@@ -20,7 +20,7 @@ dependencies = [
     # --- Core packages ------------------
     "ipykernel",
     "dotenv",        # < Loads .env files
-    "tqdm",          # < Progress bars
+    # "tqdm",          # < Progress bars
     # --- Numerical ----------------------
     "numpy",
     "openpyxl",      # < Opens excel files
@@ -46,13 +46,13 @@ dependencies = [
 ### pip install -e .[dev]
 dev = [
     # --- Packaging helpers ------------
-    "pip-tools>=7.4",   # < Dependency management: pip-compile
+    # "pip-tools>=7.4",   # < Dependency management: pip-compile
     # --- Testing ----------------------
     "pytest>=8.2",
-    "pytest-xdist",     # < Multi-core testing
-    "pytest-cov",       # < Code-Coverage
+    # "pytest-xdist",     # < Multi-core testing
+    # "pytest-cov",       # < Code-Coverage
     # --- Linting / formatting ---------
-    "black>=25.1",
+    # "black>=25.1",
     # "ruff>=0.4",
     # "mypy>=1.10",
     # --- Plotting -----------------------
