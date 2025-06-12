@@ -16,12 +16,9 @@ authors     = [{ name = "markur4", email = "you@example.com" }]
 readme      = "README.md"
 license     = "MIT"
 requires-python = ">=3.12"
-dependencies = [        ### Most shall run on the std-lib!
-    # "pip-tools>=7.4",   # < Installed in .direnv venv
-    # "pytest>=8.2",
-    # "pytest-xdist",     # < Multi-core testing
-    # "pytest-cov",       # < Code-Coverage
-]
+# !! Dependencies would clutter the OS-Python! 
+# !! We can't call pipx from pyproject.toml!
+# dependencies = []  # !! -> LEAVE EMPTY !!!
 
 
 # =====================================================================
