@@ -3,8 +3,59 @@
 # %%
 import os
 import sys
+import subprocess
 import shutil
 from pathlib import Path
+from textwrap import dedent
+
+
+# %%
+
+
+def run_command(command: str | list[str], cwd=None, quiet=True) -> str:
+    """Run a shell command and check for errors."""
+
+    shell = True if isinstance(command, str) else False
+
+    if isinstance(command, list):
+        shell = False
+    elif isinstance(command, str):
+        shell = True
+        command = dedent(command).strip()
+
+    result = subprocess.run(
+        command,
+        shell=shell,  # < If command is not a list but a string
+        cwd=cwd,  # < Current working directory
+        # capture_output=True,  # < Capture output and error streams
+        stdout=subprocess.PIPE,  # < Capture output stream
+        stderr=subprocess.PIPE,  # < Capture error stream
+        text=True,  # < Output as text (not bytes)
+    )
+
+    if result.returncode != 0:
+        print(f"\n!!\n!! Error executing command: \n{command} \n")
+        print(result.stderr, "!!\n!!\n")
+        raise subprocess.CalledProcessError(result.returncode, command)
+
+    if not quiet:
+        print(result.stdout, end="")
+
+    return result.stdout.strip()
+
+
+if __name__ == "__main__":
+    print(run_command("ls"))
+    print(
+        run_command(
+            """ls \
+                -l \
+                -a \
+            """
+        )
+    )
+    print(run_command(["ls", "-l", "-a"]))
+
 
 # %%
 
@@ -91,7 +142,7 @@ def warn_dir_overwrite(dir: Path) -> None:
             sys.exit("Aborted by user")
 
 
-# %% 
+# %%
 def create__init__(dir: Path):
     """Create __init__.py files in a subdirectory"""
     (dir / "__init__.py").touch(exist_ok=True)

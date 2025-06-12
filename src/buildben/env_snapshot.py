@@ -8,38 +8,13 @@
 
 
 import os
-import subprocess
 import argparse
 from pathlib import Path
 from textwrap import dedent
 
+# import logging
+
 from . import utils
-
-
-def run_command(command: str | list[str], cwd=None):
-    """Run a shell command and check for errors."""
-
-    shell = True if isinstance(command, str) else False
-
-    if isinstance(command, list):
-        shell = False
-    elif isinstance(command, str):
-        shell = True
-        command = dedent(command).strip()
-
-    result = subprocess.run(
-        command,
-        shell=shell,  # < If command is not a list but a string
-        cwd=cwd,  # < Current working directory
-        capture_output=True,  # < Capture output and error streams
-        text=True,  # < Output as text (not bytes)
-    )
-
-    if result.returncode != 0:
-        print(f"\n!!\n!! Error executing command: \n{command} \n")
-        print(result.stderr, "!!\n!!\n")
-        raise subprocess.CalledProcessError(result.returncode, command)
-    return result.stdout.strip()
 
 
 def add_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -88,9 +63,9 @@ def _run(args: argparse.Namespace) -> None:
 
     # === Capture Commit Hash =========================================
 
-    commit_hash: str = run_command("git rev-parse --short HEAD")
-    timepoint: str = run_command(
-        f"git show --format=%cd --date=iso {commit_hash}", cwd=PR_ROOT
+    commit_hash: str = utils.run_command("git rev-parse --short HEAD")
+    timepoint: str = utils.run_command(
+        f"git show -s --format=%cd --date=iso {commit_hash}", cwd=PR_ROOT
     )
     print(f"🔖  Using Commit: {commit_hash} ({timepoint})")
 
@@ -99,16 +74,16 @@ def _run(args: argparse.Namespace) -> None:
     # =================================================================
 
     print(f"📌  pip-compiling environment ...")
-    run_command(
+    utils.run_command(
         f"""pip-compile \\
             --generate-hashes \\
             --allow-unsafe \\
             --extra dev \\
             --output-file {LOCK_FP} \\
             pyproject.toml
-        """
+        """,
     )
-    print(f"📌  Environment frozen to {LOCK_FP}")
+    print(f"📌  Environment frozen to {LOCK_REL}")
 
     # === Write experiment.env ========================================
     ENV_FP.write_text(f"COMMIT_HASH={commit_hash}\nLOCK_FILE={LOCK_FP.name}\n")
@@ -118,13 +93,11 @@ def _run(args: argparse.Namespace) -> None:
     # === Write .dockerignore
     # =================================================================
     # > Prevents copying EVERY experiment into the Docker image!
-    dockerignore = dedent(
-        f""" \
+    dockerignore = f""" \
         # > Ignore everything under experiments, but keep the target directory!
         experiments/**
         !{TARGET_REL}/**
         """
-    )
     DOCKERIGNORE_FP.write_text(dockerignore)
 
     # =================================================================
@@ -170,14 +143,14 @@ def _run(args: argparse.Namespace) -> None:
         """
     )
     DOCKERFILE_FP.write_text(dockerfile)
-    print(f"🐳  Wrote Dockerfile {DOCKERFILE_FP.name}")
+    print(f"🐳  Wrote Dockerfile")
 
     # =================================================================
     # === Build Docker Image
     # =================================================================
 
     print(f"🐳  Building Docker image {image_tag} ...")
-    run_command(
+    utils.run_command(
         f"""docker build \\
         --tag {image_tag} \\
         --file {DOCKERFILE_FP} \\
@@ -185,8 +158,15 @@ def _run(args: argparse.Namespace) -> None:
         """
     )
 
-    print(f"🐳  Done building!")
+    size = utils.run_command(f"docker image ls | grep {commit_hash}").split()[
+        -1
+    ]
+
+    print(f"🐳  Done building ({size})")
+    print(f"👉  Check with: docker run --rm -it")
     print(f"👉  Push with:  docker push {image_tag}")
     print(
         f"🧹  Remove local copy: docker image rm {image_tag}   (layers stay deduped)"
     )
+
+    # %%
