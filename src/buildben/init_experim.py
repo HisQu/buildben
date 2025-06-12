@@ -36,13 +36,14 @@ def add_parser(subparsers: argparse._SubParsersAction) -> None:
 # === implementation                                                 #
 # ================================================================== #
 def _run(args: argparse.Namespace) -> None:
-
-    ### Locate project root:
-    PR_ROOT = utils.detect_root()
-
+    
+    # === Retrieve Variables ==========================================
+    PR_ROOT:Path = utils.detect_root()
+    PR_NAME = os.getenv("PROJECT_NAME")
+    
     ### Experiment directory
-    today = dt.date.today().isoformat()
-    EXP_ROOT = PR_ROOT / "experiments" / f"{today}_{args.name}"
+    TODAY = dt.date.today().isoformat()
+    EXP_ROOT = PR_ROOT / "experiments" / f"{TODAY}_{args.name}"
     utils.warn_dir_overwrite(EXP_ROOT)
 
     # =================================================================
@@ -50,7 +51,7 @@ def _run(args: argparse.Namespace) -> None:
     # =================================================================
 
     directories: list[Path] = [
-        EXP_ROOT / "env",
+        # EXP_ROOT / "env", # ?? This would complicate .dockerignore logic
         EXP_ROOT / "data",
         EXP_ROOT / "scripts",
         EXP_ROOT / "output",
@@ -80,10 +81,10 @@ def _run(args: argparse.Namespace) -> None:
     placeholders = {
         "<experiment_name>": args.name,
         "{experiment_name}": args.name,
-        "<bb_date>": today,  # < bb_ makes it more unique to buildben
-        "{bb_date}": today,
-        "<my_project>": os.getenv("PROJECT_NAME"),
-        "{my_project}": os.getenv("PROJECT_NAME"),
+        "<bb_date>": TODAY,  # < bb_ makes it more unique to buildben
+        "{bb_date}": TODAY,
+        "<my_project>": PR_NAME,
+        "{my_project}": PR_NAME,
     }
 
     utils.substitute_placeholders(

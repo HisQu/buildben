@@ -2,6 +2,7 @@
 import argparse
 from . import init_proj
 from . import init_experim
+from . import env_snapshot
 
 def main() -> None:
     ### Init parsers
@@ -17,6 +18,7 @@ def main() -> None:
     ### Edit subparser in place to include script-specific parsers
     init_proj.add_parser(subparsers)
     init_experim.add_parser(subparsers)
+    env_snapshot.add_parser(subparsers)
 
     ### Parse args and run the command
     args = PARSER.parse_args()
