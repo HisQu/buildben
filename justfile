@@ -25,4 +25,6 @@ init_test:
     buildben init-proj \
         -n bla_a \
         -t .. \
-        -u markur4
+        -u markur4 \
+        -git
+        
