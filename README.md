@@ -148,7 +148,7 @@ buildben init-proj --help
 ### Use `direnv` & `just` in VS Code:
 
 #### Select Python Interpreter:
-1. Copy the path to the path to the python executable (`<my_project_name>/.direnv/python-3.12.3`). 
+1. Copy the path to the path to the python executable (`<my_project>/.direnv/python-3.12.3`). 
 2. Open the vscode commands palette (Ctrl+Shift+P), search & select "Python: Select Interpreter".
 3. Select "Search on workspace level".
 4. "Enter interpreter path" & paste the path.
@@ -160,6 +160,9 @@ buildben init-proj --help
 // optional: add the name so global scans also catch ~/.direnv
 "python.venvFolders": [ ".direnv" ],
 ```
+<blockquote>
+🤬 Seriously, VS Code is VERY BAD at detecting .direnv !!! I have recognized only one  pattern: VS Code detects a venv or .venv in the workspace root very reliably. But god forbid a customised venv layout like .direnv! I have tried a lot (both on MacOS and WSL): Reloads, restarts, extensions, everything related to the settings.json, etc. If anyone found a reliable solution, please let me know..!
+</blockquote>
 
 #### Install VS Code Extensions:
 ```bash
