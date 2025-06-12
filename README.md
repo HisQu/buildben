@@ -148,21 +148,19 @@ buildben init-proj --help
 ### Use `direnv` & `just` in VS Code:
 
 #### Select Python Interpreter:
-1. Copy the path to the path to the python executable (`<my_project>/.direnv/python-3.12.3`). 
-2. Open the vscode commands palette (Ctrl+Shift+P), search & select "Python: Select Interpreter".
-3. Select "Search on workspace level".
-4. "Enter interpreter path" & paste the path.
-5. Add this to your ``settings.json``:
+This needs to be repeated for every new workspace folder!
+1. Press ``Ctrl + Shift + P``; search & select *"Python: Select Interpreter"*
+2. It will list workspace folders. Select the one you want to assign the direnv-interpreter to.
+3. It will list available interpreters `.direnv/python-3.x.y` should be next to the global ones (VS Code documentation claims it knows `direnv` out-of-the-box!).
+4. If it does not appear, then try adding this to your ``settings.json`` & replace ``<path_to_your_projects>`` with the actual parent folder where you store your projects. It must be within your home directory, and VS Code must have permission to that folder!
+
 
 ```json
-// look one level down inside .direnv
-"python.venvPath": ".direnv",
-// optional: add the name so global scans also catch ~/.direnv
-"python.venvFolders": [ ".direnv" ],
+// Optional: Patterns inside the home directory that point to a parent folder containing a venv or python-3.x.y:
+  "python.venvFolders": [ "user/<path_to_your_projects>/*/.direnv" ],
 ```
-<blockquote>
-🤬 Seriously, VS Code is VERY BAD at detecting .direnv !!! I have recognized only one  pattern: VS Code detects a venv or .venv in the workspace root very reliably. But god forbid a customised venv layout like .direnv! I have tried a lot (both on MacOS and WSL): Reloads, restarts, extensions, everything related to the settings.json, etc. If anyone found a reliable solution, please let me know..!
-</blockquote>
+5. You might also try activating "python.terminal.activateEnvironment" in the VS Code settings.
+
 
 #### Install VS Code Extensions:
 ```bash
