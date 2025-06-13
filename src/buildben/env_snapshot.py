@@ -26,7 +26,7 @@ def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
         help="Directory to write lock & env files",
     )
     p.add_argument(
-        "--py_base",
+        "--py-base",
         "-b",
         default="python:3.12-slim",
         help="Base image (default 'python:3.12-slim')",
