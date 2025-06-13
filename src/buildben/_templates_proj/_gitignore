@@ -22,6 +22,7 @@ db/
 .secrets.env
 .env.prod
 # .envrc
+*Zone.Identifier
 
 # === Virtual Environments =============================================
 .venv/
