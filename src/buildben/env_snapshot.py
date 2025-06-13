@@ -8,14 +8,15 @@ from textwrap import dedent
 
 from . import utils
 
-CMD_NAME = "env-snapshot" # < Name of the CLI-command
-CMD_ALIASES = ["snp"] # < Alias shortcut of the CLI-command
+CMD_NAME = "env-snapshot"  # < Name of the CLI-command
+CMD_ALIASES = ["snp"]  # < Alias shortcut of the CLI-command
 DOC = "Snapshot a Python project into requirements.lock, experiment.env, and Dockerfile"
+
 
 def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
     p: argparse.ArgumentParser = subparsers.add_parser(
-        name=CMD_NAME, 
-        aliases=CMD_ALIASES,  
+        name=CMD_NAME,
+        aliases=CMD_ALIASES,
         help=DOC,
         description=DOC,
     )
@@ -88,11 +89,13 @@ def _run(args: argparse.Namespace) -> None:
     # === Write .dockerignore
     # =================================================================
     # > Prevents copying EVERY experiment into the Docker image!
-    dockerignore = f""" \
+    dockerignore = dedent(
+        f""" \
         # > Ignore everything under experiments, but keep the target directory!
         experiments/**
         !{TARGET_REL}/**
         """
+    )
     DOCKERIGNORE_FP.write_text(dockerignore)
 
     # =================================================================
