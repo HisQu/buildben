@@ -20,7 +20,7 @@ def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
         description=DOC,
     )
     p.add_argument(
-        "--target_dir",
+        "--target-dir",
         "-t",
         required=True,
         help="Directory to write lock & env files",
