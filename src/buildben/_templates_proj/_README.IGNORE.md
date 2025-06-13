@@ -151,7 +151,7 @@ python3 -m {my_project}
 pip install -e <myproject>[dev] # Install testing dependencies from pyproject.toml
 pytest                # Run tests
 ```
-</blockquote></details>
+</details>
 
 
 <!-- --- Diagrams ------------------------------------------------- -->
