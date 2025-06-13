@@ -162,10 +162,15 @@ def _run(args: argparse.Namespace) -> None:
     ]
 
     print(f"🐳  Done building [Imagesize = {size}]")
-    print(f"👉  Check with:\tdocker run --rm -it")
-    print(f"👉  Push with:\tdocker push {image_tag}")
+    
+    # =================================================================
+    # === Next steps
+    # =================================================================
+    print("Next steps:")
+    print(f"🚀  Run interactively:\tdocker run -it {image_tag}")
+    print(f"👉  Push to ??:\tdocker push {image_tag}")
     print(
-        f"👉  Remove local copy:\tdocker image rm {image_tag}   (layers stay deduped)"
+        f"🚮  Remove image:\tdocker image rm {image_tag}   (layers stay deduped)"
     )
 
     # %%
