@@ -134,7 +134,8 @@ fi
 
 ### ✅ Verify installation:
 ```bash
-buildben init-proj --help
+bube        # Prints help when no args are given
+# buildben  # Alias for bube
 ```
 
 <br>
@@ -205,7 +206,7 @@ code --install-extension jebbs.plantuml
 ### Initialize project scaffold:
 ```bash
 # Initialize project scaffold:
-buildben init-proj \
+bube init-proj \
   -n my_project \
   -t ./target_dir \
   -u your_github_username
