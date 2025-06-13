@@ -6,13 +6,13 @@ Describe **what question you are answering** here.
 
 ## How to reproduce
 ```bash
-source .venv/bin/activate   # if you created one
-bash run.sh
+# source .venv/bin/activate   # if you created one
+# bash run.sh
 ```
 
 ## Inputs
-* **Data:** `data/` (tracked via DVC / symlink / copy)
-* **Config:** `src/config.yaml` (add if needed)
+* **Data:** `data/` 
+* **Config:** `src/config.yaml` 
 
 ## Outputs
 Generated artifacts go to `output/`.
