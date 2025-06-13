@@ -15,7 +15,7 @@ def main() -> None:
     ### Top-level parser
     PARSER = argparse.ArgumentParser(
         prog="buildben",
-        description="CLI of Build-Benedictions",
+        description="CLI of Build-Benedictions.\nAliases: `buildben`, `bube`",
     )
 
     ### Init Subparser, will be modified in place to include script-parsers
