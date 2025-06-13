@@ -32,9 +32,10 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 
 #### `buildben` ...
 <!-- Summarize the top 3 features -->
-- ... standardizes project setups with template scaffolds
-- ... integrates common developer tools (e.g. `pipx`, `direnv`, `just`)
-- ... collects development workflows, scripts & recipes
+- ... = a Python development tool.
+- ... standardizes project & experiment setups with template scaffolds
+- ... integrates popular tools like `pipx`, `direnv`, `just`, etc.
+- ... dockerizes a snapshot of your project for 100 % reproducibibility of experiments
 
 
 #### Main dependencies:
@@ -43,6 +44,7 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 - **[`pip-tools`](https://github.com/jazzband/pip-tools)**: Used to re-compute the venv requirements and sync them.
 - **[`direnv`](https://direnv.net/)**: Auto-loads project-specific environment and provides  one-liners for environment management.
 - **[`just`](https://github.com/casey/just)**: For running tasks to manage build tools & the virtual environment.
+- **`Docker`:** Used to create snapshots of your project (optional). 
 
 
 <hr>
@@ -67,8 +69,8 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 <!-- toc -->
 
 1. [📦 Installation](#-installation)
-2. [❓Optional Installs](#optional-installs)
-3. [🚀 Usage](#-usage)
+2. [🚀 Usage](#-usage)
+3. [❓Optional Installs](#optional-installs)
 4. [📚  Examples / Documentation](#--examples--documentation)
 
 <!-- tocstop -->
@@ -141,6 +143,89 @@ bube        # Prints help when no args are given
 <br>
 
 
+
+
+<!-- ============================================================== -->
+<!-- == Usage ===================================================== -->
+## 🚀 Usage
+
+### Projects
+```bash
+# Initialize project scaffold:
+bube init-proj \   # Long Alias for `bube proj`
+  -n my_project \  # Project name = Name of new project folder
+  -t . \           # Parent directory to place new project folder into
+  -u your_github_username
+  -g               # Initializes git repo and commits scaffold
+```
+
+#### Create virtual environment (``/.direnv``):
+
+```bash
+cd <my_project_name> # Changing directory will auto-create the venv
+# ==> You will be prompted to allow the direnv to activate!
+# direnv allow
+```
+
+#### Install dependencies & create ``(dev-)requirements.txt`` :
+```bash
+just install-compile  # Executes `pip-compile` & `pip-sync` from pip-tools
+# just insco          # Alias for `install-compile`
+```
+<details> <summary> What's pip-compile? </summary>
+
+  - ``just`` auto-navigates to the directory of the justfile (project root).
+  - **`pip-compile`:** 
+    - Resolves environment defined by dependencies listed in `pyproject.toml`. 
+    - Similair to `pip freeze`, this creates ``requirements.txt`` and ``dev-requirements.txt``, including all versions and sources.
+  - **`pip-sync`:** Installs dependencies from ``requirements.txt`` and ``dev-requirements.txt``
+
+</details>
+
+#### List `just` recipes:
+*Recipes* (=functions) are defined in the `justfile`. Edit them or add more as you like! 
+```bash
+just  # Alias for `just --list`. 
+```
+
+#### 'Uninstall' Project:
+```bash
+rm -rf ../my_project  # Simply delete the project folder
+```
+
+<hr>
+
+
+### Experiments
+Experiments are defined as scripts meant to use, test, validate, etc.
+your current project. They will be collected inside the `experiments`
+directory inside the project root, including templates for Reports, outputs, etc.!
+
+```bash
+# From inside your project:
+bube init-exp -n experiment1 # Long Alias for `bube exp`
+# > Creates the scaffold in `./experiments/2025-06-13_experiment1`
+```
+
+<hr>
+
+### Snapshots
+You can create a snapshot of your current project, sparing you the
+headache of PyPI releases and semantic versioning. This is useful for
+e.g. reproducing your experiment after the project has changed. It works by
+capturing the current commit hash, pip-compiling requirements and creates a
+Dockerfile + Docker-Image.
+```bash
+# From inside your project:
+bube env-snapshot --target-dir experiments/2025-06-13_experiment1
+# > Creates Dockerfile, experiment.env, etc. inside target-dir
+```
+
+
+<br>
+
+
+
 <!-- ============================================================== -->
 <!-- == Optionals ================================================= -->
 
@@ -198,41 +283,6 @@ code --install-extension jebbs.plantuml
 
 
 
-
-<!-- ============================================================== -->
-<!-- == Usage ===================================================== -->
-## 🚀 Usage
-
-### Initialize project scaffold:
-```bash
-# Initialize project scaffold:
-bube init-proj \
-  -n my_project \
-  -t ./target_dir \
-  -u your_github_username
-```
-
-### Create virtual environment (``/.direnv``):
-
-```bash
-cd <my_project_name> # Changing directory will auto-create the venv
-# You will be prompted to allow the venv to activate
-```
-
-### Install dependencies & create ``(dev-)requirements.txt`` :
-```bash
-just install-deps # Executes `pip-compile` & `pip-sync` from pip-tools
-```
-  - ``just `` auto-navigates to the directory of the justfile (project root).
-  - **`pip-compile`:** Resolves environment defined by dependencies listed in `pyproject.toml`. Similair to `pip freeze`, this creates ``requirements.txt`` and ``dev-requirements.txt``, including all versions of dependencies.
-  - **`pip-sync`:** Installs all dependencies from ``requirements.txt`` and ``dev-requirements.txt``
-
-### List & try available recipes:
-```bash
-just --list # Or just `just`, default recipe is `just --list` anyways
-```
-
-<br>
 
 <!-- ============================================================== -->
 <!-- == Examples ================================================== -->
