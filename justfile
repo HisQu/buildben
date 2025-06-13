@@ -17,9 +17,10 @@ default:
 reinstall:
     pipx uninstall buildben
     pipx install -e .
+alias reins := reinstall
 
 # Removes old test-project (bla_a); Re-Creates it
-init_test:
+test-init:
     if [ -e "../bla_a" ]; then rm -rf "../bla_a"; fi
     echo "Creating ../bla_a"
     buildben init-proj \
@@ -27,4 +28,4 @@ init_test:
         -t .. \
         -u markur4 \
         -git
-        
+alias tstin := test-init
