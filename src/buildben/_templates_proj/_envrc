@@ -7,7 +7,6 @@
 export PROJECT_NAME=$(basename "$PWD")
 export PROJECT_ROOT=$PWD
 
-
 # > hard-fail if someone runs pip outside the venv
 export PIP_REQUIRE_VIRTUALENV=1
 
@@ -16,7 +15,7 @@ export PIP_REQUIRE_VIRTUALENV=1
 
 # === direnv / venv ===================================================
 
-#?? This is a direnv auto function. We don't use it
+#?? This is a direnv auto function.
 layout python3 # > create & activate .venv under .direnv/
 
 # === Install pip-tools ===============================================
@@ -26,12 +25,14 @@ python -m pip show pip-tools >/dev/null 2>&1 || (
         python -m pip install --quiet "pip-tools>=7.4"
 )
 
-
-# === Echo all env vars and info ==================================
+# === Echo all env vars and info ======================================
 echo
 echo "PROJECT_NAME: $PROJECT_NAME"
 echo "PROJECT_ROOT: $PROJECT_ROOT"
 echo "PIP_REQUIRE_VIRTUALENV: $PIP_REQUIRE_VIRTUALENV"
 echo "VIRTUAL_ENV:" $VIRTUAL_ENV
 echo "pip-tools: {$(python -m pip show pip-tools | grep Version)}"
-echo 
+echo
+
+# === Secrets =========================================================
+[[ -f ./.secrets.env ]] && source_env ./.secrets.env
