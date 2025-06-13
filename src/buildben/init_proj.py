@@ -33,7 +33,7 @@ def add_parser(subparsers: argparse._SubParsersAction) -> None:
         help="Directory in which to create project",
     )
     p.add_argument(
-        "-g", "--git", action="store_true", help="Initialise git repo"
+        "-g", "--git-init", action="store_true", help="Initialise git repo"
     )
     p.add_argument(
         "-u", "--github-user", default="github-user", help="Github Username"
@@ -90,14 +90,14 @@ def _run(args: argparse.Namespace) -> None:
         "_pyproject.toml": PR_ROOT / "pyproject.toml",
         "_envrc": PR_ROOT / ".envrc",
         "_justfile": PR_ROOT / "justfile",
-        "_codecov.yml": PR_ROOT / ".github" / "workflows_inactive" / "codecov.yml",
-        "_main.py": PR_ROOT / "src" / args.name / "main.py",
+        "_github_codecov.yml": PR_ROOT / ".github" / "workflows_inactive" / "codecov.yml",
+        "_src_main.py": PR_ROOT / "src" / args.name / "main.py",
         "_utils_stdlib.py": PR_ROOT / "src" / args.name / "utils" / "stdlib.py",
         ### .IGNORE - Files are git-ignored until manually renamed:
         "_README.IGNORE.md": PR_ROOT / "README.IGNORE.md",
-        "_flowchart.IGNORE.mmd": PR_ROOT / "assets" / "flowchart.IGNORE.mmd",
-        "_classdiagram.IGNORE.mmd": PR_ROOT / "assets" / "classdiagram.IGNORE.mmd",
-        "_diagram.IGNORE.puml": PR_ROOT / "assets" / "diagram.IGNORE.puml",
+        "_assets_flowchart.IGNORE.mmd": PR_ROOT / "assets" / "flowchart.IGNORE.mmd",
+        "_assets_classdiagram.IGNORE.mmd": PR_ROOT / "assets" / "classdiagram.IGNORE.mmd",
+        "_assets_diagram.IGNORE.puml": PR_ROOT / "assets" / "diagram.IGNORE.puml",
     }
     # fmt: on
 
@@ -121,7 +121,13 @@ def _run(args: argparse.Namespace) -> None:
     # =================================================================
     # === Optional git init
     # =================================================================
-    if args.git:
+    if args.git_init:
+        ### Rename "master" branch to "main"
+        utils.run_command(
+            "git config --global init.defaultBranch main", cwd=PR_ROOT
+        )
+
+        ### Initialize git repo and commit
         subprocess.run(["git", "init"], cwd=PR_ROOT, check=True)
         subprocess.run(["git", "add", "."], cwd=PR_ROOT, check=True)
         subprocess.run(
@@ -129,6 +135,8 @@ def _run(args: argparse.Namespace) -> None:
             cwd=PR_ROOT,
             check=True,
         )
+
+        subprocess.run(["git", "branch", "-m", "main"], cwd=PR_ROOT, check=True)
 
     # =================================================================
     # === Final message

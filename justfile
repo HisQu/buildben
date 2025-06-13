@@ -24,8 +24,8 @@ test-init:
     if [ -e "../bla_a" ]; then rm -rf "../bla_a"; fi
     echo "Creating ../bla_a"
     buildben init-proj \
-        -n bla_a \
-        -t .. \
-        -u markur4 \
-        -git
+        --name bla_a \
+        --target-dir .. \
+        --github-user markur4 \
+        --git-init
 alias tstin := test-init
