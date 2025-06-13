@@ -57,6 +57,8 @@ if __name__ == "__main__":
     print(run_command(["ls", "-l", "-a"]))
 
 
+
+
 # %%
 
 PROJ_ROOT_SENTINELS = (".git", "pyproject.toml")
@@ -78,15 +80,13 @@ def find_project_root(start: Path | None = None) -> Path:
 
 
 if __name__ == "__main__":
-    pass
-    # %%
     print(find_project_root(Path(".")))
-    print(find_project_root(Path("..")))
     print(find_project_root(None))
 
     # %%
     # !! Somewhere outside of a project, throws error
-    find_project_root(Path("../../.."))
+    # print(find_project_root(Path(".."))) 
+    # find_project_root(Path("../../.."))
 
 
 # %%
@@ -102,10 +102,9 @@ def detect_root() -> Path:
 
 
 if __name__ == "__main__":
-    pass
-    # %%
+    print(Path().cwd())
     detect_root()
-    # %%
+
 
 
 # %%
@@ -146,3 +145,73 @@ def warn_dir_overwrite(dir: Path) -> None:
 def create__init__(dir: Path):
     """Create __init__.py files in a subdirectory"""
     (dir / "__init__.py").touch(exist_ok=True)
+
+
+# ====================================================================
+# === Docker
+# ====================================================================
+
+# %%
+class DockerNotInstalledError(RuntimeError):
+    """Raised when the `docker` command is not found on PATH."""
+
+class DockerDaemonNotRunningError(RuntimeError):
+    """Raised when Docker is installed but the daemon/service is unreachable."""
+
+def assert_docker_available(timeout: float = 3.0) -> None:
+    """
+    Ensure that Docker is installed *and* the engine is responding.
+
+    Parameters
+    ----------
+    timeout : float, optional
+        Seconds to wait for `docker info` before giving up.  Default is 3 s.
+
+    Raises
+    ------
+    DockerNotInstalledError
+        If the `docker` executable cannot be located.
+    DockerDaemonNotRunningError
+        If the CLI exists but cannot talk to the Docker engine.
+    """
+    # 1. Is the CLI on PATH?
+    if shutil.which("docker") is None:                      # std-lib check :contentReference[oaicite:3]{index=3}
+        raise DockerNotInstalledError(
+            "Docker is not installed or the 'docker' command is not on your PATH. "
+            "Install Docker Desktop (Windows/macOS) or Docker Engine (Linux) "
+            "and then re-run this program."
+        )
+
+    # 2. Does the daemon answer?
+    try:
+        completed = subprocess.run(
+            ["docker", "info", "--format", "{{json .ServerVersion}}"],  # < avoids stdout noise
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=timeout,
+            check=False,       # < we inspect returncode ourselves
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise DockerDaemonNotRunningError(
+            f"Docker CLI responded but the engine did not answer within {timeout}s. "
+            "Ensure the Docker service is running."
+        ) from exc
+
+    if completed.returncode != 0:
+        #  > The CLI’s exit status is 1 when it cannot reach the daemon
+        raise DockerDaemonNotRunningError(
+            "Docker is installed, but the engine is not running or you lack permission "
+            "to access the socket. Start Docker Desktop or, on Linux, run "
+            "`sudo systemctl start docker` and make sure your user is in the "
+            "'docker' group."
+        )
+
+
+if __name__ == "__main__":
+    try:
+        assert_docker_available()
+        print("✓ Docker is installed and the daemon is running.")
+    except (DockerNotInstalledError, DockerDaemonNotRunningError) as err:
+        print(f"✗ {err}")
+        
+# %%

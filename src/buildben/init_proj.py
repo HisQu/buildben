@@ -3,7 +3,7 @@
 from __future__ import annotations
 import argparse
 import re
-import shutil
+# import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -15,13 +15,17 @@ from . import utils
 # ================================================================== #
 # === CLI wiring                                                     #
 # ================================================================== #
-def add_parser(subparsers: argparse._SubParsersAction) -> None:
+
+CMD_NAME = "init-proj"  # < Name of the CLI-command
+CMD_ALIASES = ["proj"]  # < Alias shortcut of the CLI-command
+DOC = "Scaffold a new src-layout Python project."
+
+def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
     """Attach the init-proj sub-parser to the CLI aggregator."""
 
-    DOC = """Scaffold a new src-layout Python project."""
-
     p: argparse.ArgumentParser = subparsers.add_parser(
-        "init-proj",
+        name=CMD_NAME,
+        aliases=CMD_ALIASES,
         help=DOC,
         description=DOC,
     )
@@ -38,7 +42,7 @@ def add_parser(subparsers: argparse._SubParsersAction) -> None:
     p.add_argument(
         "-u", "--github-user", default="github-user", help="Github Username"
     )
-
+    # > Entrypoint, retrieved as args.func in cli.py
     p.set_defaults(func=_run)  # !! call _run(args) when chosen
 
 

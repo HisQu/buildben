@@ -1,26 +1,21 @@
 #!/usr/bin/env python3
 
-# def usage():
-#     print(
-#         "Usage: python3 env_snapshot.py --proj_name NAME --proj_root PATH --target_dir PATH [--py_base IMAGE]"
-#     )
-#     exit(1)
-
-
 import os
 import argparse
 from pathlib import Path
 from textwrap import dedent
 
-# import logging
 
 from . import utils
 
+CMD_NAME = "env-snapshot" # < Name of the CLI-command
+CMD_ALIASES = ["snp"] # < Alias shortcut of the CLI-command
+DOC = "Snapshot a Python project into requirements.lock, experiment.env, and Dockerfile"
 
-def add_parser(subparsers: argparse._SubParsersAction) -> None:
-    DOC = "Snapshot a Python project into requirements.lock, experiment.env, and Dockerfile"
+def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
     p: argparse.ArgumentParser = subparsers.add_parser(
-        "env-snapshot",  # < the command name typed on the shell
+        name=CMD_NAME, 
+        aliases=CMD_ALIASES,  
         help=DOC,
         description=DOC,
     )
@@ -36,7 +31,7 @@ def add_parser(subparsers: argparse._SubParsersAction) -> None:
         default="python:3.12-slim",
         help="Base image (default 'python:3.12-slim')",
     )
-
+    # > Entrypoint, retrieved as args.func in cli.py
     p.set_defaults(func=_run)
 
 
@@ -73,7 +68,7 @@ def _run(args: argparse.Namespace) -> None:
     # === Freeze the live venv
     # =================================================================
 
-    print(f"📌  pip-compiling environment ...")
+    print(f"📌 ... pip-compiling environment ...")
     utils.run_command(
         f"""pip-compile \\
             --generate-hashes \\
@@ -149,7 +144,8 @@ def _run(args: argparse.Namespace) -> None:
     # === Build Docker Image
     # =================================================================
 
-    print(f"🐳  Building Docker image {image_tag} ...")
+    print(f"🐳 ...  Building Docker image {image_tag} ...")
+    utils.assert_docker_available()  # < Check docker
     utils.run_command(
         f"""docker build \\
         --tag {image_tag} \\
@@ -162,11 +158,11 @@ def _run(args: argparse.Namespace) -> None:
         -1
     ]
 
-    print(f"🐳  Done building ({size})")
-    print(f"👉  Check with: docker run --rm -it")
-    print(f"👉  Push with:  docker push {image_tag}")
+    print(f"🐳  Done building [Imagesize = {size}]")
+    print(f"👉  Check with:\tdocker run --rm -it")
+    print(f"👉  Push with:\tdocker push {image_tag}")
     print(
-        f"🧹  Remove local copy: docker image rm {image_tag}   (layers stay deduped)"
+        f"👉  Remove local copy:\tdocker image rm {image_tag}   (layers stay deduped)"
     )
 
     # %%

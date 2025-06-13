@@ -17,10 +17,15 @@ from . import utils
 # ================================================================== #
 # === CLI wiring                                                     #
 # ================================================================== #
-def add_parser(subparsers: argparse._SubParsersAction) -> None:
-    DOC = "Create a dated experiment scaffold inside ./experiments/"
+
+CMD_NAME = "init_experim"  # < Name of the CLI-command
+CMD_ALIASES = ["exp"] # < Alias shortcut of the CLI-command
+DOC = "Create a dated experiment scaffold inside ./experiments/"
+
+def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
     p: argparse.ArgumentParser = subparsers.add_parser(
-        "init-experim",  # < the command name typed on the shell
+        name=CMD_NAME,  # < the command name typed on the shell
+        aliases=CMD_ALIASES,
         help=DOC,
         description=DOC,
     )
@@ -29,7 +34,8 @@ def add_parser(subparsers: argparse._SubParsersAction) -> None:
     p.add_argument(
         "--no-freeze", action="store_true", help="Skip pip-compile lock"
     )
-    p.set_defaults(func=_run)
+    # > Entrypoint, retrieved as args.func in cli.py
+    p.set_defaults(func=_run) 
 
 
 # ================================================================== #

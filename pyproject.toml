@@ -67,6 +67,7 @@ where = ["src"]                       # < Scan only src/ for packages
 
 [project.scripts]
 buildben = "buildben.cli:main"
+bube = "buildben.cli:main"
 
 
 # =====================================================================
