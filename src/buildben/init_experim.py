@@ -42,14 +42,15 @@ def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
 # === implementation                                                 #
 # ================================================================== #
 def _run(args: argparse.Namespace) -> None:
-    
+
     # === Retrieve Variables ==========================================
     PR_ROOT:Path = utils.detect_root()
     PR_NAME = os.getenv("PROJECT_NAME")
-    
+
     ### Experiment directory
     TODAY = dt.date.today().isoformat()
-    EXP_ROOT = PR_ROOT / "experiments" / f"{TODAY}_{args.name}"
+    EXP_NAME_FULL = f"{TODAY}_{args.name}"
+    EXP_ROOT = PR_ROOT / "experiments" / EXP_NAME_FULL
     utils.warn_dir_overwrite(EXP_ROOT)
 
     # =================================================================
@@ -58,9 +59,11 @@ def _run(args: argparse.Namespace) -> None:
 
     directories: list[Path] = [
         # EXP_ROOT / "env", # ?? This would complicate .dockerignore logic
-        EXP_ROOT / "data",
-        EXP_ROOT / "scripts",
+        PR_ROOT / "experiments" / "resources", # < Potential use for experiments, must be manually copied into input!
+        EXP_ROOT / "input",
+        EXP_ROOT / "interm-output",
         EXP_ROOT / "output",
+        EXP_ROOT / "scripts",
     ]
     for dir in directories:
         dir.mkdir(parents=True, exist_ok=True)
@@ -74,6 +77,7 @@ def _run(args: argparse.Namespace) -> None:
     transfers: dict[str, Path] = {
         "_REPORT.md": EXP_ROOT / "REPORT.md",
         "_run.py": EXP_ROOT / "run.py",
+        "_envrc": EXP_ROOT / ".envrc",
     }
     # fmt: on
 
@@ -87,6 +91,8 @@ def _run(args: argparse.Namespace) -> None:
     placeholders = {
         "<experiment_name>": args.name,
         "{experiment_name}": args.name,
+        "<experiment_name_full>": EXP_NAME_FULL,
+        "{experiment_name_full}": EXP_NAME_FULL,
         "<bb_date>": TODAY,  # < bb_ makes it more unique to buildben
         "{bb_date}": TODAY,
         "<my_project>": PR_NAME,
@@ -96,9 +102,9 @@ def _run(args: argparse.Namespace) -> None:
     utils.substitute_placeholders(
         filepaths=list(transfers.values()), placeholders=placeholders
     )
-    
+
     # =================================================================
-    # === Optional .venv + dependency freeze 
+    # === Optional .venv + dependency freeze
     # =================================================================
 
 #     if not args.no_freeze:

@@ -25,12 +25,15 @@ python -m pip show pip-tools >/dev/null 2>&1 || (
         python -m pip install --quiet "pip-tools>=7.4"
 )
 
-# === Echo all env vars and info ======================================
+# === Echo all env vars & info ======================================
 echo
+echo "=== Project-Related Environment Variables ==="
 echo "PROJECT_NAME: $PROJECT_NAME"
 echo "PROJECT_ROOT: $PROJECT_ROOT"
 echo "PIP_REQUIRE_VIRTUALENV: $PIP_REQUIRE_VIRTUALENV"
 echo "VIRTUAL_ENV:" $VIRTUAL_ENV
+
+echo "=== Buildben Dependencies ==="
 echo "pip-tools: {$(python -m pip show pip-tools | grep Version)}"
 echo
 
