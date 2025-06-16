@@ -81,7 +81,12 @@ def _run(args: argparse.Namespace) -> None:
         dir.mkdir(parents=True, exist_ok=True)
 
     utils.create__init__(PR_ROOT / "src" / args.name)
-    utils.create__init__(PR_ROOT / "src" / args.name / "utils")
+    utils.create__init__(
+        PR_ROOT / "src" / args.name / "utils",
+        imports=["stdlib"],
+        # < x = u.stdlib.my_function()
+        # < import <my_project>.utils as u
+    )
 
     # =================================================================
     # === Copy template files

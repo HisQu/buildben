@@ -8,6 +8,8 @@ import shutil
 from pathlib import Path
 from textwrap import dedent
 
+from typing import Iterable
+
 
 # %%
 
@@ -142,10 +144,27 @@ def warn_dir_overwrite(dir: Path) -> None:
 
 
 # %%
-def create__init__(dir: Path):
-    """Create __init__.py files in a subdirectory"""
-    (dir / "__init__.py").touch(exist_ok=True)
+def create__init__(dir: Path, imports: Iterable[str] | None = None) -> None:
+    """
+    Creates dir/__init__.py. If *imports* is given, writes a
+    single line into the __init__.py.:  from . import <comma-separated
+    names> 
 
+    Parameters
+    ----------
+    dir : Path
+        Directory that should behave as a Python package.
+    imports : iterable[str] | None
+        Helper-module names to import eagerly, e.g. ("fileio", "pd").
+        Pass None (default) to leave the file empty.
+    """
+    init_path: Path = dir / "__init__.py"
+
+    if imports:                                   # write the import line
+        line = f"from . import {', '.join(imports)}\n"
+        init_path.write_text(line, encoding="utf-8")
+    else:                                         # just “touch” the file
+        init_path.touch(exist_ok=True)
 
 # ====================================================================
 # === Docker
