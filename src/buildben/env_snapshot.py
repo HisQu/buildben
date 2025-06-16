@@ -88,11 +88,12 @@ def _run(args: argparse.Namespace) -> None:
     # =================================================================
     # === Write .dockerignore
     # =================================================================
-    # > Prevents copying EVERY experiment into the Docker image!
+    # > Prevent copying EVERY experiment into the Docker image!
     dockerignore = dedent(
         f""" \
-        # > Ignore everything under experiments, but keep the target directory!
+        # > Ignore everything under experiments ...
         experiments/**
+        # > ... but keep the target directory!
         !{TARGET_REL}/**
         """
     )
@@ -137,6 +138,11 @@ def _run(args: argparse.Namespace) -> None:
         COPY --from=builder /usr/local /usr/local  
         # > (optional) Copy source for debugging to WORKDIR
         COPY . .
+        
+        # > Make experminet-related env vars available
+        CMD ["source", ".envrc"]
+        
+        # > Executables
         # CMD ["python", "-m", "your_pkg.cli"]
         """
     )
