@@ -82,7 +82,7 @@ def _run(args: argparse.Namespace) -> None:
     transfers: dict[str, Path] = {
         "_REPORT.md": EXP_ROOT / "REPORT.md",
         "_run.py": EXP_ROOT / "run.py",
-        "_envrc": EXP_ROOT / ".envrc",
+        "_paths.env": EXP_ROOT / ".paths.env",
     }
     # fmt: on
 
@@ -107,66 +107,3 @@ def _run(args: argparse.Namespace) -> None:
     utils.substitute_placeholders(
         filepaths=list(transfers.values()), placeholders=placeholders
     )
-
-    # =================================================================
-    # === Optional .venv + dependency freeze
-    # =================================================================
-
-#     if not args.no_freeze:
-#         _freeze_reqs(EXP_ROOT)
-#     if not args.no_venv:
-#         _create_venv(EXP_ROOT)
-
-#     print(
-#         dedent(
-#             f"""
-#         ✅  experiment created at  {EXP_ROOT}
-#             cd experiments/{today}_{args.name}
-#             direnv allow          # trust .envrc
-#             just install          # compile & install deps (optionally)
-#     """
-#         )
-#     )
-
-
-# # ================================================================== #
-# # === helpers                                                        #
-# # ================================================================== #
-# def _freeze_reqs(root: Path) -> None:
-#     req_in = root / "env" / "requirements.in"
-#     req_out = root / "env" / "requirements.txt"
-#     pip_compile = shutil.which("pip-compile")
-#     if pip_compile is None:
-#         print("∙ Skipping freeze (pip-compile not on PATH)")
-#         return
-#     subprocess.run([pip_compile, req_in, "-o", req_out], check=True)
-#     print("✓  requirements.txt frozen")
-
-
-# def _create_venv(root: Path) -> None:
-#     import venv, sys as _sys
-
-#     print("⏳  creating .venv …")
-#     venv.EnvBuilder(with_pip=True).create(root / ".venv")
-#     pip = root / ".venv" / "bin" / "pip"
-#     subprocess.run(
-#         [pip, "install", "-r", root / "env/requirements.in"], check=False
-#     )
-#     print(
-#         "✓  .venv ready (activate with 'direnv reload' or '. .venv/bin/activate')"
-#     )
-
-
-# # ================================================================== #
-# def main() -> None:
-#     # standalone usage: fall back to simple parser
-#     pr = argparse.ArgumentParser()
-#     pr.add_argument("-n", "--name", required=True)
-#     pr.add_argument("--no-venv", action="store_true")
-#     pr.add_argument("--no-freeze", action="store_true")
-#     ns = pr.parse_args()
-#     _run(ns)
-
-
-# if __name__ == "__main__":
-#     main()

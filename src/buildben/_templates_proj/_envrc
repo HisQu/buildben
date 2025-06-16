@@ -7,15 +7,13 @@
 export PROJECT_NAME=$(basename "$PWD")
 export PROJECT_ROOT=$PWD
 
-# > hard-fail if someone runs pip outside the venv
+# > Make pip hard-fail if pip is run outside a venv
 export PIP_REQUIRE_VIRTUALENV=1
 
 # > Uncomment to pin tool versions
 # export PIPX_HOME=$PWD/.build-tools
 
 # === direnv / venv ===================================================
-
-#?? This is a direnv auto function.
 layout python3 # > create & activate .venv under .direnv/
 
 # === Install pip-tools ===============================================
@@ -30,9 +28,9 @@ echo
 echo "=== Project-Related Environment Variables ==="
 echo "PROJECT_NAME: $PROJECT_NAME"
 echo "PROJECT_ROOT: $PROJECT_ROOT"
+echo "VIRTUAL_ENV:  $VIRTUAL_ENV"
 echo "PIP_REQUIRE_VIRTUALENV: $PIP_REQUIRE_VIRTUALENV"
-echo "VIRTUAL_ENV:" $VIRTUAL_ENV
-
+echo
 echo "=== Buildben Dependencies ==="
 echo "pip-tools: {$(python -m pip show pip-tools | grep Version)}"
 echo

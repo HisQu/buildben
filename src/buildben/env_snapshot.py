@@ -139,8 +139,8 @@ def _run(args: argparse.Namespace) -> None:
         # > (optional) Copy source for debugging to WORKDIR
         COPY . .
         
-        # > Make experminet-related env vars available
-        CMD ["source", ".envrc"]
+        # > Make env vars available TODO: this creates a .direnv. !!! Find a better solution
+        # CMD ["source", ".envrc"]
         
         # > Executables
         # CMD ["python", "-m", "your_pkg.cli"]
