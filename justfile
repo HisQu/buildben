@@ -23,8 +23,7 @@ alias reins := reinstall
 test-init:
     if [ -e "../bla_a" ]; then rm -rf "../bla_a"; fi
     echo "Creating ../bla_a"
-    buildben init-proj \
-        --name bla_a \
+    buildben init-proj bla_a \
         --target-dir .. \
         --github-user markur4 \
         --git-init

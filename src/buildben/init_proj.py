@@ -3,6 +3,7 @@
 from __future__ import annotations
 import argparse
 import re
+
 # import shutil
 import subprocess
 import sys
@@ -20,6 +21,7 @@ CMD_NAME = "init-proj"  # < Name of the CLI-command
 CMD_ALIASES = ["proj"]  # < Alias shortcut of the CLI-command
 DOC = "Scaffold a new src-layout Python project."
 
+
 def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
     """Attach the init-proj sub-parser to the CLI aggregator."""
 
@@ -29,7 +31,7 @@ def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
         help=DOC,
         description=DOC,
     )
-    p.add_argument("-n", "--name", required=True, help="Project name")
+    p.add_argument("name", help="Project name")
     p.add_argument(
         "-t",
         "--target-dir",
@@ -154,10 +156,11 @@ def _run(args: argparse.Namespace) -> None:
         dedent(
             f"""
             ✅  {args.name} scaffold complete!
-
+            
+            👉 Next Steps:
                 cd "{PR_ROOT}"
-                direnv allow        # trust .envrc
-                just venv-reset     # set up .venv via direnv
+                direnv allow       # Trust .envrc
+                just insco         # Install dependencies
             
             Happy hacking 🎉
             """

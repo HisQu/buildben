@@ -29,7 +29,12 @@ def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
         help=DOC,
         description=DOC,
     )
-    p.add_argument("-n", "--name", default="", help="Experiment Name (e.g. validation, benchmark, etc.)")
+    p.add_argument(
+        "name",
+        nargs="?",
+        default="",
+        help="Experiment Name (e.g. validation, benchmark, etc.)",
+    )
     p.add_argument("--no-venv", action="store_true", help="Skip venv creation")
     p.add_argument(
         "--no-freeze", action="store_true", help="Skip pip-compile lock"
