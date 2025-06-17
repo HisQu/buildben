@@ -59,8 +59,6 @@ if __name__ == "__main__":
     print(run_command(["ls", "-l", "-a"]))
 
 
-
-
 # %%
 
 PROJ_ROOT_SENTINELS = (".git", "pyproject.toml")
@@ -71,7 +69,7 @@ def find_project_root(start: Path | None = None) -> Path:
     Walk upward from *start* (or cwd) until we find a sentinel that
     marks the project root. Raises RuntimeError if none found.
     """
-    here = (start or Path.cwd()).resolve()  # <–– key change
+    here = (start or Path.cwd()).resolve()
     for candidate in [here, *here.parents]:
         if any((candidate / s).exists() for s in PROJ_ROOT_SENTINELS):
             return candidate
@@ -106,7 +104,6 @@ def detect_root() -> Path:
 if __name__ == "__main__":
     print(Path().cwd())
     detect_root()
-
 
 
 # %%
@@ -232,5 +229,5 @@ if __name__ == "__main__":
         print("✓ Docker is installed and the daemon is running.")
     except (DockerNotInstalledError, DockerDaemonNotRunningError) as err:
         print(f"✗ {err}")
-        
+
 # %%
