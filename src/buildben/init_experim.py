@@ -49,7 +49,7 @@ def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
 def _run(args: argparse.Namespace) -> None:
 
     # === Retrieve Variables ==========================================
-    PR_ROOT:Path = utils.detect_root()
+    PR_ROOT: Path = utils.find_project_root()
     PR_NAME = os.getenv("PROJECT_NAME")
 
     ### Experiment directory

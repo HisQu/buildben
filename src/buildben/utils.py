@@ -8,7 +8,7 @@ import shutil
 from pathlib import Path
 from textwrap import dedent
 
-from typing import Iterable
+from typing import Iterable, Sequence
 
 
 # %%
@@ -61,21 +61,26 @@ if __name__ == "__main__":
 
 # %%
 
-PROJ_ROOT_SENTINELS = (".git", "pyproject.toml")
 
-
-def find_project_root(start: Path | None = None) -> Path:
+def find_project_root(
+    start: Path | None = None,
+    sentinels: Sequence[str] = (".git", "pyproject.toml", "setup.py"),
+) -> Path:
     """
-    Walk upward from *start* (or cwd) until we find a sentinel that
+    Returns environment variable "PROJECT_ROOT". Otherwise, falls back
+    to Walk upward from *start* (or cwd) until we find a sentinel that
     marks the project root. Raises RuntimeError if none found.
     """
+    env_root = os.getenv("PROJECT_ROOT")
+    if env_root:
+        return Path(env_root).resolve()  # !! Early exit
+
     here = (start or Path.cwd()).resolve()
     for candidate in [here, *here.parents]:
-        if any((candidate / s).exists() for s in PROJ_ROOT_SENTINELS):
-            return candidate
+        if any((candidate / s).exists() for s in sentinels):
+            return candidate  # < Found!
     raise RuntimeError(
-        f"Not inside a buildben project; "
-        f"looked for {PROJ_ROOT_SENTINELS} starting at {here}"
+        f"Not inside a project; " f"looked for {sentinels} starting at {here}"
     )
 
 
@@ -85,25 +90,8 @@ if __name__ == "__main__":
 
     # %%
     # !! Somewhere outside of a project, throws error
-    # print(find_project_root(Path(".."))) 
+    # print(find_project_root(Path("..")))
     # find_project_root(Path("../../.."))
-
-
-# %%
-def detect_root() -> Path:
-    """Reads environment Variable, or falls back to the project root"""
-    env_root = os.getenv("PROJECT_ROOT")
-    if env_root:
-        return Path(env_root).resolve()
-    print(
-        f"=> No PROJECT_ROOT env var — fallback to search for {PROJ_ROOT_SENTINELS}"
-    )
-    return find_project_root(Path.cwd())  # function from §1
-
-
-if __name__ == "__main__":
-    print(Path().cwd())
-    detect_root()
 
 
 # %%
