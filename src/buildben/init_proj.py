@@ -60,31 +60,31 @@ def _run(args: argparse.Namespace) -> None:
 
     ### Project root
     # > .envrc and PROJ_ROOT do not exist yet, it's defined by user input:
-    PR_ROOT: Path = Path(args.target_dir).expanduser().resolve() / args.name
-    utils.warn_dir_overwrite(PR_ROOT)
+    PROOT: Path = Path(args.target_dir).expanduser().resolve() / args.name
+    utils.warn_dir_overwrite(PROOT)
 
     # =================================================================
     # === Directory tree
     # =================================================================
 
     directories: list[Path] = [
-        PR_ROOT / "tests",
-        PR_ROOT / "assets",
-        PR_ROOT / "examples",
+        PROOT / "tests",
+        PROOT / "assets",
+        PROOT / "examples",
         # PR_ROOT / "experiments",
-        PR_ROOT / ".github" / "workflows",
-        PR_ROOT / ".github" / "workflows_inactive",
-        PR_ROOT / "src" / args.name,
-        PR_ROOT / "src" / args.name / "utils",
-        PR_ROOT / "src" / args.name / "data",
-        PR_ROOT / "src" / args.name / "images",
+        PROOT / ".github" / "workflows",
+        PROOT / ".github" / "workflows_inactive",
+        PROOT / "src" / args.name,
+        PROOT / "src" / args.name / "utils",
+        PROOT / "src" / args.name / "data",
+        PROOT / "src" / args.name / "images",
     ]
     for dir in directories:
         dir.mkdir(parents=True, exist_ok=True)
 
-    utils.create__init__(PR_ROOT / "src" / args.name)
+    utils.create__init__(PROOT / "src" / args.name)
     utils.create__init__(
-        PR_ROOT / "src" / args.name / "utils",
+        PROOT / "src" / args.name / "utils",
         imports=["stdlib"],
         # < x = u.stdlib.my_function()
         # < import <my_project>.utils as u
@@ -97,18 +97,23 @@ def _run(args: argparse.Namespace) -> None:
     # > {<_template_filename>: <destination_filepath>}
     # fmt: off
     transfers: dict[str, Path] = {
-        "_gitignore": PR_ROOT / ".gitignore",
-        "_pyproject.toml": PR_ROOT / "pyproject.toml",
-        "_envrc": PR_ROOT / ".envrc",
-        "_justfile": PR_ROOT / "justfile",
-        "_github_codecov.yml": PR_ROOT / ".github" / "workflows_inactive" / "codecov.yml",
-        "_src_main.py": PR_ROOT / "src" / args.name / "main.py",
-        "_utils_stdlib.py": PR_ROOT / "src" / args.name / "utils" / "stdlib.py",
-        ### .IGNORE - Files are git-ignored until manually renamed:
-        "_README.IGNORE.md": PR_ROOT / "README.IGNORE.md",
-        "_assets_flowchart.IGNORE.mmd": PR_ROOT / "assets" / "flowchart.IGNORE.mmd",
-        "_assets_classdiagram.IGNORE.mmd": PR_ROOT / "assets" / "classdiagram.IGNORE.mmd",
-        "_assets_diagram.IGNORE.puml": PR_ROOT / "assets" / "diagram.IGNORE.puml",
+        ### PR_ROOT:
+        "_gitignore": PROOT / ".gitignore",
+        "_pyproject.toml": PROOT / "pyproject.toml",
+        "_envrc": PROOT / ".envrc",
+        "_justfile": PROOT / "justfile",
+        ### PR_ROOT/.github:
+        "_github_codecov.yml": PROOT / ".github" / "workflows_inactive" / "codecov.yml",
+        ### PR_ROOT/src:
+        "_src_main.py": PROOT / "src" / args.name / "main.py",
+        "_src_env.py": PROOT / "src" / args.name / "env.py",
+        ### PR_ROOT/src/utils:
+        "_utils_stdlib.py": PROOT / "src" / args.name / "utils" / "stdlib.py",
+        ### .IGNORE - Files are git-ignored until renamed manually:
+        "_README.IGNORE.md": PROOT / "README.IGNORE.md",
+        "_assets_flowchart.IGNORE.mmd": PROOT / "assets" / "flowchart.IGNORE.mmd",
+        "_assets_classdiagram.IGNORE.mmd": PROOT / "assets" / "classdiagram.IGNORE.mmd",
+        "_assets_diagram.IGNORE.puml": PROOT / "assets" / "diagram.IGNORE.puml",
     }
     # fmt: on
 
@@ -135,19 +140,19 @@ def _run(args: argparse.Namespace) -> None:
     if args.git_init:
         ### Rename "master" branch to "main"
         utils.run_command(
-            "git config --global init.defaultBranch main", cwd=PR_ROOT
+            "git config --global init.defaultBranch main", cwd=PROOT
         )
 
         ### Initialize git repo and commit
-        subprocess.run(["git", "init"], cwd=PR_ROOT, check=True)
-        subprocess.run(["git", "add", "."], cwd=PR_ROOT, check=True)
+        subprocess.run(["git", "init"], cwd=PROOT, check=True)
+        subprocess.run(["git", "add", "."], cwd=PROOT, check=True)
         subprocess.run(
             ["git", "commit", "-m", "Initial scaffold from buildben"],
-            cwd=PR_ROOT,
+            cwd=PROOT,
             check=True,
         )
 
-        subprocess.run(["git", "branch", "-m", "main"], cwd=PR_ROOT, check=True)
+        subprocess.run(["git", "branch", "-m", "main"], cwd=PROOT, check=True)
 
     # =================================================================
     # === Final message
@@ -158,7 +163,7 @@ def _run(args: argparse.Namespace) -> None:
             ✅  {args.name} scaffold complete!
             
             👉 Next Steps:
-                cd "{PR_ROOT}"
+                cd "{PROOT}"
                 direnv allow       # Trust .envrc
                 just insco         # Install dependencies
             
