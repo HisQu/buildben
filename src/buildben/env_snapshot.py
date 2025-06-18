@@ -91,10 +91,41 @@ def _run(args: argparse.Namespace) -> None:
     # > Prevent copying EVERY experiment into the Docker image!
     dockerignore = dedent(
         f""" \
-        # > Ignore everything under experiments ...
-        experiments/**
-        # > ... but keep the target directory!
+        # > Ignore everything under experiments, but keep the target directory!
+        experiments/** 
         !{TARGET_REL}/**
+        
+        .direnv/
+        .venv/
+        venv/
+        env/
+        
+        .git/
+        .gitignore
+        
+        __pycache__/
+        *.py[cod]
+        *$py.class
+        *.egg-info/
+        .eggs/
+        
+        tests/
+        .pytest_cache/
+        .coverage
+        htmlcov/
+        
+        .vscode/
+        .idea/
+        .DS_Store
+        Thumbs.db
+        
+        *.log
+        logs/
+        *.sqlite3
+        
+        .env
+        .env.*
+        .secrets.env
         """
     )
     DOCKERIGNORE_FP.write_text(dockerignore)
