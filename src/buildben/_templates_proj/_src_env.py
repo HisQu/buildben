@@ -1,7 +1,6 @@
 """Environment Variables Management:
-- Upon Import: Retrieve environment variables from .envrc
-- Utility functions
-- Initialize environs.Env() as a convenient handle
+- setup(): Retrieve environment variables from .envrc for developer tasks
+- Initialize environs.Env() as a handle for connecting to the environment at runtime
 """
 
 # %%
@@ -18,74 +17,10 @@ from typing import Sequence
 
 # %%
 # =====================================================================
-# === Background Import of .envrc
+# === Public Helper "env" for connecting to the environment
 # =====================================================================
 
-
-def _find_project_root(
-    start: Path | None = None,
-    sentinels: Sequence[str] = (".git", "pyproject.toml", "setup.py"),
-) -> Path:
-    """
-    Returns environment variable "PROJECT_ROOT". Otherwise, falls back
-    to Walk upward from *start* (or cwd) until we find a sentinel that
-    marks the project root. Raises RuntimeError if none found.
-    """
-    env_root = os.getenv("PROJECT_ROOT")
-    if env_root:
-        return Path(env_root).resolve()  # !! Early exit
-
-    here = (start or Path.cwd()).resolve()
-    for candidate in [here, *here.parents]:
-        if any((candidate / s).exists() for s in sentinels):
-            return candidate  # < Found!
-    raise RuntimeError(
-        f"Not inside a project; " f"looked for {sentinels} starting at {here}"
-    )
-
-
-if __name__ == "__main__":
-    print(_find_project_root(Path(".")))
-    print(_find_project_root(None))
-
-
-# %%
-def _load_direnv_envrc(cwd: str | Path = "."):
-    """Merge the official .envrc into the current environment"""
-    if "DIRENV_DIR" not in os.environ:  # !! 2nd Call causes JSONDecodeError
-        try:
-            payload = subprocess.check_output(
-                ["direnv", "export", "json"], cwd=cwd, text=True
-            )
-            os.environ.update(json.loads(payload))  # idempotent; no new venv
-        except (FileNotFoundError, subprocess.CalledProcessError):
-            pass
-
-
-if __name__ == "__main__":
-    _load_direnv_envrc(cwd=_find_project_root())
-    print(os.getenv("PROJECT_ROOT"))
-    print(os.getenv("BASE_URL"))
-
-
-# %%
-def main():
-    PROJECT_ROOT = _find_project_root()
-    print(PROJECT_ROOT)
-    _load_direnv_envrc(cwd=PROJECT_ROOT)
-
-
-# !! Execute on every import ------------------------------------------
-main()
-env = Env()  # < Create a global Env Wrapper
-# !! ------------------------------------------------------------------
-
-
-# %%
-# =====================================================================
-# === Public Helpers for env
-# =====================================================================
-
+env: Env = Env()  # < Create a global Env Wrapper (copies available variables)
 
 def import_vars(*names: str, allow_blank: bool = False) -> tuple[str, ...]:
     """
@@ -124,3 +59,89 @@ if __name__ == "__main__":
     # %%
     # !! Throws error
     # import_vars("PROJECT_name", "BASE_URL")
+
+
+# %%
+# =====================================================================
+# === For Developers: Import .envrc
+# =====================================================================
+# !!! Only editable pip-installs will retain a .envrc !!!
+
+
+# --- Public API ------------------------------------------------------
+def setup(quiet: bool = False):
+    PROJECT_ROOT = _find_project_root()
+    if PROJECT_ROOT is None:
+        raise RuntimeError("Could not find project root directory.")
+    _load_direnv_envrc(cwd=PROJECT_ROOT, quiet=quiet)
+
+
+# --- Private Helpers -------------------------------------------------
+def _find_project_root(
+    start: Path | None = None,
+    sentinels: Sequence[str] = (".git", "pyproject.toml", "setup.py"),
+    raise_error: bool = False,
+) -> Path | None:
+    """
+    Returns environment variable "PROJECT_ROOT". Otherwise, falls back
+    to Walk upward from *start* (or cwd) until we find a sentinel that
+    marks the project root. Raises RuntimeError if none found.
+    """
+    env_root = os.getenv("PROJECT_ROOT")
+    if env_root:
+        return Path(env_root).resolve()  # !! Early exit
+
+    here = (start or Path.cwd()).resolve()
+    for candidate in [here, *here.parents]:
+        if any((candidate / s).exists() for s in sentinels):
+            return candidate  # < Found!
+
+    m = f"Not inside a project; looked for {sentinels} starting at {here}"
+    if raise_error:
+        raise RuntimeError(m)
+    else:
+        print(m)
+
+
+if __name__ == "__main__":
+    print(_find_project_root(Path(".")))
+    print(_find_project_root(None))
+
+
+# %%
+def _load_direnv_envrc(cwd: str | Path = ".", quiet: bool = False) -> None:
+    """Merge the official .envrc into the current environment"""
+
+    ### Skip if we already ran inside a direnv session
+    if "DIRENV_DIR" in os.environ:
+        return  # !! Early exit; 2nd Call causes JSONDecodeError
+
+    ### Prepare child-process environment
+    child_env = os.environ.copy()  # < Lives only until child process spawns
+    if quiet:
+        # > Empty string silences *all* log lines from direnv
+        child_env.setdefault("DIRENV_LOG_FORMAT", "")
+
+    ### Run direnv .envrc
+    try:
+        payload = subprocess.check_output(
+            ["direnv", "export", "json"],
+            cwd=cwd,
+            text=True,
+            env=child_env,  # < Use our modified environment
+            stderr=subprocess.DEVNULL if quiet else None,
+        )
+        os.environ.update(json.loads(payload))  # idempotent; no new venv
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        # > direnv binary missing
+        # > .envrc not yet allowed
+        # > export produced non-JSON because of an unexpected message
+        pass
+
+
+if __name__ == "__main__":
+    root = _find_project_root()
+    if root:
+        _load_direnv_envrc(cwd=root)
+    print(os.getenv("PROJECT_ROOT"))
+    print(os.getenv("BASE_URL"))
