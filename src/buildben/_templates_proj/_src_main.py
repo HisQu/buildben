@@ -7,8 +7,12 @@ from pathlib import Path
 
 ### Local Imports
 # import <my_project>.utils as u
-# from <my_project> import env  # < Import .envrc and the environs interface
-# env.env.read(".paths.env")  # < Load custom .env files like this
+
+### Enviornment Variables
+# from <my_project> import env
+# env.env.read_env(".paths.env")  # < Load custom .env files during runtime 
+# if __name__ == "__main__":
+#     env.setup()  # < Loads .envrc from project root for development tasks
 
 # %%
 
