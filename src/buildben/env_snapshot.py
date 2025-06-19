@@ -10,7 +10,7 @@ from . import utils
 
 CMD_NAME = "env-snapshot"  # < Name of the CLI-command
 CMD_ALIASES = ["snp"]  # < Alias shortcut of the CLI-command
-DOC = "Snapshot a Python project into requirements.lock, experiment.env, and Dockerfile"
+DOC = f"Snapshot a Python project into requirements.lock, experiment.env, and Dockerfile.\nalias: {CMD_ALIASES}"
 
 
 def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:

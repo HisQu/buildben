@@ -20,7 +20,7 @@ from . import utils
 
 CMD_NAME = "init_experim"  # < Name of the CLI-command
 CMD_ALIASES = ["exp"] # < Alias shortcut of the CLI-command
-DOC = "Create a dated experiment scaffold inside ./experiments/"
+DOC = f"Create a dated experiment scaffold inside ./experiments/.\nalias: {CMD_ALIASES}"
 
 def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
     p: argparse.ArgumentParser = subparsers.add_parser(
