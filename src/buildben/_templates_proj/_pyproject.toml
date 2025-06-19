@@ -19,7 +19,7 @@ requires-python = ">=3.12"
 dependencies = [
     # --- Core packages ------------------
     "ipykernel",
-    "dotenv",        # < Loads .env files
+    # "dotenv",        # < Loads .env files
     "environs",
     # "tqdm",          # < Progress bars
     # --- Numerical ----------------------
