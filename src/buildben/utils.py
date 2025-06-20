@@ -12,6 +12,9 @@ from typing import Iterable, Sequence
 
 
 # %%
+# =====================================================================
+# === Shell
+# =====================================================================
 
 
 def run_command(command: str | list[str], cwd=None, quiet=True) -> str:
@@ -60,6 +63,31 @@ if __name__ == "__main__":
 
 
 # %%
+# =====================================================================
+# === Git
+# =====================================================================
+def git_init(PROOT: Path) -> None:
+    """Initialize a git repository in the given project root directory."""
+
+    ### Rename "master" branch to "main"
+    run_command("git config --global init.defaultBranch main", cwd=PROOT)
+
+    ### Initialize git repo and commit
+    subprocess.run(["git", "init"], cwd=PROOT, check=True)
+    subprocess.run(["git", "add", "."], cwd=PROOT, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Initial scaffold from buildben"],
+        cwd=PROOT,
+        check=True,
+    )
+
+    subprocess.run(["git", "branch", "-m", "main"], cwd=PROOT, check=True)
+
+
+# %%
+# =====================================================================
+# === Path Resolution
+# =====================================================================
 
 
 def find_project_root(
@@ -95,27 +123,17 @@ if __name__ == "__main__":
 
 
 # %%
+# =====================================================================
+# === Create Files
+# =====================================================================
+
+
 def copy_templates(transfers: dict[str, Path], tmpl_dir: Path) -> None:
     """Copy template files to the project root"""
     for tmpl_fn, dst_fp in transfers.items():
         tmpl_fp = tmpl_dir / tmpl_fn
         shutil.copy2(tmpl_fp, dst_fp, follow_symlinks=False)
     print(f"✓  Templates copied from {tmpl_dir}")
-
-
-# %%
-def substitute_placeholders(
-    filepaths: list[Path], placeholders: dict[str, str]
-) -> None:
-    """Substitute placeholders in a string"""
-    for fp in filepaths:
-        fp: Path
-        text = fp.read_text(encoding="utf-8")
-        for old, new in placeholders.items():
-            text = text.replace(old, new)
-        fp.write_text(text, encoding="utf-8")
-        # > Pathlib closes the file automatically
-    print(f"✓  Placeholders substituted: {list(placeholders.keys())}")
 
 
 # %%
@@ -133,7 +151,7 @@ def create__init__(dir: Path, imports: Iterable[str] | None = None) -> None:
     """
     Creates dir/__init__.py. If *imports* is given, writes a
     single line into the __init__.py.:  from . import <comma-separated
-    names> 
+    names>
 
     Parameters
     ----------
@@ -145,22 +163,48 @@ def create__init__(dir: Path, imports: Iterable[str] | None = None) -> None:
     """
     init_path: Path = dir / "__init__.py"
 
-    if imports:                                   # write the import line
+    if imports:  # write the import line
         line = f"from . import {', '.join(imports)}\n"
         init_path.write_text(line, encoding="utf-8")
-    else:                                         # just “touch” the file
+    else:  # just “touch” the file
         init_path.touch(exist_ok=True)
 
+
+# %%
+# =====================================================================
+# === Edit Files
+# =====================================================================
+
+
+def substitute_placeholders(
+    filepaths: list[Path], placeholders: dict[str, str]
+) -> None:
+    """Substitute placeholders in a string"""
+    for fp in filepaths:
+        fp: Path
+        text = fp.read_text(encoding="utf-8")
+        for old, new in placeholders.items():
+            text = text.replace(old, new)
+        fp.write_text(text, encoding="utf-8")
+        # > Pathlib closes the file automatically
+    print(f"✓  Placeholders substituted: {list(placeholders.keys())}")
+
+
+
+
+# %%
 # ====================================================================
 # === Docker
 # ====================================================================
 
-# %%
+
 class DockerNotInstalledError(RuntimeError):
     """Raised when the `docker` command is not found on PATH."""
 
+
 class DockerDaemonNotRunningError(RuntimeError):
     """Raised when Docker is installed but the daemon/service is unreachable."""
+
 
 def assert_docker_available(timeout: float = 3.0) -> None:
     """
@@ -179,7 +223,9 @@ def assert_docker_available(timeout: float = 3.0) -> None:
         If the CLI exists but cannot talk to the Docker engine.
     """
     # 1. Is the CLI on PATH?
-    if shutil.which("docker") is None:                      # std-lib check :contentReference[oaicite:3]{index=3}
+    if (
+        shutil.which("docker") is None
+    ):  # std-lib check :contentReference[oaicite:3]{index=3}
         raise DockerNotInstalledError(
             "Docker is not installed or the 'docker' command is not on your PATH. "
             "Install Docker Desktop (Windows/macOS) or Docker Engine (Linux) "
@@ -189,11 +235,16 @@ def assert_docker_available(timeout: float = 3.0) -> None:
     # 2. Does the daemon answer?
     try:
         completed = subprocess.run(
-            ["docker", "info", "--format", "{{json .ServerVersion}}"],  # < avoids stdout noise
+            [
+                "docker",
+                "info",
+                "--format",
+                "{{json .ServerVersion}}",
+            ],  # < avoids stdout noise
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=timeout,
-            check=False,       # < we inspect returncode ourselves
+            check=False,  # < we inspect returncode ourselves
         )
     except subprocess.TimeoutExpired as exc:
         raise DockerDaemonNotRunningError(

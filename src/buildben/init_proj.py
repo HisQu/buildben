@@ -138,21 +138,7 @@ def _run(args: argparse.Namespace) -> None:
     # === Optional git init
     # =================================================================
     if args.git_init:
-        ### Rename "master" branch to "main"
-        utils.run_command(
-            "git config --global init.defaultBranch main", cwd=PROOT
-        )
-
-        ### Initialize git repo and commit
-        subprocess.run(["git", "init"], cwd=PROOT, check=True)
-        subprocess.run(["git", "add", "."], cwd=PROOT, check=True)
-        subprocess.run(
-            ["git", "commit", "-m", "Initial scaffold from buildben"],
-            cwd=PROOT,
-            check=True,
-        )
-
-        subprocess.run(["git", "branch", "-m", "main"], cwd=PROOT, check=True)
+        utils.git_init(PROOT)
 
     # =================================================================
     # === Final message
