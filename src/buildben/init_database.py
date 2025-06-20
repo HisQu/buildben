@@ -17,7 +17,7 @@ from . import utils
 # === CLI wiring                                                     #
 # ================================================================== #
 
-CMD_NAME = "init-data"  # < Name of the CLI-command
+CMD_NAME = "init-database"  # < Name of the CLI-command
 CMD_ALIASES = ["data"]  # < Alias shortcut of the CLI-command
 DOC = f"Scaffolds a new data repository with similair layout as any Python project. Aliases: {CMD_ALIASES}"
 
@@ -83,14 +83,35 @@ def _run(args: argparse.Namespace) -> None:
     tmpl_dir = Path(__file__).resolve().parent / "_templates_proj"
     utils.copy_templates(transfers=transfers, tmpl_dir=tmpl_dir)
 
-
     # =================================================================
     # === Write .gitattributes
     # =================================================================
+
+    """
+    How to handle data in git:
+    - .gitattributes
+        - https://git-scm.com/docs/gitattributes
+    *.csv   diff=none   merge=union   -text
+    *.json  diff=none   merge=union   -text
+    *.xlsx  binary
+    *.npy   binary
+    
+    *.pickle binary
+    *.txt   -text
+    *.md    -text
+    
+    How exactly does this track changes?
+    
+    - textconv
+        - What's textconv exactly?
+    
+    - git lfs track "*.csv" "*.xlsx"
     
     
-    
-    
+    prompt:
+    Alright! Now let's tackle git: I have lots of excel, .csvs, JSON, .npy.  files etc.. They're not big, a couple of KB or MB, but still, git treats them with too much rigor like code, so changes to data confuse my other git-tools.Are there any options git uses to treat them differently but still enable version control? What are my options and what are best practices?
+    """
+
     # =================================================================
     # === Placeholder substitution
     # =================================================================
@@ -104,7 +125,7 @@ def _run(args: argparse.Namespace) -> None:
     utils.substitute_placeholders(
         filepaths=list(transfers.values()), placeholders=placeholders
     )
-    
+
     # =================================================================
     # === Optional git init
     # =================================================================
