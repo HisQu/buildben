@@ -3,7 +3,7 @@
 buildben.init_experim – scaffold a new experiment folder.
 
 Usage from CLI aggregator:
-    buildben init-experim -n MY_TEST [--no-venv] [--no-freeze]
+    buildben add-experim -n MY_TEST [--no-venv] [--no-freeze]
 """
 from __future__ import annotations
 import os
@@ -18,7 +18,7 @@ from . import utils
 # === CLI wiring                                                     #
 # ================================================================== #
 
-CMD_NAME = "init_experim"  # < Name of the CLI-command
+CMD_NAME = "add-experim"  # < Name of the CLI-command
 CMD_ALIASES = ["exp"] # < Alias shortcut of the CLI-command
 DOC = f"Create a dated experiment scaffold inside ./experiments/.\nalias: {CMD_ALIASES}"
 
