@@ -19,7 +19,7 @@ from . import utils
 
 CMD_NAME = "init-proj"  # < Name of the CLI-command
 CMD_ALIASES = ["proj"]  # < Alias shortcut of the CLI-command
-DOC = f"Scaffold a new src-layout Python project.\nalias: {CMD_ALIASES}"
+DOC = f"Scaffolds a new src-layout Python project. Aliases: {CMD_ALIASES}"
 
 
 def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
