@@ -14,7 +14,7 @@ export PIP_REQUIRE_VIRTUALENV=1
 # export PIPX_HOME=$PWD/.build-tools
 
 # === direnv / venv ===================================================
-layout python3 # > create & activate .venv under .direnv/
+layout python3 # > create & activate a venv under .direnv/
 
 # === Install pip-tools ===============================================
 
