@@ -53,3 +53,60 @@ def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
 # ================================================================== #
 def _run(args: argparse.Namespace) -> None:
     raise NotImplementedError("init_data is not implemented yet. Please use init_proj instead.")
+
+    # =================================================================
+    # === Copy template files (from init_proj.py)
+    # =================================================================
+    # > {<_template_filename>: <destination_filepath>}
+    # fmt: off
+    transfers: dict[str, Path] = {
+        ### PR_ROOT:
+        "_gitignore": PROOT / ".gitignore",
+        "_pyproject.toml": PROOT / "pyproject.toml",
+        "_envrc": PROOT / ".envrc",
+        "_justfile": PROOT / "justfile",
+        ### PR_ROOT/.github:
+        "_github_codecov.yml": PROOT / ".github" / "workflows_inactive" / "codecov.yml",
+        ### PR_ROOT/src:
+        "_src_main.py": PROOT / "src" / args.name / "main.py",
+        "_src_env.py": PROOT / "src" / args.name / "env.py",
+        ### PR_ROOT/src/utils:
+        "_utils_stdlib.py": PROOT / "src" / args.name / "utils" / "stdlib.py",
+        ### .IGNORE - Files are git-ignored until renamed manually:
+        "_README.IGNORE.md": PROOT / "README.IGNORE.md",
+        "_assets_flowchart.IGNORE.mmd": PROOT / "assets" / "flowchart.IGNORE.mmd",
+        "_assets_classdiagram.IGNORE.mmd": PROOT / "assets" / "classdiagram.IGNORE.mmd",
+        "_assets_diagram.IGNORE.puml": PROOT / "assets" / "diagram.IGNORE.puml",
+    }
+    # fmt: on
+
+    tmpl_dir = Path(__file__).resolve().parent / "_templates_proj"
+    utils.copy_templates(transfers=transfers, tmpl_dir=tmpl_dir)
+
+
+    # =================================================================
+    # === Write .gitattributes
+    # =================================================================
+    
+    
+    
+    
+    # =================================================================
+    # === Placeholder substitution
+    # =================================================================
+    placeholders = {
+        "<my_project>": args.name,
+        "{my_project}": args.name,
+        "<github_username>": args.github_user,
+        "{github_username}": args.github_user,
+    }
+
+    utils.substitute_placeholders(
+        filepaths=list(transfers.values()), placeholders=placeholders
+    )
+    
+    # =================================================================
+    # === Optional git init
+    # =================================================================
+    if args.git_init:
+        utils.git_init(PROOT)
