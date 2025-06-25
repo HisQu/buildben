@@ -69,7 +69,7 @@ if __name__ == "__main__":
 
 
 # --- Public API ------------------------------------------------------
-def setup(quiet: bool = False):
+def load_direnv(quiet: bool = False):
     PROJECT_ROOT = _find_project_root()
     if PROJECT_ROOT is None:
         raise RuntimeError("Could not find project root directory.")
