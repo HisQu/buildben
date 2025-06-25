@@ -4,8 +4,11 @@
 
 # === Environment Variables ===========================================
 ### direnv changes into directory of .envrc and runs subshell, so $PWD is always project root.
-export PROJECT_NAME=$(basename "$PWD")
-export PROJECT_ROOT=$PWD
+PROJECT_NAME=$(basename "$PWD")
+PROJECT_ROOT=$PWD
+
+export PROJECT_NAME
+export PROJECT_ROOT
 
 # > Make pip hard-fail if pip is run outside a venv
 export PIP_REQUIRE_VIRTUALENV=1
