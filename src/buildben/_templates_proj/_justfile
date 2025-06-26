@@ -36,7 +36,7 @@ _venv-guard:
 reset-venv:
     rm -rf .direnv        
     direnv reload   # direnv will rebuild on reload
-    direnv exec . just install-recompile  # Make requirements.txt & install deps
+    direnv exec . just install-compile  # Make requirements.txt & install deps
 alias resve := reset-venv
 
 # =====================================================================
@@ -59,7 +59,7 @@ alias insco := install-compile
 # Only Installs: requirements.txt & <my_project> in editable mode
 install:
     just _venv-guard
-    if ! [[ -e requirements.txt ]]; then echo "✗ Didn't find requirements.txt! Run 'just install-recompile'!" >&2; exit 1; fi
+    if ! [[ -e requirements.txt ]]; then echo "✗ Didn't find requirements.txt! Run 'just install-compile'!" >&2; exit 1; fi
     pip-sync requirements.txt dev-requirements.txt  
     {{PY}} -m pip install -e .[dev]
 alias ins := install
@@ -73,7 +73,7 @@ alias reins := reinstall
 
 # Upgrade all pins in-place
 upgrade:                        
-    just install-recompile --upgrade
+    just install-compile --upgrade
 
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
