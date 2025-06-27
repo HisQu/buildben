@@ -83,6 +83,8 @@ def _run(args: argparse.Namespace) -> None:
         "_REPORT.md": EXP_ROOT / "REPORT.md",
         "_run.py": EXP_ROOT / "run.py",
         "_paths.env": EXP_ROOT / ".paths.env",
+        "_scripts_exp.py": EXP_ROOT / "scripts" / "exp.py",
+        "_scripts_eval.py": EXP_ROOT / "scripts" / "eval.py",
     }
     # fmt: on
 
