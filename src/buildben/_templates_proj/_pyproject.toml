@@ -21,6 +21,7 @@ dependencies = [
     "ipykernel",
     # "dotenv",        # < Loads .env files
     "environs",
+    "tabulate",
     # "tqdm",          # < Progress bars
     # --- Numerical ----------------------
     "numpy",
@@ -61,6 +62,11 @@ dev = [
     "seaborn",
     # "plotastic",
     # "scipy",
+    # --- IO ----------------------------
+    "jupytext",      # < Jupyter Notebook export
+    # ---Example Data --------------
+    # "neddata @ git+https://github.com/HisQu/neddata.git",
+    # "neddata @ file:///home/kuric/_REPOS/neddata"
 ]
 
 # =====================================================================
