@@ -42,7 +42,7 @@ package "Global Environment" as GE {
 }
 
 ' === Package: Project Directory =============
-package "Project Directory" as PDIR {
+package "Project Directory" as PDIR #d9c49966 {
     
     class "pyproject.toml"                          as PPRT <<File>>
     
@@ -61,7 +61,7 @@ package "Project Directory" as PDIR {
 }
 
 ' === Package: Virtual Environment =============
-package "Virtual Environment" as VENV {
+package "Virtual Environment (.direnv)" as VENV  {
     interface "pip-tools"               as PT  <<Tool>>{
         +pip-compile()
         +pip-sync()
@@ -121,12 +121,12 @@ arrow {
 </style>
 
 
-D   <-- ERC 
-J   <-- JF     
-D   <-- JF     
+D   <-- ERC  : requires
+J   <-- JF  : requires
+D   <-- JF  : requires
 
-JF  --> PT     
-PT --> PPRT
+JF  --> PT   : requires
+PT --> PPRT : requires
 
 ' ERC -left-  JF     : interacts
 ' PPRT ..> PT    : read by

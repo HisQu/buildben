@@ -1,0 +1,84 @@
+@startuml
+left to right direction
+
+' === Style (kept identical) ===
+skinparam defaultFontSize 20
+skinparam BackgroundColor transparent
+skinparam package {
+    BackgroundColor #99999966
+    BorderColor     #99999966
+    BorderWidth     2
+    FontColor       #ffffff
+}
+skinparam class {
+    BackgroundColor #99999999
+    BorderColor     #000000
+}
+
+' === Packages (now ordered GE → PDIR → VENV) ===
+package "Global Environment" as GE {
+    interface "python" as PY  <<CLI>> {
+        +python -m venv .venv
+    }
+}
+
+package "Project Directory" as PDIR #d9c49966 {
+    class "requirements.txt"         as REQ <<File>>
+    class "main.py\n(or other code)" as APP <<File>>
+}
+
+
+
+package "Virtual Environment (.venv)" as VENV  {
+    interface "pip"          as PIP <<CLI>> {
+        +install()
+    }
+    class "Python Dependencies" as PKG <<Pkg>>
+}
+
+' === Hidden arrows to lock horizontal order ===
+GE   -[hidden]-> PDIR
+PDIR -[hidden]-> VENV
+
+' === Visible blue arrows (same semantics) ===
+<style>
+arrow {
+    LineColor #00A2FF
+    LineThickness 2.5
+    FontColor #00A2FF
+    FontStyle italic
+}
+</style>
+
+PY  --> VENV : creates
+PIP --> PKG  : installs
+
+
+REQ <-- PIP  : compiles
+
+' === SPecial Straight Arrows =============
+<style>
+arrow {
+    LineColor #61D836
+    FontColor #61D836
+}
+</style>
+abstract "User" as USER <<Actor>> {
+    +eat
+    +sleep
+    +code
+}
+USER  --> VENV : creates, \n (de-)activates \n& manages 
+
+
+<style>
+arrow {
+    LineStyle 10-5
+    LineColor #EE220C
+    FontColor #EE220C
+}
+</style>
+APP --> PKG  : requires
+REQ <-- PIP  : requires
+
+@enduml
