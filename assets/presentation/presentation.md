@@ -66,7 +66,7 @@ footer: "Dr. Martin Kuric — ADW Göttingen · Germania Sacra / HisQu"
 
 ---
 <!-- ------------------------------------------------------------- -->
-## Minimal Python Project: Dependency Management 
+## Document Dependencies Manually: `requirements.txt`
 
 ```bash
 pip freeze > requirements.txt  # Write dependency-list installed in current .venv
@@ -90,18 +90,29 @@ jedi==0.19.2
 
 ---
 <!-- ------------------------------------------------------------- -->
-## Minimal Python Project: Setup
+## Setup of a Python Project
 
 ```bash
 git clone "<repo-url>"             # Download
 python -m venv ".venv"             # Protect system packages
 source .venv/bin/activate          # Activate virtual environment
-pip install -r requirements.txt    # Install dependencies
+```
+If there's only a ``requirements.txt``:
+```bash
+pip install -r requirements.txt    # Install ONLY dependencies
 ```
 
-#### Limits:
+If there's a ``pyproject.toml`` (& ``requirements.txt``):
+
+```bash
+pip install -e .                   # Editable install (requires pyproject.toml!)
+```
+
+---
+
+### Limits of only installing `requirements.txt`, not the project:
 - ``requirements.txt`` only holds dependencies, not the **project structure**.
-  - Python **can't import** modules one directory up.
+  - Cannot import anything outside the current working directory (no ``import ../module``)
   - VS Code (sometimes) struggles with **refactoring** & **typing** across packages.
 - ``requirements.txt`` must be manually updated.
 - ``requirements.txt`` mixes runtime and development dependencies.
