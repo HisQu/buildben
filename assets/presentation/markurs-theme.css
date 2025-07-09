@@ -1,0 +1,194 @@
+/* @theme markurs-theme */
+@import 'nord';
+
+/* base palette */
+
+section {
+  width: 1280px;
+  height: 720px;
+  /* font-size: 29px; */
+  padding: 40px;
+  color: #d8dee9;
+  /* Snow storm 3 */
+  /* font-family: 'Arial narrow', sans-serif; */
+  font-family: 'Arial', sans-serif;
+  /* font-family: 'Helvetica Neue', sans-serif; */
+}
+
+
+h1 {
+  font-size: 55px;
+  text-align: center;
+  color: #eceff4;
+}
+
+h2 {
+  font-size: 40px;
+  color: #eceff4;
+}
+
+h3 {
+  font-size: 35px;
+  color: #d8dee9;
+}
+
+h4 {
+  margin-top: 5px;
+  color: #d8dee9;
+}
+
+header, footer {
+  color: #8fbcbb;
+  /* bold */
+  /* font-weight: bold; */
+  font-style: italic;
+  /* padding: 0 -200px 100 100; */
+  /* text-align: center; */
+}
+
+/* Pagination */
+section::after {
+  /* <— targets the built-in pager */
+  position: absolute;
+  /* pull it out of normal flow    */
+  bottom: 18px;
+  /* distance from slide edge      */
+  right: 40px;
+  /* swap to left:40px to move it  */
+  /* color: #aaaaaa; */
+  color: #8fbcbb;
+  font-weight: bold;
+  font-style:italic;
+
+  /* Custom wording: “Page X / Y”                                 */
+  content: attr(data-marpit-pagination)
+    /* ' / '  attr(data-marpit-pagination-total); */
+}
+
+
+
+.speaker {
+  text-align: center;
+  margin-top: 2em;
+}
+
+.author {
+  font: 700 30px/1.2 'Fira Sans', sans-serif;
+  color: #b1dfdf;
+}
+
+.affiliation {
+  font: 400 24px/1.3 'Fira Sans', sans-serif;
+  color: #a4d8d8;
+  letter-spacing: .02em;
+}
+
+/* optional fine rule under author for polish */
+.author::after {
+  content: '';
+  display: block;
+  width: 40%;
+  height: 1px;
+  margin: 12px auto 4px;
+  background: #a4d8d8;
+}
+
+/* ───── VS Code Dark +  token map ──────────────────────────── */
+/* place after nord.css so it REPLACES those colours           */
+
+/* base */
+.hljs {
+  background: #1e1e1e;
+  color: #d4d4d4;
+}
+
+/* comments & docstrings */
+.hljs-comment,
+.hljs-quote {
+  color: #6a9955;
+  font-style: italic;
+}
+
+/* KEYWORDS / control-flow  */
+.hljs-keyword,
+.hljs-literal,
+.hljs-selector-tag {
+  color: #569cd6;
+}
+
+/* ──  FUNCTION names  ── */
+.function_.hljs-title,
+.hljs-title.function_,
+.hljs-title.hljs-function {
+  color: #dcdcaa;
+  font-weight: bold;
+}
+
+/* yellow */
+
+/* ──  CLASS names  (patched)  ── */
+.class_.hljs-title,
+.hljs-title.class_,
+.hljs-class .hljs-title {
+  color: #4ec9b0;
+}
+
+/* green */
+
+/* types & built-ins (extra green for e.g. numpy, str, list…) */
+.hljs-built_in,
+.hljs-type {
+  color: #4ec9b0;
+}
+
+/* strings & doc literals */
+.hljs-string,
+.hljs-doctag {
+  color: #ce9178;
+  font-style: italic;
+}
+
+/* numbers & regex */
+.hljs-number,
+.hljs-regexp {
+  color: #b5cea8;
+}
+
+/* symbols / operators */
+.hljs-symbol,
+.hljs-bullet {
+  color: #d16969;
+}
+
+/* ──  BASH-specific tweaks  ─────────────────────────── */
+/* commands like `git`, `ls`, `printf` are tagged built_in */
+.language-bash .hljs-built_in {
+  color: #dcdcaa;
+}
+
+/* yellow */
+
+/* flags: -a, --help  → attr / meta keyword */
+.language-bash .hljs-attr,
+.language-bash .hljs-meta,
+.language-bash .hljs-meta .hljs-keyword {
+  color: #569cd6;
+}
+
+/* blue */
+
+/* REPL / shell prompts keep Nord grey so they don’t distract */
+.language-bash .hljs-meta.prompt {
+  color: #4c566a;
+}
+
+/* emphasis helpers */
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: bold;
+}
+
+/* ─────────────────────────────────────────────────────────── */

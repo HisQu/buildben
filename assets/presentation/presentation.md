@@ -1,71 +1,122 @@
 ---
 marp: true
-theme: markurstheme
+theme: markurs-theme
 paginate: true
-header: "Build-Benedictions: init_proj"
-footer: "Dr. Martin Kuric • 2025 • Germania Sacra, HisQu • ADW Göttingen"
+header: "2025 · Build-Benedictions: Managing Multiple (Python) Projects & Dependencies"
+footer: "Dr. Martin Kuric — ADW Göttingen · Germania Sacra / HisQu"
+
 
 ---
+<center>
 
-# Build-Benedictions
-# ``buildben init_proj`` 
+# Build-Benedictions 
+
+# ``$ buildben init_proj`` 
 
 ## Managing Multiple (Python) Projects & Dependencies
 
-By Dr. Martin Kuric
+
+<div class="speaker">
+  <p class="author">Dr.&#8239rer.&#8239nat. Martin Kuric</p>
+  <p class="affiliation">Academy of Sciences Göttingen · Germania Sacra / HisQu</p>
+</div>
 
 <!-- _paginate: skip -->
+<!-- _footer: "" -->
+<!-- _header: "" -->
 
+</center>
 
 
 ---
-<header> <h1>From <a href="https://en.wikipedia.org/wiki/Benediction">Wikipedia</a>:</h1> </header>
-  
-![bg left 50%](./Benedictions_image.png) 
+<!-- ------------------------------------------------------------- -->
+## From [Wikipedia]("https://en.wikipedia.org/wiki/Benediction"):
+<!-- ------------------------------------------------------------- -->
 
+![bg left 50%](./Benedictions_image.png) 
 
 *"A **benediction** (Latin: bene, 'well' + dicere, 'to speak') is a short **invocation** for divine help, blessing and guidance [...]."*
 
 *"**Invocation** is the act of calling upon a deity, spirit, or supernatural force, typically through prayer, ritual, or **spoken formula**, to seek guidance, assistance, or presence."*
 
+<br>
+
+<!-- _header: "" -->
 
 ---
-<header> <h1>Build-Benedictions: Main Features</h1> </header>
+<!-- ------------------------------------------------------------- -->
+## Build-Benedictions: Main Features
+<!-- ------------------------------------------------------------- -->
 
+#### Standardize setups with **template** scaffolds:
+- ``buildben init_proj``: Create a new **project** in ``/src``-layout.
+- ``buildben add_experiment``: Add a new **experiment** to a project.
+- ``buildben init_database``: Create a new central **database**. *(WIP)*
 
-
-- Standardize setups with **template scaffolds**:
-  - ``buildben init_proj``: Create a new **project**. 
-  - ``buildben add_experiment``: Add a new **experiment** to a project.
-  - ``buildben init_database``: Create a new central **database**. *(WIP)*
-- Integrate **popular tools**:
-  - ``direnv``: Virtual environment & variables.
-  - ``pip-tools``: Dependency management.
-  - ``just``: For summarizing tasks (upgrade, test, etc.).
-  - ``Docker``: Snapshot current state of project.
-
----
-
-<header> <h1>Common Practice: ``requirements.txt`` & ``.venv``</h1> </header>
+#### Integrate popular **CLI-tools**:
+- ``direnv``: Automate virtual **environments** & variables.
+- ``pip-tools``: Automate **dependency** management.
+- ``just``: Summarizing tasks into **one-liners** (upgrade, test, etc.).
+- ``docker``: **Snapshot** current state of project.
 
 ---
+<!-- ------------------------------------------------------------- -->
+## Common Architecture: ``requirements.txt`` & ``.venv``
+<!-- ------------------------------------------------------------- -->
 
-# Common Practice: Installing from GitHub
+
+
+
+---
+<!-- ------------------------------------------------------------- -->
+## Common Practice: Installing from GitHub
+<!-- ------------------------------------------------------------- -->
+
 
 ```bash
-git clone <repo-url>             # Download
-python -m venv .venv             # Protect system packages
-source .venv/bin/activate        # Activate virtual environment
-pip install -r requirements.txt  # Install dependencies
+git clone "<repo-url>"             # Download
+python -m venv ".venv"             # Protect system packages
+source .venv/bin/activate          # Activate virtual environment
+pip install -r requirements.txt    # Install dependencies
 ```
 
-### Why this is not enough:
+#### Why this is not enough:
 - ``requirements.txt`` only holds dependencies, not the **project structure**.
-  - Python can't **import** local packages.
+  - Python **can't import** local packages.
   - VS Code (sometimes) struggles with **refactoring** & **typing** across packages.
-- ``requirements.txt`` not up-to-date?
-- ``.venv`` not activated?
+- ``requirements.txt`` could be outdated.
+- Activating ``.venv`` can be forgotten or annoying.
+
+
+---
+<!-- ------------------------------------------------------------- -->
+<!-- ------------------------------------------------------------- -->
+
+<img src="../diagram/diagram.svg" alt="diagram.svg" width="1500px" style="background-color:transparent; float: right; margin-left: 20px; margin-bottom: 20px;">
+
+<!-- ![bg](../diagram/diagram.svg)  -->
+
+
 
 
 ---
 
+
+```python
+import pandas as pd
+
+def dsaf(column: str) -> pd.DataFrame:
+    """
+    This function does something with a DataFrame.
+    """
+    if a is None:
+        raise ValueError("a must not be None")
+    column = pd.concat()
+    a = 1 + 2
+    # Do something with df
+    return df
+
+
+class bla:
+  
+```
