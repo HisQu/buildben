@@ -5,7 +5,6 @@ paginate: true
 header: "2025 · Build-Benedictions: Managing Multiple (Python) Projects & Dependencies"
 footer: "Dr. Martin Kuric — ADW Göttingen · Germania Sacra / HisQu"
 
-
 ---
 
 
@@ -13,11 +12,16 @@ footer: "Dr. Martin Kuric — ADW Göttingen · Germania Sacra / HisQu"
 
 # Build-Benedictions 
 
-# ``$ buildben init-proj`` 
+**Aliases:  ``buildben``, ``bube``**
+
+ <br>
+ 
 
 ## Managing Multiple (Python) Projects & Dependencies
+**using**
+# ``$ bube init-proj`` 
 
-
+ <br>
 <div class="speaker">
   <p class="author">Dr.&#8239rer.&#8239nat. Martin Kuric</p>
   <p class="affiliation">Academy of Sciences Göttingen · Germania Sacra / HisQu</p>
@@ -29,10 +33,24 @@ footer: "Dr. Martin Kuric — ADW Göttingen · Germania Sacra / HisQu"
 
 </center>
 
-
+<!-- ------------------------------------------------------------- -->
 ---
-## `buildben`: Main Commands
-(`bube` is the alias for `buildben`)
+## What's `buildben`?
+
+
+
+#### ChatGPT:
+> “buildben is like **Cookiecutter** plus automatic virtual-env creation, dependency locking, and helper tasks.”
+
+<br>
+
+... and what's a Cookiecutter?
+> "A **Cookiecutter** is a project template that can be used to create new projects with a predefined structure and configuration. It is a tool that helps developers quickly set up new projects by providing a standardized starting point."
+
+<!-- ------------------------------------------------------------- -->
+---
+
+## Main Modules:
 
 - ``$ bube init-proj``: Create a new **project**. — ✅ *99% Done*
 - ``$ bube add-experiment``: Add a new **experiment** to a project. — 🤞 *80% Done*
@@ -98,7 +116,7 @@ python -m venv ".venv"  # Prevents polluting your OS with project-related chaos
 source .venv/bin/activate  # Activate virtual environment
 ```
 2. Collect my dependencies in a ``"proj-requirements.txt"`` file.
-3. `pip`: installs my dependencies and all *dependencies of dependencies*:
+3. `pip`: Collects *dependencies of my dependencies* and installs everything:
 ```bash
 pip install -r "proj-requirements.txt"  # Resolve Environment & install dependencies
 ```
@@ -205,7 +223,7 @@ pip install -e .                   # Editable install
 
 
 ---
-
+<!-- ------------------------------------------------------------- -->
 #### Further Annoyances:
 
 1. ``requirements.txt`` mixes runtime and development dependencies.
@@ -215,16 +233,22 @@ pip install -e .                   # Editable install
 <br>
 
 
+
+
+
+
 ---
+<!-- ------------------------------------------------------------- -->
+
 
 | Solution                        | Why beginners should care                        | Standard                                           |
 | ------------------------------------- | ------------------------------------------------ | -------------------------------------------------- |
 | `pyproject.toml`                      | Single file that stores metadata and tool config |  [PEP 621][1] |
-| Editable install (`pip install -e .`) | Code changes are picked up without re-install    | [PEP 660][2] |
-| `src/` layout                         | Forces you to test the installed package         | [PyPA guide][3] |
-| `pip-tools`                           | Auto-generates (and syncs) `requirements*.txt`   | [Jazzband docs][4] |
-| `direnv`                              | Activates the correct virtual env when you `cd`  | [direnv docs][5] |
-| `just`                                | Saves “one-liners” like `just insco`             | [just README][6] |
+| `pip install -e .` | Code changes are picked up without re-install    | [PEP 660][2] |
+| `src/` layout                         | Forces tests to run on the installed package         | [PyPA guide][3] |
+| `pip-tools`                           | Auto-generates (and syncs) `requirements*.txt`   | ([realpython.com][4])|
+| `direnv`                              | Activates the correct virtual env when you `cd`  | ([direnv docs][5]) |
+| `just`                                | Saves “one-liners” like `just insco`             | ([just README][6]) |
 
 
 [1]: https://peps.python.org/pep-0621/?utm_source=chatgpt.com "PEP 621 – Storing project metadata in pyproject.toml | peps.python.org"
@@ -236,41 +260,68 @@ pip install -e .                   # Editable install
 
 
 
----
-
-===== ID-based evaluation =====
-| Metric                       | Value   |
-|------------------------------|---------|
-| Hits Pos.-ctrl [total count] | 2602    |
-| Hits AI [total count]        | 4372    |
-| AI TP [count]                | 1038    |
-| AI FP [count]                | 1105    |
-| AI FN [count]                | 1566    |
-| AI UNCLEAR [count]           | 662     |
-| ERROR [count]                | 1       |
-| AI precision [%]             | 48.4%   |
-| AI recall [%]                | 39.9%   |
 
 ---
-## Build-Benedictions: Minimal Workflow
+<!-- ------------------------------------------------------------- -->
+## `bube proj`: Workflow
+
+#### 1. `$ bube proj` sets up a *ready-to-use* project directory (*Cookie-Cutter*):
+- `pyproject.toml`: Pre-configured for ``src``-layout, basic dependency list, etc.
+- `.envrc`: Tells `direnv` to create & activate virtual environment automatically.
+- `justfile`: Comes with working recipes (functions) to install, etc.
+- Many more...
+
+#### 2. Use `just` recipes for everyday tasks:
+- Installing your project: `just install-compile` 
+- Resetting environment: `just reset-venv`
+- Upgrading dependencies: `just upgrade-deps`
+- You can add more yourself!
+
+
+---
+<!-- ------------------------------------------------------------- -->
+## `bube proj`: Demonstration
 
 ```bash
-bube proj    # Shorthand for `buildben init-proj`
+bube -h                           # Show help message
+bube proj -h                      # Shorthand for `buildben init-proj -h`
+bube proj "sheesh" -t . -g -u "<your_github_username>"  # Cookiecutter project
+cd "sheesh"                       # Change to project directory
+direnv allow                      # Trust & execute .envrc
+# A .direnv directory is created containing the virtual environment
+just                              # Show available recipes
+just install-compile              # Install project, compile requirements.txt
+
+cd ..                  # Demonstrate auto-deactivation of direnv
+cd bla_a               # Demonstrate auto-activation of direnv
+cd ../sheesh           # Demonstrate auto-deactivation and activation of direnv
+
+just reset-venv        # Fully Nuke the virtual environment, start fresh!
 ```
 
 ---
 <!-- ------------------------------------------------------------- -->
-## Build-Benedictions: Improving **Setup & Maintenance**
+## `bube proj`: Minimal Example
 
-#### **Standardize** with template scaffolds:
-- ``$ bube init-proj``: Create a new **project** 
+4 Lines to set up a new project.
 
-#### **Automate workflow** by integrating popular CLI-tools:
-- ``direnv``: Automate virtual **environments** & variables.
-- ``pip-tools``: Automate **dependency** management.
-- ``just``: Summarize tasks into **one-liners**: `just install`, `just upgrade`, etc.
-- ``docker``: **Snapshot** current state of project.
+```bash
+bube proj "sheesh" -t . -g -u "<your_github_username>"
+cd "sheesh" 
+direnv allow 
+just install-compile
+```
 
+
+
+---
+<!-- ------------------------------------------------------------- -->
+
+## With `buildben`:
+<img src="../diagram/diagram.svg" alt="diagram.svg" width="1200px" style="background-color:transparent; float: center; ">
+
+<!-- _footer: "" -->
+<!-- _header: "" -->
 
 ---
 <!-- ------------------------------------------------------------- -->
@@ -283,15 +334,36 @@ bube proj    # Shorthand for `buildben init-proj`
 <!-- _footer: "" -->
 <!-- _header: "" -->
 
+<br>
+<br>
 
 ---
 <!-- ------------------------------------------------------------- -->
+## `just` Recipe Syntax
 
-## With `buildben`:
-<img src="../diagram/diagram.svg" alt="diagram.svg" width="1200px" style="background-color:transparent; float: center; ">
+A "Recipe" is a bash function that can be called from the command line.
+```bash
+# Docstring for the recipe (optional)
+recipe-name *ARGS:
+    echo "Hello, World!"
+    echo "This is a recipe."
+    rm {{ARGS}}
+alias rcp-nm:=recipe-name  # Create an alias for the recipe  
+```
 
-<!-- _footer: "" -->
-<!-- _header: "" -->
+---
+<!-- ------------------------------------------------------------- -->
+## `pyproject.toml` 
+
+- Contains metadata about the project, dependencies, and build system.
+- Used by `pip` to install the project and its dependencies.
+
+
+#### What you have to do:
+- Whenever you `pip install` a python package, add it under `[project.dependencies]` 
+  - For development dependencies, add them under `[project.optional-dependencies]`
+- 
+
 
 ---
 <!-- ------------------------------------------------------------- -->
@@ -312,7 +384,6 @@ myproject/                       myproject/
 - Avoids imports from working directory via ``PYTHONPATH``
 → Forces tests to run on installed code: `pip install -e .` → Catches ``import`` bugs
 - Builds **clean wheels**: Stray files never ship to PyPI
-- Recommended by [Python Packaging Authority (PyPA)](https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/)
 
 ---
 <!-- ------------------------------------------------------------- -->

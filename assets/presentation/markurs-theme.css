@@ -22,12 +22,13 @@ section {
 h1 {
   font-size: 55px;
   text-align: center;
-  color: #eceff4;
+  color: #d8dee9;
+  margin-bottom: 0px;
 }
 
 h2 {
   font-size: 38px;
-  color: #eceff4;
+  color: #d8dee9;
   /* margin-bottom: 0px; */
 }
 
@@ -49,6 +50,11 @@ header, footer {
   font-style: italic;
   /* padding: 0 -200px 100 100; */
   /* text-align: center; */
+}
+
+.markdown-body blockquote, section blockquote {
+  color: #84aede;
+  font-style:italic;
 }
 
 /* Pagination */
@@ -225,27 +231,56 @@ section hr {
   color: #c586c0;
 }
 
+/* ── Nord-dark tables that win the cascade ───────────── */
 
+/* ── HARD OVERRIDE: wipe the white square for good ─────────── */
 
-/* Dark-mode table for Nord + Marp --------------------------- */
-section table {
-  width: 100%;
+.markdown-body table, section table {
+  display: table;
+  /* back to normal flow            */
+  width: auto;
+  /* shrink to content              */
+  overflow: visible;
+  /* no inner scroll-box            */
+  table-layout: fixed;
+  /* equal column widths, nice wrap */
   border-collapse: collapse;
-  background: transparent;
-  /* deep slate */
-  color: var(--nord6);
-  /* light text */
-  font-size: 28px;
-  /* matches body */
+  font-size: 31px;
+  /* match slide body               */
+  font-family: 'Arial', sans-serif;
 }
 
-/* Zebra stripe for readability */
-section tbody tr:nth-child(even) td {
-  background: transparent;
+.markdown-body td {
+  padding: 10px 18px;
+  /* breathe   */
+  text-align: left;
+  /* VS Code style */
+  vertical-align: top;
+  word-wrap: break-word;
+  /* wrap long URLs */
+  border: 1px solid var(--tbl-border);
+  /* uses colour you set */
 }
 
-/* Body cells */
-section tbody td {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--nord3);
+.markdown-body table th, section table th {
+  background-color: #424d64;
+  font-family: 'Arial', sans-serif;
 }
+
+.markdown-body table tr, section table tr {
+  background-color: #4c566a;
+  border-top: 1px solid #c6cbd1;
+}
+
+.markdown-body table tr:nth-child(2n), section table tr:nth-child(2n) {
+  background-color: #566177;
+}
+
+
+
+
+
+/* h1::after {
+  content: "✅";
+  color: #ff0;
+} */

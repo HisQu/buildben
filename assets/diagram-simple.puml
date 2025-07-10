@@ -76,6 +76,7 @@ abstract "User" as USER <<Actor>> {
 }
 USER  --> VENV : creates, \n (de-)activates \n& manages 
 REQ_PROJ <-- USER : collects
+REQ <-- USER : pip freezes
 
 <style>
 arrow {
