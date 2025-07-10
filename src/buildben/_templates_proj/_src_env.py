@@ -1,5 +1,5 @@
 """Environment Variables Management:
-- setup(): Retrieve environment variables from .envrc for developer tasks
+- setup_direnv(): Retrieve environment variables from .envrc for developer tasks
 - Initialize environs.Env() as a handle for connecting to the environment at runtime
 """
 
