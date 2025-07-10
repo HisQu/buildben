@@ -20,7 +20,7 @@ dependencies = [
     # --- Core packages ------------------
     "ipykernel",
     # "dotenv",        # < Loads .env files
-    "environs",
+    "environs",        # < Loads .env files, but better
     "tabulate",
     # "tqdm",          # < Progress bars
     # --- Numerical ----------------------
