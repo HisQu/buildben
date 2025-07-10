@@ -44,7 +44,10 @@ package "Global Environment" as GE {
 ' === Package: Project Directory =============
 package "Project Directory" as PDIR #d9c49966 {
     
-    class "pyproject.toml"                          as PPRT <<File>>
+    class "pyproject.toml"                          as PPRT <<Config>> {
+        +Dependencies
+        +Setup Configuration
+    }
     
     class "justfile"                                as JF  <<File>> {
         +reset()
@@ -57,7 +60,10 @@ package "Project Directory" as PDIR #d9c49966 {
         +ENV_VARS
     }
     
-    class "requirements.txt \n+ dev_requirements.txt" as RE   <<File>>
+    class "requirements.txt \ndev-requirements.txt" as RE   <<2 Files>> {
+        +Dependencies
+        +Versions & Hashes
+    }
 }
 
 ' === Package: Virtual Environment =============
@@ -92,7 +98,7 @@ arrow {
 ' PT --> PD <<test>> : installs 
 PT --> PD : installs
 PIP --> B : installs 
-B --> PDIR   : creates scaffold
+B --> PDIR   : creates\nscaffold
 ERC --> PT     : installs 
 PT  --> RE     : compiles \n& syncs
 

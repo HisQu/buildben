@@ -3,6 +3,9 @@
 
 /* base palette */
 
+
+
+
 section {
   width: 1280px;
   height: 720px;
@@ -25,6 +28,7 @@ h1 {
 h2 {
   font-size: 38px;
   color: #eceff4;
+  /* margin-bottom: 0px; */
 }
 
 h3 {
@@ -67,7 +71,19 @@ section::after {
 }
 
 
+/* ========================================== */
 
+
+section hr {
+  border: none;
+  height: .1px;
+  background: #002b36;
+  /* solarized base */
+}
+
+
+
+/* ========================================== */
 .speaker {
   text-align: center;
   margin-top: 2em;
@@ -198,11 +214,38 @@ section::after {
 }
 
 
-
+.hljs-string {
+  color: #ce9178;
+}
 
 /* ─────────────────────────────────────────────────────────── */
 
 /* NEW: control-flow kw  */
 .hljs-control {
   color: #c586c0;
+}
+
+
+
+/* Dark-mode table for Nord + Marp --------------------------- */
+section table {
+  width: 100%;
+  border-collapse: collapse;
+  background: transparent;
+  /* deep slate */
+  color: var(--nord6);
+  /* light text */
+  font-size: 28px;
+  /* matches body */
+}
+
+/* Zebra stripe for readability */
+section tbody tr:nth-child(even) td {
+  background: transparent;
+}
+
+/* Body cells */
+section tbody td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--nord3);
 }
