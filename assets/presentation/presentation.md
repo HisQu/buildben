@@ -3,7 +3,7 @@ marp: true
 theme: markurs-theme
 paginate: true
 header: "2025 · Build-Benedictions: Managing Multiple (Python) Projects & Dependencies"
-footer: "Dr. Martin Kuric — ADW Göttingen · Germania Sacra / HisQu"
+footer: "Dr. Martin Kuric — Germania Sacra / HisQu @ ADW Göttingen"
 
 ---
 
@@ -24,7 +24,7 @@ footer: "Dr. Martin Kuric — ADW Göttingen · Germania Sacra / HisQu"
  <br>
 <div class="speaker">
   <p class="author">Dr.&#8239rer.&#8239nat. Martin Kuric</p>
-  <p class="affiliation">Academy of Sciences Göttingen · Germania Sacra / HisQu</p>
+  <p class="affiliation">Germania Sacra / HisQu · Academy of Sciences Göttingen</p>
 </div>
 
 <!-- _paginate: skip -->
@@ -180,7 +180,7 @@ matplotlib-inline==0.1.7
 
 <center>
 
-***"I will add a `pyproject.toml` once I need it!"***</center>
+***"I will add a `pyproject.toml` later..!"***</center>
 
 <center>
 
@@ -207,6 +207,7 @@ If there's a ``pyproject.toml``:
 pip install -e .                   # Editable install
 ```
 
+<!-- ------------------------------------------------------------- -->
 ---
 ### My Projects before `buildben`: **2 Main Problems**
 
@@ -224,8 +225,9 @@ pip install -e .                   # Editable install
 
 ---
 <!-- ------------------------------------------------------------- -->
-#### Further Annoyances:
 
+
+#### Further Annoyances:
 1. ``requirements.txt`` mixes runtime and development dependencies.
 2. (De-)Activating ``.venv`` can be forgotten or annoying.
 3. Too many CLI-commands to remember & type *(especially when working with 4 Repos at the same time)*.
@@ -240,8 +242,9 @@ pip install -e .                   # Editable install
 ---
 <!-- ------------------------------------------------------------- -->
 
+## Solutions:
 
-| Solution                        | Why beginners should care                        | Standard                                           |
+| Building Block                        | Why beginners should care                        | Standard                                           |
 | ------------------------------------- | ------------------------------------------------ | -------------------------------------------------- |
 | `pyproject.toml`                      | Single file that stores metadata and tool config |  [PEP 621][1] |
 | `pip install -e .` | Code changes are picked up without re-install    | [PEP 660][2] |
@@ -325,7 +328,6 @@ just install-compile
 
 ---
 <!-- ------------------------------------------------------------- -->
-
 ## Without `buildben`: 
 
 
@@ -339,6 +341,33 @@ just install-compile
 
 ---
 <!-- ------------------------------------------------------------- -->
+## `pyproject.toml` 
+
+- Contains metadata about the project, dependencies, and build system.
+- Used by `pip` & `pip-sync` to install the project and its dependencies.
+- Used by `pip-compile` to generate lock-file: `requirements.txt`.
+
+
+---
+<!-- ------------------------------------------------------------- -->
+## `pyproject.toml` 
+
+
+#### Keep in mind:
+- Whenever you `pip install` something, add it under `[project.dependencies]`,
+or for development dependencies under `[project.optional-dependencies]`.
+- Other `buildben` projects can be added as a dependency via their Git-URL:
+  `"sheesh2 @ git+https://github.com/HisQu/sheesh2.git@<branch, tag or commit>"`, 
+  or as a local path: `"sheesh2 @ file://../sheesh2"`
+  → No need for GitHub submodules
+  → No need for publishing on PyPI
+- Package any non-``.py`` file under `[project.package-data]`
+
+
+
+
+---
+<!-- ------------------------------------------------------------- -->
 ## `just` Recipe Syntax
 
 A "Recipe" is a bash function that can be called from the command line.
@@ -347,27 +376,14 @@ A "Recipe" is a bash function that can be called from the command line.
 recipe-name *ARGS:
     echo "Hello, World!"
     echo "This is a recipe."
-    rm {{ARGS}}
+    rm {{ARGS}}     # Pass arguments
 alias rcp-nm:=recipe-name  # Create an alias for the recipe  
 ```
 
----
-<!-- ------------------------------------------------------------- -->
-## `pyproject.toml` 
-
-- Contains metadata about the project, dependencies, and build system.
-- Used by `pip` to install the project and its dependencies.
-
-
-#### What you have to do:
-- Whenever you `pip install` a python package, add it under `[project.dependencies]` 
-  - For development dependencies, add them under `[project.optional-dependencies]`
-- 
-
 
 ---
 <!-- ------------------------------------------------------------- -->
-## Project Directory: `src`-Layout 
+## Project Structure: `src/`-Layout
 
 ```bash
 # src layout (good)              # flat layout (risky)
@@ -387,7 +403,7 @@ myproject/                       myproject/
 
 ---
 <!-- ------------------------------------------------------------- -->
-## Project Directory: Inside `src`
+## Project Structure: Inside `src/`
 
 ```bash
 myproject/
@@ -395,7 +411,7 @@ myproject/
 │   └── myproject/            # Single directory, same name as project root (Recommended)  
 │       ├── __init__.py       # Marks directory as package; runs on first import!
 │       ├── main.py           # Optional CLI entry-point (wired in via pyproject.toml)
-│       ├── sheesh.py         # >>> import myproject.sheesh
+│       ├── shishkebab.py     # >>> import myproject.shishkebab
 │       ├── clients/          # >>> import myproject.clients
 │       │   ├── __init__.py   # Sub-package "clients"
 │       │   ├── llm.py        # >>> import myproject.clients.llm
@@ -432,3 +448,60 @@ myproject/
 ```
 
 
+---
+<!-- ------------------------------------------------------------- -->
+## Installation of `buildben`
+
+
+### Prerequisites:
+- Python installed on your OS (and you know its executable in your `$PATH`)
+- A Package manager (`apt`, `brew`, `winget`, etc.)
+
+### 🏃Quick & Dirty:
+```bash
+git clone https://github.com/markur4/buildben.git
+pip install -e buildben    # venv recommended. (Also, you might want just & direnv.) 
+```
+
+
+---
+<!-- ------------------------------------------------------------- -->
+
+## 🏗️ Full Install (recommended): 
+
+#### 1. Install [`pipx`](https://pipx.pypa.io/stable/installation/):
+To use `buildben`  globally and to keep the OS-python clean, we recommend `pipx`.
+```bash
+sudo apt install pipx        # For Ubuntu
+# brew install pipx          # For MacOS
+# py -m pip install --user pipx   # For Windows (Not tested!)
+pipx ensurepath                   # Add pipx to PATH, if not already done
+pipx upgrade-all                  # !! Never run pipx with sudo !!
+```
+
+#### 2. Clone & install `buildben`:
+```bash
+git clone https://github.com/markur4/buildben.git
+cd buildben         # Needed, `pipx install buildben` does NOT work!
+pipx install -e .   # Editable for direct modifications.
+```
+
+
+
+---
+<!-- ------------------------------------------------------------- -->
+## 🏗️ Full Install (recommended): 
+
+<br>
+
+#### 3. Install [`just`](https://github.com/casey/just):
+```bash
+sudo apt install just     # For Ubuntu
+# brew install just       # For MacOS
+# pipx install rust-just  # Windows requires the cross-platform version (not tested!)
+```
+
+
+#### 4. Install [`direnv`](https://direnv.net/) & hook it into your shell: 
+   - *Either* follow the instructions for [install](https://direnv.net/docs/installation.html) & [hook](https://direnv.net/docs/hook.html),
+   - *Or* run `src/buildben/setup_zsh.sh` to install both `zsh` & other useful plugins, including `direnv`.

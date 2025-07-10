@@ -245,7 +245,7 @@ section hr {
   table-layout: fixed;
   /* equal column widths, nice wrap */
   border-collapse: collapse;
-  font-size: 31px;
+  /* font-size: 31px; */
   /* match slide body               */
   font-family: 'Arial', sans-serif;
 }
