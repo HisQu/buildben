@@ -244,14 +244,14 @@ pip install -e .                   # Editable install
 
 ## Solutions:
 
-| Building Block                        | Why beginners should care                        | Standard                                           |
-| ------------------------------------- | ------------------------------------------------ | -------------------------------------------------- |
-| `pyproject.toml`                      | Single file that stores metadata and tool config |  [PEP 621][1] |
+| Building Block    | Why beginners should care   | Standard   |
+| ----------------- | --------------------------- | ---------- |
+| `pyproject.toml`   | Single file that stores metadata and tool config |  [PEP 621][1] |
 | `pip install -e .` | Code changes are picked up without re-install    | [PEP 660][2] |
-| `src/` layout                         | Forces tests to run on the installed package         | [PyPA guide][3] |
-| `pip-tools`                           | Auto-generates (and syncs) `requirements*.txt`   | ([realpython.com][4])|
-| `direnv`                              | Activates the correct virtual env when you `cd`  | ([direnv docs][5]) |
-| `just`                                | Saves “one-liners” like `just insco`             | ([just README][6]) |
+| `src/` layout     | Forces tests to run on the installed package       | [PyPA guide][3] |
+| `pip-tools`       | Compiles `*requirements.txt` & syncs it with venv   | ([realpython.com][4])|
+| `direnv`          | Activates the correct virtual env when you `cd`  | ([direnv docs][5]) |
+| `just`            | Saves “one-liners” like `just insco`             | ([just README][6]) |
 
 
 [1]: https://peps.python.org/pep-0621/?utm_source=chatgpt.com "PEP 621 – Storing project metadata in pyproject.toml | peps.python.org"
@@ -346,23 +346,55 @@ just install-compile
 - Contains metadata about the project, dependencies, and build system.
 - Used by `pip` & `pip-sync` to install the project and its dependencies.
 - Used by `pip-compile` to generate lock-file: `requirements.txt`.
+  
+#### Manual things to do:
+- Whenever you `pip install` a package, add it to your `pyproject.toml`
+-> (Otherwise it will be forgotten on re-install)
 
-
+```toml
+[project]
+  dependencies = [
+    "pandas",  # You can pin a version, e.g. "pandas>=2.0.0,<3.0.0"
+    "...",     # Add more dependencies here
+  ]
+```
+  
 ---
 <!-- ------------------------------------------------------------- -->
 ## `pyproject.toml` 
 
+#### Optional Dependencies:
+- For development dependencies under `[project.optional-dependencies]`:
+```toml
+[project.optional-dependencies]
+  dev = [
+    "pytest",
+    "...",     # Add more dependencies here
+  ]
+```
 
-#### Keep in mind:
-- Whenever you `pip install` something, add it under `[project.dependencies]`,
-or for development dependencies under `[project.optional-dependencies]`.
+- For development dependencies under `[project.optional-dependencies]`.
+- Package any non-``.py`` file under `[project.package-data]`
+
+
+
+---
+<!-- ------------------------------------------------------------- -->
+## `pyproject.toml`: Adding Your Project as Dependencies
+
+
+
+
 - Other `buildben` projects can be added as a dependency via their Git-URL:
-  `"sheesh2 @ git+https://github.com/HisQu/sheesh2.git@<branch, tag or commit>"`, 
+  
+```toml
+[project.dependencies]
+  "sheesh2 @ git+https://github.com/HisQu/sheesh2.git@<branch, tag or commit>", 
+```
   or as a local path: `"sheesh2 @ file://../sheesh2"`
   → No need for GitHub submodules
   → No need for publishing on PyPI
-- Package any non-``.py`` file under `[project.package-data]`
-
+  
 
 
 
@@ -379,6 +411,30 @@ recipe-name *ARGS:
     rm {{ARGS}}     # Pass arguments
 alias rcp-nm:=recipe-name  # Create an alias for the recipe  
 ```
+
+---
+<!-- ------------------------------------------------------------- -->
+## `pip-tools` = `pip-compile` + `pip-sync`
+
+#### `pip-compile`:
+- Compiles a `requirements.txt` file from the `pyproject.toml` file (unlike `pip freeze`).
+- Automatically resolves dependencies and their versions.
+- Generates a `requirements.txt` file with pinned versions.
+
+#### `pip-sync`:
+- Synchronizes the virtual environment with the `requirements.txt` file.
+- Installs or removes packages to match the `requirements.txt` file.
+
+---
+<!-- ------------------------------------------------------------- -->
+
+| Capability                                             | `pip freeze`   | `pip-compile`                   |
+| ------------------------------------------------------ | -------------- | ------------------------------- |
+| Locks transitive deps deterministically                | ⚠️ best-effort | ✅ topologically sorted          |
+| Separates **direct** vs **indirect** deps              | ❌              | ✅ comments show who pulled what |
+| Generates secure `--hash=` pins                        | ❌              | ✅ `--generate-hashes` flag      |
+| Selective upgrades (e.g. --upgrade-package flask)      | ❌              | ✅ built-in                      |
+| Understands modern metadata (PEP 621 `pyproject.toml`) | ❌              | ✅                               |
 
 
 ---
