@@ -12,7 +12,7 @@ footer: "Dr. Martin Kuric — Germania Sacra / HisQu @ ADW Göttingen"
 
 # Build-Benedictions 
 
-*Aliases:  **``buildben``, ``bube``***
+*Aliases:*  ``buildben``, ``bube``
 
  <br>
  
@@ -72,8 +72,8 @@ I myself don't understand them fully either, *I simply trust the best practices.
 <!-- ------------------------------------------------------------- -->
 ---
 
+### Aliases: ``buildben``, ``bube``
 ## Main Modules:
-*Aliases:  **``buildben``, ``bube``***
 - ``$ bube init-proj``: Create a new **project**. — ✅ *99% Done*
 - ``$ bube add-experiment``: Add a new **experiment** to a project. — 🤞 *80% Done*
 - ``$ bube env-snapshot``: Dockerize current project for reproducibility. — 🤞 *80% Done*
@@ -85,14 +85,14 @@ I myself don't understand them fully either, *I simply trust the best practices.
 
 - I had one big mono-repository containing multiple projects. It was a MESS. 
 - After splitting into smaller repos: Managing multiple separate projects is painful, too..! 
-  - "Let's just start developing, I can add a ``setup.py`` later!"
-  - "When did I last update the ``requirements.txt`` / ``setup.py``?"
-  - "When anyone tries to use this code, the setup will probably break..."
+  - *"Let's just start developing, I can add a ``setup.py`` later!"*
+  - *"When did I last update the ``requirements.txt`` / ``setup.py``?"*
+  - *"When anyone tries to use this code, the setup will probably break..."*
 - I had scripts to automate tasks, all of them poorly documented & scattered across repos!
 - I needed one centralized standard to solve **all** my problems:
   - Think ahead, avoid problems, read my mind, etc.
   - Minimal interaction: No more than 1 CLI-command to do 100 things at once.
-  - (*like a quick prayer doing miracles ...🙏😇*)
+  - (*like a quick prayer for a miracle ...🙏😇*)
 
 
 
@@ -238,6 +238,7 @@ pip install -e .                   # Editable install
 2. (De-)Activating ``.venv`` can be forgotten or annoying.
 3. Too many CLI-commands to remember & type *(especially when working with 4 Repos at the same time)*.
 4. How to properly write unit-tests mid-development..?
+5. Where to keep `.secrets.env` ..?
 <br>
 
 
@@ -312,7 +313,7 @@ just reset-venv        # Fully Nuke the virtual environment, start fresh!
 <!-- ------------------------------------------------------------- -->
 ## `bube proj`: Minimal Example
 
-4 Lines to set up a new project.
+4 Lines to set up a new `pip`-installable project.
 
 ```bash
 bube proj "sheesh" -t . -g -u "<your_github_username>"
@@ -344,6 +345,81 @@ just install-compile
 
 <br>
 <br>
+
+
+
+
+---
+<!-- ============================================================= -->
+# `src/`-Layout
+<!-- ============================================================= -->
+<!-- _footer: "" -->
+<!-- _header: "" -->
+---
+<!-- ------------------------------------------------------------- -->
+## Project Structure: `src/`-Layout
+
+```bash
+# src layout (good)              # flat layout (risky)
+myproject/                       myproject/
+├── src/                         │    
+│   └── myproject/               │
+│       ├── main.py              ├── main.py             
+│       └── package/module.py    ├── package/module.py
+├── tests/                       ├── tests/
+│   └── test_module.py           │   └── test_module.py
+├── README.md                    ├── README.md
+```
+#### Benefits:
+- Avoids imports from working directory via ``PYTHONPATH``
+→ Forces tests to run on installed code: `pip install -e .` → Catches ``import`` bugs
+- Builds **clean wheels**: Stray files never ship to PyPI
+
+---
+<!-- ------------------------------------------------------------- -->
+## Project Structure: Inside `src/`
+
+```bash
+myproject/
+├── src/
+│   └── myproject/            # Single directory, same name as project root (Recommended)  
+│       ├── __init__.py       # Marks directory as package; runs on first import!
+│       ├── main.py           # Optional CLI entry-point (wired in via pyproject.toml)
+│       ├── shishkebab.py     # >>> import myproject.shishkebab
+│       ├── clients/          # >>> import myproject.clients
+│       │   ├── __init__.py   # Sub-package "clients"
+│       │   ├── llm.py        # >>> import myproject.clients.llm
+│       │   └── embedding.py  # >>> import myproject.clients.embedding
+│       └── utils/            # >>> import myproject.utils
+│           ├── __init__.py   # Sub-package "utils"
+│           ├── cooltool.py   # >>> import myproject.utils.cooltool
+│           └── module6.py    # >>> import myproject.utils.module6
+```
+
+
+
+
+---
+<!-- ------------------------------------------------------------- -->
+## Project Directory: Auxiliary Files in Project Root
+
+```bash
+myproject/
+├── .venv/                 # Virtual environment (or .direnv!)
+├── .env                   # Environment variables (& secrets)
+├── .gitignore               
+├── .git/                  # Repository metadata
+├── src/
+│   └── myproject/        # Separate source code from tests!
+├── tests/
+│   └── test_module1.py    # Tests for module1
+├── justfile               # Development tasks
+├── pyproject.toml         # Project metadata, Setup!
+├── requirements.txt       # Dependencies
+├── requirements-dev.txt   # Development dependencies
+├── README.md
+├── LICENSE
+```
 
 
 
@@ -486,13 +562,13 @@ pip install -e .[dev]  # Install dependencies + development-dependencies
 <!-- ------------------------------------------------------------- -->
 ## `pyproject.toml`: Packaging of `.py` files
 
-- Modules & Packages inside `package-dir` will be copied into `".venv/lib/<my_project>"`.
+- Modules & Packages inside `package-dir` will be copied into `".venv/**/<my_project>"`.
 ```toml
 [tool.setuptools]
-package-dir = { "" = "src"}     # "<my_project>/src/" --> ".venv/lib/<my_project>"
+package-dir = { "" = "src"}     # "<my_project>/src/" --> ".venv/**lib**/<my_project>"
 ```
 
-- Further components are scanned
+- Auto-discovery (and exclusion) of packages:
 ```toml
 [tool.setuptools.packages.find]
 where = ["src"]                 # Scan "<my_project>/src/" for packages (subdirectories)
@@ -502,48 +578,46 @@ where = ["src"]                 # Scan "<my_project>/src/" for packages (subdire
 from <my_project>.<package>.<module> import <your_class>, <your_variable>
 ```
 
-<!-- 
----
 
+<!-- ---
 ## `pyproject.toml` – what the pieces do
 
 | Table / key | Purpose | Why it matters |
 |-------------|---------|----------------|
 | **`[build-system]` → `requires`, `build-backend`** | Declares the backend (`setuptools`, `hatchling`, …) and the packages needed **to build** your wheel/sdist | Standardised by PEP 517 ✔︎ :contentReference[oaicite:0]{index=0} |
-| **`[project]`** | Static metadata: `name`, `version`, `dependencies`, … | Defined by PEP 621; readable by *all* front-ends :contentReference[oaicite:1]{index=1} |
-| **`[tool.setuptools]` → `package-dir`** | Maps *import* package path to real files (`"" = "src"`) | Tells `pip` to copy code from `src/` into the installed wheel :contentReference[oaicite:2]{index=2} |
+| **`[project]`** | Static metadata: `name`, `version`, `dependencies`, … | Defined by PEP 621; readable by *all* front-ends :contentReference[oaicite:1]{index=1} | -->
+
 
 ---
 | Table / key | Purpose | Why it matters |
 |-------------|---------|----------------|
-| **`[tool.setuptools.packages.find]`** | Auto-discovers packages under `where = ["src"]`; supports `include`, `exclude`, `namespaces` | Avoids hand-listing sub-packages; you can still override when needed :contentReference[oaicite:3]{index=3} |
-| **Other `[tool.*]` subtables** | Config for linters, type-checkers, docs, etc. (`[tool.black]`, `[tool.mypy]`) | Keeps all project config in one file, reducing boilerplate :contentReference[oaicite:4]{index=4} |
- -->
+| **`[tool.setuptools]` → `package-dir`** | Maps *import* package path to real files (`"" = "src"`) | Tells `pip` to copy code from `src/` into the installed wheel  |
+| **`[tool.setuptools.packages.find]`** | Auto-discovers packages under `where = ["src"]`; supports `include`, `exclude`, `namespaces` | Avoids hand-listing sub-packages; you can still override when needed  |
+| **Other `[tool.*]` subtables** | Config for linters, type-checkers, docs, etc. (`[tool.black]`, `[tool.mypy]`) | Keeps all project config in one file, reducing boilerplate  |
+
 
 
 ---
 <!-- ------------------------------------------------------------- -->
 ## `pyproject.toml`: Packaging strategy of `buildben` 
 
-- `$ bube proj` returns a `pyproject.toml` with a conservative strategy:
+- `$ bube proj` returns a `pyproject.toml` pre-configured with a conservative strategy:
   - Use the `src/`-layout 
-  - Use *a single parent directory* as the root of the project.
+  - Use a ***single** parent directory* as the root of the project.
 
 
 
 
 
-  
 
----
 
-## Why the **single `src/` directory** is *good practice*
+#### Why the **single `src/` directory** is *good practice*:
 
-- **Eliminates “works-on-my-machine” imports**: code isn’t on `sys.path` until *after* installation, so tests mirror the real wheel behaviour 
-- **Prevents accidental shadowing**: the current working directory can’t mask an already-installed package of the same name 
-- **Forces proper packaging earlier**: you *must* set up `package-dir`/`find` once, then forget about it—cleaner CI and fewer surprises 
+
 - **Keeps import statements short & stable**: e.g. `from my_project.subpkg.mod import Foo` just works after `pip install -e .` 
-- **Yes, you *could* nest multiple roots, flat-layout, mixed C-extensions…** but every extra path mapping adds maintenance cost; for most apps the single-dir rule of thumb is “99 % right, 0 % regrets” 
+- **Yes, you *could* nest multiple roots, flat-layout, mixed C-extensions…** 
+  - But every extra path mapping adds maintenance cost.
+  - For most apps the **single-dir** rule of thumb is “99 % right, 0 % regrets” 
 
 
 ---
@@ -574,15 +648,19 @@ from <my_project>.<package>.<module> import <your_class>, <your_variable>
 - Add emerging non-`.py` files to `[tool.setuptools.package-data]`
 
 
-#### Don't Do *unless you know what you're doing*:
+#### **Don't Do** *unless you know what you're doing*:
 - Modify the `[build-system]` section
 - Change *single directory* `src/` layout `[tool.setuptools]`, `[tool.setuptools.packages.find]`
+
 
 
 ---
 <!-- ============================================================= -->
 # `pip-tools`
 <!-- ============================================================= -->
+
+<img src="../diagram/diagram.svg" alt="diagram.svg" width="1000px" style="background-color:transparent; float: center; ">
+
 <!-- _footer: "" -->
 <!-- _header: "" -->
 ---
@@ -609,78 +687,6 @@ from <my_project>.<package>.<module> import <your_class>, <your_variable>
 | Generates secure `--hash=` pins                        | ❌              | ✅ `--generate-hashes` flag      |
 | Selective upgrades (e.g. --upgrade-package flask)      | ❌              | ✅ built-in                      |
 | Understands modern metadata (PEP 621 `pyproject.toml`) | ❌              | ✅                               |
-
----
-<!-- ============================================================= -->
-# `src/`-Layout
-<!-- ============================================================= -->
-<!-- _footer: "" -->
-<!-- _header: "" -->
----
-<!-- ------------------------------------------------------------- -->
-## Project Structure: `src/`-Layout
-
-```bash
-# src layout (good)              # flat layout (risky)
-myproject/                       myproject/
-├── src/                         │    
-│   └── myproject/               │
-│       ├── main.py              ├── main.py             
-│       └── package/module.py    ├── package/module.py
-├── tests/                       ├── tests/
-│   └── test_module.py           │   └── test_module.py
-├── README.md                    ├── README.md
-```
-#### Benefits:
-- Avoids imports from working directory via ``PYTHONPATH``
-→ Forces tests to run on installed code: `pip install -e .` → Catches ``import`` bugs
-- Builds **clean wheels**: Stray files never ship to PyPI
-
----
-<!-- ------------------------------------------------------------- -->
-## Project Structure: Inside `src/`
-
-```bash
-myproject/
-├── src/
-│   └── myproject/            # Single directory, same name as project root (Recommended)  
-│       ├── __init__.py       # Marks directory as package; runs on first import!
-│       ├── main.py           # Optional CLI entry-point (wired in via pyproject.toml)
-│       ├── shishkebab.py     # >>> import myproject.shishkebab
-│       ├── clients/          # >>> import myproject.clients
-│       │   ├── __init__.py   # Sub-package "clients"
-│       │   ├── llm.py        # >>> import myproject.clients.llm
-│       │   └── embedding.py  # >>> import myproject.clients.embedding
-│       └── utils/            # >>> import myproject.utils
-│           ├── __init__.py   # Sub-package "utils"
-│           ├── cooltool.py   # >>> import myproject.utils.cooltool
-│           └── module6.py    # >>> import myproject.utils.module6
-```
-
-
-
-
----
-<!-- ------------------------------------------------------------- -->
-## Project Directory: Auxiliary Files in Project Root
-
-```bash
-myproject/
-├── .venv/                 # Virtual environment (or .direnv!)
-├── .env                   # Environment variables (& secrets)
-├── .gitignore               
-├── .git/                  # Repository metadata
-├── src/
-│   └── myproject/        # Separate source code from tests!
-├── tests/
-│   └── test_module1.py    # Tests for module1
-├── justfile               # Development tasks
-├── pyproject.toml         # Project metadata, Setup!
-├── requirements.txt       # Dependencies
-├── requirements-dev.txt   # Development dependencies
-├── README.md
-├── LICENSE
-```
 
 
 ---
@@ -740,3 +746,23 @@ sudo apt install just     # For Ubuntu
 #### 4. Install [`direnv`](https://direnv.net/) & hook it into your shell: 
    - *Either* follow the instructions for [install](https://direnv.net/docs/installation.html) & [hook](https://direnv.net/docs/hook.html),
    - *Or* run `src/buildben/setup_zsh.sh` to install both `zsh` & other useful plugins, including `direnv`.
+
+---
+<!-- ============================================================= -->
+# Summary
+<!-- ============================================================= -->
+---
+
+### Summary – Key Takeaways
+
+- **One command, full scaffold:** `bube init-proj` drops a ready-to-run project (`src/`, `pyproject.toml`, `.envrc`, `justfile`, tests) in seconds.  
+- **Standards-first:** Uses PEP 621 for metadata & PEP 660 for editable installs, so your code works with modern packaging tools.  
+- **Automated dependency locking:** `pip-compile` + `pip-sync` generate and enforce reproducible `requirements*.txt`.  
+- **Zero-friction environments:** `direnv` creates & activates the correct venv every time you `cd` into the folder.  
+- **Repeatable recipes:** `just` gives you memorable one-liners (`just insco`, `just reset-venv`) for daily tasks.
+
+
+<small><center> Build once → code everywhere.  Less worry, more science 🧑‍🔬✨ </center></small>
+
+---
+
