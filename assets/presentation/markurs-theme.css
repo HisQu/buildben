@@ -170,9 +170,14 @@ section hr {
 
 /* strings & doc literals */
 .hljs-string,
-.hljs-doctag {
+.hljs-doctag
+{
   color: #ce9178;
   font-style: italic;
+}
+
+.language-toml .hljs-string {
+  color: #ce9178;
 }
 
 /* numbers & regex */
