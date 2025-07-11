@@ -12,7 +12,7 @@ footer: "Dr. Martin Kuric — Germania Sacra / HisQu @ ADW Göttingen"
 
 # Build-Benedictions 
 
-**Aliases:  ``buildben``, ``bube``**
+*Aliases:  **``buildben``, ``bube``***
 
  <br>
  
@@ -33,6 +33,28 @@ footer: "Dr. Martin Kuric — Germania Sacra / HisQu @ ADW Göttingen"
 
 </center>
 
+
+---
+<!-- ============================================================= -->
+## Disclaimer
+
+- ``buildben`` is very easy to use. (Goal is to make work simpler)
+- This presentation is for python beginners.
+
+#### But ...
+- ... ``buildben``  solves **a lot** of *behind-the-scenes-problems* at once.
+→ The logic behind ``buildben`` is **not beginner-friendly**.
+- Some problems are hard to understand if you haven't encountered them yet...
+I myself don't understand them fully either, *I simply trust the best practices..!*
+→ expect some *(un)organized chaos*...
+
+# PLEASE INTERRUPT ME AT ANY POINT!
+
+
+
+
+
+
 <!-- ------------------------------------------------------------- -->
 ---
 ## What's `buildben`?
@@ -51,27 +73,11 @@ footer: "Dr. Martin Kuric — Germania Sacra / HisQu @ ADW Göttingen"
 ---
 
 ## Main Modules:
-
+*Aliases:  **``buildben``, ``bube``***
 - ``$ bube init-proj``: Create a new **project**. — ✅ *99% Done*
 - ``$ bube add-experiment``: Add a new **experiment** to a project. — 🤞 *80% Done*
 - ``$ bube env-snapshot``: Dockerize current project for reproducibility. — 🤞 *80% Done*
 - ``$ bube init-database``: Create a new central **database**. — 🏗️ *60% Done*
-
----
-<!-- ============================================================= -->
-## Disclaimer
-
-- ``buildben`` is very easy to use. (Goal is to make work simpler)
-- This presentation is for python beginners.
-
-#### But ...
-- ... ``buildben``  solves **a lot** of *behind-the-scenes-problems* at once.
-→ The logic behind ``buildben`` is **not beginner-friendly**.
-- Some problems are hard to understand if you haven't encountered them yet...
-(I myself don't understand them fully either, *I simply trust the best practices..!*)
-- I'll give my best to explain  python standards and my personal decisions.
-- If anything is unclear, please ask immediately! (But expect some *(un)organized chaos*...)
-
 
 ---
 <!-- ============================================================= -->
@@ -339,70 +345,20 @@ just install-compile
 <br>
 <br>
 
----
-<!-- ------------------------------------------------------------- -->
-## `pyproject.toml` 
-
-- Contains metadata about the project, dependencies, and build system.
-- Used by `pip` & `pip-sync` to install the project and its dependencies.
-- Used by `pip-compile` to generate lock-file: `requirements.txt`.
-  
-#### Manual things to do:
-- Whenever you `pip install` a package, add it to your `pyproject.toml`
--> (Otherwise it will be forgotten on re-install)
-
-```toml
-[project]
-  dependencies = [
-    "pandas",  # You can pin a version, e.g. "pandas>=2.0.0,<3.0.0"
-    "...",     # Add more dependencies here
-  ]
-```
-  
----
-<!-- ------------------------------------------------------------- -->
-## `pyproject.toml` 
-
-#### Optional Dependencies:
-- For development dependencies under `[project.optional-dependencies]`:
-```toml
-[project.optional-dependencies]
-  dev = [
-    "pytest",
-    "...",     # Add more dependencies here
-  ]
-```
-
-- For development dependencies under `[project.optional-dependencies]`.
-- Package any non-``.py`` file under `[project.package-data]`
-
 
 
 ---
-<!-- ------------------------------------------------------------- -->
-## `pyproject.toml`: Adding Your Project as Dependencies
-
-
-
-
-- Other `buildben` projects can be added as a dependency via their Git-URL:
-  
-```toml
-[project.dependencies]
-  "sheesh2 @ git+https://github.com/HisQu/sheesh2.git@<branch, tag or commit>", 
-```
-  or as a local path: `"sheesh2 @ file://../sheesh2"`
-  → No need for GitHub submodules
-  → No need for publishing on PyPI
-  
-
-
-
+<!-- ============================================================= -->
+# `just`, `justfiles` & Recipes
+<!-- ============================================================= -->
+<!-- _footer: "" -->
+<!-- _header: "" -->
 ---
 <!-- ------------------------------------------------------------- -->
-## `just` Recipe Syntax
+## `just`, `justfiles` & Recipes
 
-A "Recipe" is a bash function that can be called from the command line.
+
+- A "Recipe" is a `bash` function that can be called from the command line.
 ```bash
 # Docstring for the recipe (optional)
 recipe-name *ARGS:
@@ -411,19 +367,237 @@ recipe-name *ARGS:
     rm {{ARGS}}     # Pass arguments
 alias rcp-nm:=recipe-name  # Create an alias for the recipe  
 ```
+- All Recipes are stored in a file called `justfile` in the project root.
+- `just` auto-detects the `justfile` and provides a CLI to run the recipes.
 
+
+---
+<!-- ------------------------------------------------------------- -->
+# `pyproject.toml`
+<!-- ------------------------------------------------------------- -->
+
+---
+<!-- ------------------------------------------------------------- -->
+## `pyproject.toml` 
+```toml
+[project]
+  name        = "<my_project>"
+  version     = "0.1.0"
+  description = "Short, one-line summary."
+  authors     = [{ name = "<github_username>", email = "you@example.com" }]
+  readme      = "README.md"
+  license     = { text = "MIT" }
+  requires-python = ">=3.12"
+```
+
+- Contains project metadata:
+  - Dependencies (*it replaced my ``proj-requirements.txt`` file*).
+  - Build system (e.g. `setuptools`, `poetry`, `uv`).
+- Used by `pip` & `pip-sync` to install the project and its dependencies.
+- Used by `pip-compile` to generate lock-file: `requirements.txt`.
+
+---
+<!-- ------------------------------------------------------------- -->
+## `pyproject.toml`: Main Dependencies
+
+- Whenever you `pip install` a package, add it to the list (like I did with my ``proj-requirements.txt``)
+  → Otherwise it will be forgotten when you re-install the project
+
+```toml
+[project]
+  dependencies = [
+    "numpy",
+    "openpyxl",             
+    "matplotlib==3.5.1",    # You can pin a specific version 
+    "pandas>=2.0.0,<3.0.0", # You can pin a version range
+    "IPython",              # Unpinned versions will be resolved by pip or pip-compile
+    "...",                  # Add more dependencies here
+  ]
+```
+
+
+
+
+---
+<!-- ------------------------------------------------------------- -->
+## `pyproject.toml`: Private / Unpublished Projects as Dependencies
+
+- `pip install <package>` only works for packages published on [PyPI](https://pypi.org/).
+  - (*We don't bother with PyPI, yet. Also, GitHub-Submodules are <u>scary</u>*)
+- Any `pip`-installable projects can be added via **Git-URL** or **local path**:
+```toml
+[project.dependencies]
+"<my_project> @ file://../<my_project>",                 # Local path (easiest).
+"<my_project2> @ git+https://github.com/HisQu/<my_project2>.git",   # Git-URL
+```
+- **Git version control:** Add `@<branch>`, `@<tag>` or `@<commit_hash>` after the Git-URL:
+```toml
+"<my_project3> @ git+https://github.com/HisQu/<my_project3>.git@<commit>"
+```
+
+  
+---
+<!-- ------------------------------------------------------------- -->
+## `pyproject.toml`: Optional Dependencies
+- Unnecessary dependencies risk breaking the project for users who don't need them.
+- Development-tools are only needed for development, make them optional:
+
+```toml
+[project.optional-dependencies]
+  dev = [      # Name of the optional dependency group
+    "pytest",
+    "...",     # Add more dependencies here
+  ]
+```
+
+- Include optional dependencies on installation:
+```bash
+pip install -e .[dev]  # Install dependencies + development-dependencies
+```
+
+
+---
+<!-- ------------------------------------------------------------- -->
+## `pyproject.toml`: Packaging
+
+- **Packaging** = Collecting all files needed to run the project into a single *distributable*.
+- Python packages are usually distributed as *wheels* (`.whl` files).
+- By default, Python uses `setuptools` to auto-package projects ([PEP 517](https://peps.python.org/pep-0517/)).
+  - Other packaging-tools use `pyproject.toml`, too (`poetry`, `flit`, `uv`).
+- `setuptools` scans for any , and packages them automatically.
+
+
+
+---
+<!-- ------------------------------------------------------------- -->
+
+## `pyproject.toml`: Packaging Nomenclature
+
+| Component | Defintion | Contains |
+|-----------|---------|----------|
+| **Module** | single `.py` file  | vars, funcs, classes |
+| **Package** (pkg) | directory *with* `__init__.py`  | modules & sub-pkgs |
+| **Namespace pkg** | directory *without* `__init__.py` ([PEP 517](https://peps.python.org/pep-0517/)) | modules & sub-pkgs |
+| **Sub-package** | nested package | modules (& sub-pkgs) |
+| **Project** | collection of code units | pkgs, modules, assets, etc. |
+
+
+---
+<!-- ------------------------------------------------------------- -->
+## `pyproject.toml`: Packaging of `.py` files
+
+- Modules & Packages inside `package-dir` will be copied into `".venv/lib/<my_project>"`.
+```toml
+[tool.setuptools]
+package-dir = { "" = "src"}     # "<my_project>/src/" --> ".venv/lib/<my_project>"
+```
+
+- Further components are scanned
+```toml
+[tool.setuptools.packages.find]
+where = ["src"]                 # Scan "<my_project>/src/" for packages (subdirectories)
+```
+- This determines the `import`-paths:
+```python
+from <my_project>.<package>.<module> import <your_class>, <your_variable>
+```
+
+<!-- 
+---
+
+## `pyproject.toml` – what the pieces do
+
+| Table / key | Purpose | Why it matters |
+|-------------|---------|----------------|
+| **`[build-system]` → `requires`, `build-backend`** | Declares the backend (`setuptools`, `hatchling`, …) and the packages needed **to build** your wheel/sdist | Standardised by PEP 517 ✔︎ :contentReference[oaicite:0]{index=0} |
+| **`[project]`** | Static metadata: `name`, `version`, `dependencies`, … | Defined by PEP 621; readable by *all* front-ends :contentReference[oaicite:1]{index=1} |
+| **`[tool.setuptools]` → `package-dir`** | Maps *import* package path to real files (`"" = "src"`) | Tells `pip` to copy code from `src/` into the installed wheel :contentReference[oaicite:2]{index=2} |
+
+---
+| Table / key | Purpose | Why it matters |
+|-------------|---------|----------------|
+| **`[tool.setuptools.packages.find]`** | Auto-discovers packages under `where = ["src"]`; supports `include`, `exclude`, `namespaces` | Avoids hand-listing sub-packages; you can still override when needed :contentReference[oaicite:3]{index=3} |
+| **Other `[tool.*]` subtables** | Config for linters, type-checkers, docs, etc. (`[tool.black]`, `[tool.mypy]`) | Keeps all project config in one file, reducing boilerplate :contentReference[oaicite:4]{index=4} |
+ -->
+
+
+---
+<!-- ------------------------------------------------------------- -->
+## `pyproject.toml`: Packaging strategy of `buildben` 
+
+- `$ bube proj` returns a `pyproject.toml` with a conservative strategy:
+  - Use the `src/`-layout 
+  - Use *a single parent directory* as the root of the project.
+
+
+
+
+
+  
+
+---
+
+## Why the **single `src/` directory** is *good practice*
+
+- **Eliminates “works-on-my-machine” imports**: code isn’t on `sys.path` until *after* installation, so tests mirror the real wheel behaviour 
+- **Prevents accidental shadowing**: the current working directory can’t mask an already-installed package of the same name 
+- **Forces proper packaging earlier**: you *must* set up `package-dir`/`find` once, then forget about it—cleaner CI and fewer surprises 
+- **Keeps import statements short & stable**: e.g. `from my_project.subpkg.mod import Foo` just works after `pip install -e .` 
+- **Yes, you *could* nest multiple roots, flat-layout, mixed C-extensions…** but every extra path mapping adds maintenance cost; for most apps the single-dir rule of thumb is “99 % right, 0 % regrets” 
+
+
+---
+<!-- ------------------------------------------------------------- -->
+## `pyproject.toml`: Packaging non-`.py` files
+
+
+- Anything that's not a `.py`-file must be explicitly added:
+- The path-logic is 
+
+```toml
+[tool.setuptools.package-data]
+"<my_project>" = [
+    "data/**/*.xlsx",         # Located in "src/<my_project>/data/"
+    "images/**/*.{png,jpg}",  # Located in "src/<my_project>/images/"
+    ]
+```
+
+---
+<!-- ------------------------------------------------------------- -->
+## `pyproject.toml`: Manual Configurations after `$ bube init-proj`
+
+#### Do **immediately**:
+- Add description, license, authors, etc. under `[project]`
+
+#### Do **mid-development**:
+- Add emerging dependencies to `[project]`
+- Add emerging non-`.py` files to `[tool.setuptools.package-data]`
+
+
+#### Don't Do *unless you know what you're doing*:
+- Modify the `[build-system]` section
+- Change *single directory* `src/` layout `[tool.setuptools]`, `[tool.setuptools.packages.find]`
+
+
+---
+<!-- ============================================================= -->
+# `pip-tools`
+<!-- ============================================================= -->
+<!-- _footer: "" -->
+<!-- _header: "" -->
 ---
 <!-- ------------------------------------------------------------- -->
 ## `pip-tools` = `pip-compile` + `pip-sync`
 
 #### `pip-compile`:
-- Compiles a `requirements.txt` file from the `pyproject.toml` file (unlike `pip freeze`).
+- Compiles a `requirements.txt` file from the `pyproject.toml` file (*unlike* `pip freeze`).
 - Automatically resolves dependencies and their versions.
 - Generates a `requirements.txt` file with pinned versions.
 
 #### `pip-sync`:
-- Synchronizes the virtual environment with the `requirements.txt` file.
-- Installs or removes packages to match the `requirements.txt` file.
+- Synchronizes the virtual environment with multiple lock files (e.g. `*requirements.txt`):
+  - Installs packages from the lock files.
+  - Un-installs packages not listed in lock-files (*unlike* `pip install`).
 
 ---
 <!-- ------------------------------------------------------------- -->
@@ -436,7 +610,12 @@ alias rcp-nm:=recipe-name  # Create an alias for the recipe
 | Selective upgrades (e.g. --upgrade-package flask)      | ❌              | ✅ built-in                      |
 | Understands modern metadata (PEP 621 `pyproject.toml`) | ❌              | ✅                               |
 
-
+---
+<!-- ============================================================= -->
+# `src/`-Layout
+<!-- ============================================================= -->
+<!-- _footer: "" -->
+<!-- _header: "" -->
 ---
 <!-- ------------------------------------------------------------- -->
 ## Project Structure: `src/`-Layout
