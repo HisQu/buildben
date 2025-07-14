@@ -16,7 +16,7 @@ skinparam package {
     ' FontColor   #00A2FF
 }
 skinparam package<<Global Environment>> {
-    BackgroundColor #00000019
+    BackgroundColor #aaaaaa19
 }
 skinparam package<<Virtual Environment>>{
     BackgroundColor #2ead0019
