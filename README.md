@@ -54,7 +54,7 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 
 
 <div align="center">
-<img src="https://github.com/HisQu/buildben/blob/main/assets/figures/graphical-abstract_init-proj/graphical-abstract_init-proj.svg" alt="graphical-abstract_init-proj.svg" width="1000px" style="background-color:transparent">
+<img src="https://raw.githubusercontent.com/HisQu/buildben/refs/heads/main/assets/figures/graphical-abstract_init-proj/graphical-abstract_init-proj.svg" alt="graphical-abstract_init-proj.svg" width="1000px" style="background-color:transparent">
 
   <img src="https://raw.githubusercontent.com/HisQu/buildben/main/assets/figures/diagram/diagram.svg" 
        width="800px" alt="Management of Virtual Environments & Dependencies" >
