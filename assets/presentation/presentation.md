@@ -79,6 +79,20 @@ I myself don't understand them fully either, *I simply trust the best practices.
 - ``$ bube env-snapshot``: Dockerize current project for reproducibility. — 🤞 *80% Done*
 - ``$ bube init-database``: Create a new central **database**. — 🏗️ *60% Done*
 
+
+---
+<!-- ------------------------------------------------------------- -->
+
+
+<center>
+<img src="../figures/graphical-abstract_init-proj/graphical-abstract_init-proj.svg" alt="graphical-abstract_init-proj.svg" width="900px" style="background-color:transparent">
+
+</center>
+
+<!-- _footer: "" -->
+<!-- _header: "" -->
+
+
 ---
 <!-- ============================================================= -->
 ## How This all Started:
@@ -182,7 +196,7 @@ matplotlib-inline==0.1.7
 <!-- ------------------------------------------------------------- -->
 ## My Projects before `buildben`: Architecture
 
-<img src="../diagram-simple/diagram-simple.svg" alt="diagram.svg" width="1200px" style="background-color:transparent; float: center; ">
+<img src="../figures/diagram-simple/diagram-simple.svg" alt="diagram.svg" width="1200px" style="background-color:transparent; float: center; ">
 
 <center>
 
@@ -273,8 +287,19 @@ pip install -e .                   # Editable install
 
 ---
 <!-- ------------------------------------------------------------- -->
-## `bube proj`: Workflow
 
+
+<center>
+<img src="../figures/graphical-abstract_init-proj/graphical-abstract_init-proj.svg" alt="graphical-abstract_init-proj.svg" width="900px" style="background-color:transparent">
+
+</center>
+
+<!-- _footer: "" -->
+<!-- _header: "" -->
+
+---
+<!-- ------------------------------------------------------------- -->
+## `bube proj`: Workflow
 #### 1. `$ bube proj` sets up a *ready-to-use* project directory (*Cookie-Cutter*):
 - `pyproject.toml`: Pre-configured for ``src``-layout, basic dependency list, etc.
 - `.envrc`: Tells `direnv` to create & activate virtual environment automatically.
@@ -328,7 +353,7 @@ just install-compile
 <!-- ------------------------------------------------------------- -->
 
 ## With `buildben`:
-<img src="../diagram/diagram.svg" alt="diagram.svg" width="1200px" style="background-color:transparent; float: center; ">
+<img src="../figures/diagram/diagram.svg" alt="diagram.svg" width="1200px" style="background-color:transparent; float: center; ">
 
 <!-- _footer: "" -->
 <!-- _header: "" -->
@@ -338,7 +363,7 @@ just install-compile
 ## Without `buildben`: 
 
 
-<img src="../diagram-simple/diagram-simple.svg" alt="diagram.svg" width="1200px" style="background-color:transparent; float: center; ">
+<img src="../figures/diagram-simple/diagram-simple.svg" alt="diagram.svg" width="1200px" style="background-color:transparent; float: center; ">
   
 <!-- _footer: "" -->
 <!-- _header: "" -->
@@ -659,7 +684,7 @@ from <my_project>.<package>.<module> import <your_class>, <your_variable>
 # `pip-tools`
 <!-- ============================================================= -->
 
-<img src="../diagram/diagram.svg" alt="diagram.svg" width="1000px" style="background-color:transparent; float: center; ">
+<img src="../figures/diagram/diagram.svg" alt="diagram.svg" width="1200px" style="background-color:transparent; float: center; ">
 
 <!-- _footer: "" -->
 <!-- _header: "" -->

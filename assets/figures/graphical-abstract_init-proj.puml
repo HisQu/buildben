@@ -1,0 +1,64 @@
+@startuml
+' === Global look & feel =============
+
+
+' === Global look & feel =============
+skinparam defaultFontSize 20
+' skinparam BackgroundColor #00000010
+skinparam BackgroundColor transparent
+
+' ======================================
+skinparam package {
+    RoundCorner 15
+    BorderThickness 2
+    BackgroundColor #00A2FF19
+    BorderColor #00A2FF
+    FontColor   #00A2FF
+}
+
+
+skinparam rectangle {
+  Shadowing false
+  BorderColor none
+  BackgroundColor #99999977
+  RoundCorner 15
+}
+skinparam defaultFontSize 20
+
+
+<style>
+arrow {
+    LineColor #00A2FF
+    LineThickness 2.5
+    FontColor #00A2FF
+    FontStyle italic
+}
+</style>
+
+rectangle """**$ buildben init-proj**""\nTemplate Copier (Cookiecutter)" as BB 
+
+
+package "Project" as P{  
+
+  rectangle "**Python Tools**: \n• ""pip-tools"" (compile/sync) \n• Virtual-environment\n• ..." as PyTools 
+  rectangle "**Universal Tools**: \n• ""direnv""\n• ""just""\n• ..." as Tools 
+}
+
+rectangle "**Python Standards**: \n• PEP 405: Virtual-environment \n• PEP 621: ""pyproject.toml""\n• PEP 660: Editable install\n•  PEP 751: Lock-files" as Standards  #f27f72dc
+
+BB -down-> P : **copies template project:**\n ""pyproject.toml""\n "".envrc""\n ""justfile""\n **...**
+
+Tools -right-> PyTools : **automate** \n**& simplify**
+
+<style>
+arrow {
+    LineStyle 10-5
+    LineColor #EE220C
+    FontColor #EE220C
+
+}
+</style>
+PyTools -down-> Standards : **comply with**
+
+
+@enduml

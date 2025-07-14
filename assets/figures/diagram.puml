@@ -6,24 +6,53 @@ left to right direction
 skinparam defaultFontSize 20
 ' skinparam BackgroundColor #00000010
 skinparam BackgroundColor transparent
+
+' ======================================
 skinparam package {
-    BackgroundColor #99999966
-    BorderColor #99999966
-    BorderWidth 2
-    FontColor   #ffffff
+    RoundCorner 15
+    BorderThickness 2
+    ' BackgroundColor #00A2FF19
+    ' BorderColor #00A2FF
+    ' FontColor   #00A2FF
 }
-skinparam class {
-    BackgroundColor #99999999
-    BorderColor     #000000
+skinparam package<<Global Environment>> {
+    BackgroundColor #00000019
+}
+skinparam package<<Virtual Environment>>{
+    BackgroundColor #2ead0019
+    BorderColor #32bc00ff
+    FontColor   #32bc00ff
+}
+skinparam package<<Directory>> {
+    BackgroundColor #00A2FF19
+    BorderColor #00A2FF
+    FontColor   #00A2FF
 }
 
+' ======================================
+skinparam class {
+    BackgroundColor #cccccc77
+    BorderColor     #444444
+    BorderThickness 1
+    FontStyle bold
+    RoundCorner 15
+}
+skinparam class<<CLI>> {
+    BorderColor     #000000
+}
+skinparam class<<Config>><<Pkg>><<Lock-Files>> {
+    BorderColor     #000000
+    BorderThickness 0
+}
 
 ' =====================================================================
 
 
+
+
 ' === Package: Global Environment =============
-package "Global Environment" as GE {
-    
+package "Operating System" as GE <<Global Environment>> {
+
     interface "buildben"      as B   <<CLI>>{
         +init-proj()
         +add-experiment()
@@ -42,14 +71,14 @@ package "Global Environment" as GE {
 }
 
 ' === Package: Project Directory =============
-package "Project Directory" as PDIR #d9c49966 {
-    
+package "Project Directory" as PDIR <<Directory>> {
+
     class "pyproject.toml"                          as PPRT <<Config>> {
         +Dependencies
         +Setup Configuration
     }
     
-    class "justfile"                                as JF  <<File>> {
+    class "justfile"                                as JF  <<Recipes>> {
         +reset()
         +install-deps()
         +...()
@@ -60,20 +89,25 @@ package "Project Directory" as PDIR #d9c49966 {
         +ENV_VARS
     }
     
-    class "requirements.txt \ndev-requirements.txt" as RE   <<2 Files>> {
+    class "requirements.txt \ndev-requirements.txt" as RE   <<Lock-Files>> {
         +Dependencies
         +Versions & Hashes
     }
 }
 
 ' === Package: Virtual Environment =============
-package "Virtual Environment (.direnv)" as VENV  {
+package ".direnv" as VENV <<Virtual Environment>> {
     interface "pip-tools"               as PT  <<Tool>>{
         +pip-compile()
         +pip-sync()
     }
     class "python dependencies"     as PD  <<Pkg>>
     ' VE o-- PD : contains
+    
+    interface "pip"                     as PIPvenv <<CLI>> {
+        +install(editable)
+        +uninstall()
+    }
 }
 
 
@@ -83,36 +117,39 @@ package "Virtual Environment (.direnv)" as VENV  {
 
 <style>
 arrow {
-    LineColor #00A2FF
     LineThickness 2.5
-    FontColor #00A2FF
     FontStyle italic
-    
-    ' !! Not Working
-    .test {
-        LineColor #b35e5e
-    }
+}
+</style>
+
+PIP --> B : installs
+
+' =========================
+
+<style>
+arrow {
+    LineColor #00A2FF
+    FontColor #00A2FF
 }
 </style>
 
 ' PT --> PD <<test>> : installs 
-PT --> PD : installs
-PIP --> B : installs 
-B --> PDIR   : creates\nscaffold
-ERC --> PT     : installs 
-PT  --> RE     : compiles \n& syncs
-
+B -[thickness=4]-> PDIR : **copies**\n**templates**\n**(cookiecutter)** 
+PT  --> RE : compiles\n& syncs
+PDIR <-- PIPvenv : editable install
 
 ' === SPecial Straight Arrows =============
 <style>
 arrow {
-    LineColor #61D836
-    FontColor #61D836
-
+    LineColor #32bc00ff
+    FontColor #32bc00ff
+    LineThickness 2.5
 }
 </style>
 
-ERC --> VENV : creates \n& activates
+' ERC --> PT : installs
+PT --> PD : installs
+ERC -[thickness=4]-> VENV : **creates** \n**& activates**
 JF --> VENV : manages
 
 
@@ -127,12 +164,14 @@ arrow {
 </style>
 
 
-D   <-- ERC  : requires
+D   <-- ERC : requires
 J   <-- JF  : requires
 D   <-- JF  : requires
 
-JF  --> PT   : requires
+' JF  --> PT  
 PT --> PPRT : requires
+
+PPRT <-- PIPvenv: requires
 
 ' ERC -left-  JF     : interacts
 ' PPRT ..> PT    : read by

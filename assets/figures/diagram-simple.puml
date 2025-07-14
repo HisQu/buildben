@@ -5,14 +5,15 @@ left to right direction
 skinparam defaultFontSize 20
 skinparam BackgroundColor transparent
 skinparam package {
-    BackgroundColor #99999966
-    BorderColor     #99999966
+    BackgroundColor #99999988
+    BorderColor     #99999988
     BorderWidth     2
     FontColor       #ffffff
 }
 skinparam class {
     BackgroundColor #99999999
     BorderColor     #000000
+    FontStyle       bold
 }
 
 ' === Packages (now ordered GE → PDIR → VENV) ===
@@ -22,7 +23,7 @@ package "Global Environment" as GE {
     }
 }
 
-package "Project Directory" as PDIR #d9c49966 {
+package "Project Directory" as PDIR #d9c49988 {
     class "proj-requirements.txt"   as REQ_PROJ <<File>>{
         +Dependencies
     }
