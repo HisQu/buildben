@@ -16,10 +16,12 @@ skinparam package {
     ' FontColor   #00A2FF
 }
 skinparam package<<Global Environment>> {
-    BackgroundColor #eeeeee44
+    BackgroundColor #afb20019
+    BorderColor #afb200ff
+    FontColor   #afb200ff
 }
 skinparam package<<Virtual Environment>>{
-    BackgroundColor #2ead0019
+    BackgroundColor #32bc0019
     BorderColor #32bc00ff
     FontColor   #32bc00ff
 }
@@ -119,7 +121,10 @@ package ".direnv" as VENV <<Virtual Environment>> {
 arrow {
     LineThickness 2.5
     FontStyle italic
+    LineColor #afb200ff
+    FontColor   #afb200ff
 }
+
 </style>
 
 PIP --> B : installs
