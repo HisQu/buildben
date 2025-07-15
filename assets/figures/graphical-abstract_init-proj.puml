@@ -52,9 +52,8 @@ package """buildben""" as BB <<Python Package>> {
   ' rectangle "**""init-database""**" as BBdb <<Module>>
   ' rectangle "**""add-experiment""**" as BBexp <<Module>>
   ' rectangle "**""env-snapshot""**" as BBenvsnap <<Module>>
-  rectangle "**templates**" as TEMP <<Files>>
-  
-  rectangle "**""$ bube init-proj""**" as BBinitcli <<Cookie Cutter>>
+  rectangle "**Templates:**\n""• pyproject.toml""\n""• .envrc""\n""• justfile""\n• ..." as TEMP
+  rectangle "**""$ bube init-proj""**" as BBinitcli
 
 }
 <style>
@@ -68,7 +67,7 @@ arrow {
 BBinitcli <-left- TEMP : copied by
 
 
-package "Project" as P{  
+package "Project" as P <<Directory & Environment>>{  
 
   rectangle "**Python Tools**: \n• ""pip-tools"" (compile/sync) \n• Virtual-environment\n• ..." as PyTools 
   rectangle "**Universal Tools**: \n• ""direnv""\n• ""just""\n• ..." as Tools 
@@ -86,7 +85,7 @@ arrow {
 }
 </style>
 
-BBinitcli -down-> P : **creates project scaffold:**\n ""pyproject.toml"", "".envrc"", ""justfile"", etc. \n (buildben is no dependency of project)
+BBinitcli -down-> P : **creates project scaffold** (buildben is no dependency of project)
 
 Tools -right-> PyTools : **automate** \n**& simplify**
 
