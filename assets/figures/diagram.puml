@@ -153,7 +153,8 @@ arrow {
 </style>
 
 ' ERC --> PT : installs
-PT --> PD : installs
+PIPvenv --> PD : installs
+PT --> PD : syncs
 ERC -[thickness=4]-> VENV : **Auto-**\n**creates** \n**& activates**
 JF --> VENV : manages
 
