@@ -52,7 +52,7 @@ package """buildben""" as BB <<Python Package>> {
   ' rectangle "**""init-database""**" as BBdb <<Module>>
   ' rectangle "**""add-experiment""**" as BBexp <<Module>>
   ' rectangle "**""env-snapshot""**" as BBenvsnap <<Module>>
-  rectangle "**Templates:**\n""• pyproject.toml""\n""• .envrc""\n""• justfile""\n• ..." as TEMP
+  rectangle "**Templates:**\n""• pyproject.toml""\n""• .envrc""\n""• justfile""\n""•"" ..." as TEMP
   rectangle "**""$ bube init-proj""**" as BBinitcli
 
 }
@@ -73,7 +73,7 @@ package "Project" as P <<Directory & Environment>>{
   rectangle "**Universal Tools**: \n• ""direnv""\n• ""just""\n• ..." as Tools 
 }
 
-rectangle "**Python Standards**: \n• PEP 405: Virtual-environment \n• PEP 621: ""pyproject.toml""\n• PEP 660: Editable install\n•  PEP 751: Lock-files" as Standards  #f27f72dc
+rectangle "**Python Standards**: \n• PEP 405: Virtual-environment \n• PEP 621: ""pyproject.toml""\n• PEP 660: Editable install\n•  PEP 751: Lock-files\n•  PyPA: ""src/""-Layout" as Standards  #f27f72dc
 
 
 <style>
@@ -85,7 +85,7 @@ arrow {
 }
 </style>
 
-BBinitcli -down-> P : **creates project scaffold** (buildben is no dependency of project)
+BBinitcli -[thickness=4]-> P : **creates project scaffold** (buildben is no dependency of project)
 
 Tools -right-> PyTools : **automate** \n**& simplify**
 
@@ -94,10 +94,10 @@ arrow {
     LineStyle 10-5
     LineColor #EE220C
     FontColor #EE220C
-
 }
 </style>
-PyTools -down-> Standards : **comply with**
+PyTools --> Standards : **comply with**
+TEMP --> Standards : **comply with**
 
 
 @enduml
