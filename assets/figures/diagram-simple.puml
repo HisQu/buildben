@@ -15,7 +15,7 @@ skinparam package {
     ' BorderColor #00A2FF
     ' FontColor   #00A2FF
 }
-skinparam package<<Global Environment>> {
+skinparam package<<Global Environment>><<Python Package>> {
     BackgroundColor #afb20019
     BorderColor #afb200ff
     FontColor   #afb200ff
