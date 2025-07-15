@@ -1,33 +1,67 @@
 @startuml
 left to right direction
+' top to bottom direction
 
-' === Style (kept identical) ===
+' === Global look & feel =============
 skinparam defaultFontSize 20
+' skinparam BackgroundColor #00000010
 skinparam BackgroundColor transparent
+
+' ======================================
 skinparam package {
-    BackgroundColor #99999988
-    BorderColor     #99999988
-    BorderWidth     2
-    FontColor       #ffffff
+    RoundCorner 15
+    BorderThickness 2
+    ' BackgroundColor #00A2FF19
+    ' BorderColor #00A2FF
+    ' FontColor   #00A2FF
 }
+skinparam package<<Global Environment>> {
+    BackgroundColor #afb20019
+    BorderColor #afb200ff
+    FontColor   #afb200ff
+}
+skinparam package<<Virtual Environment>>{
+    BackgroundColor #32bc0019
+    BorderColor #32bc00ff
+    FontColor   #32bc00ff
+}
+skinparam package<<Directory>> {
+    BackgroundColor #00A2FF19
+    BorderColor #00A2FF
+    FontColor   #00A2FF
+}
+
+' ======================================
 skinparam class {
-    BackgroundColor #99999999
-    BorderColor     #000000
-    FontStyle       bold
+    BackgroundColor #cccccc77
+    BorderColor     #444444
+    BorderThickness 1
+    FontStyle bold
+    RoundCorner 15
 }
+skinparam class<<CLI>> {
+    BorderColor     #000000
+}
+skinparam class<<Config>><<Pkg>><<Lock-Files>><<File>><<Lock-File>> {
+    BorderColor     #000000
+    BorderThickness 0
+}
+
+
+' =================================================
 
 ' === Packages (now ordered GE → PDIR → VENV) ===
-package "Global Environment" as GE {
+package "Operating System" as GE <<Global Environment>> {
     interface "python" as PY  <<CLI>> {
         +python -m venv .venv
     }
 }
 
-package "Project Directory" as PDIR #d9c49988 {
+package "Project Directory" as PDIR <<Directory>> {
     class "proj-requirements.txt"   as REQ_PROJ <<File>>{
         +Dependencies
     }
-    class "requirements.txt"         as REQ <<File>>{
+    class "requirements.txt"         as REQ <<Lock-File>>{
         +Dependencies
         +Versions
     }
@@ -36,7 +70,7 @@ package "Project Directory" as PDIR #d9c49988 {
 
 
 
-package "Virtual Environment (.venv)" as VENV  {
+package .venv" as VENV <<Virtual Environment>> {
     interface "pip"          as PIP <<CLI>> {
         +install()
     }
@@ -57,27 +91,31 @@ arrow {
 }
 </style>
 
-PY  --> VENV : creates
-PIP --> PKG  : installs
 
+REQ_PROJ <-- USER : collects
+REQ <-- USER : pip freezes
 
 REQ <-- PIP  : compiles
 
 ' === SPecial Straight Arrows =============
 <style>
 arrow {
-    LineColor #61D836
-    FontColor #61D836
+    LineColor #32bc00ff
+    FontColor #32bc00ff
 }
 </style>
+
+
+
 abstract "User" as USER <<Actor>> {
     +eat()
     +sleep()
     +code()
 }
+
+PIP --> PKG  : installs
+PY  -[thickness=4]-> VENV : **creates**
 USER  --> VENV : creates, \n (de-)activates \n& manages 
-REQ_PROJ <-- USER : collects
-REQ <-- USER : pip freezes
 
 <style>
 arrow {

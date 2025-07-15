@@ -42,7 +42,7 @@ skinparam class {
 skinparam class<<CLI>> {
     BorderColor     #000000
 }
-skinparam class<<Config>><<Pkg>><<Lock-Files>> {
+skinparam class<<Config>><<Pkg>><<Lock-Files>><<File>><<Lock-File>> {
     BorderColor     #000000
     BorderThickness 0
 }
@@ -154,7 +154,7 @@ arrow {
 
 ' ERC --> PT : installs
 PT --> PD : installs
-ERC -[thickness=4]-> VENV : **creates** \n**& activates**
+ERC -[thickness=4]-> VENV : **Auto-**\n**creates** \n**& activates**
 JF --> VENV : manages
 
 
