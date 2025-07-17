@@ -100,8 +100,8 @@ def _run(args: argparse.Namespace) -> None:
         "{experiment_name}": args.name,
         "<experiment_name_full>": EXP_NAME_FULL,
         "{experiment_name_full}": EXP_NAME_FULL,
-        "<bb_date>": TODAY,  # < bb_ makes it more unique to buildben
-        "{bb_date}": TODAY,
+        "<bb_today>": TODAY,  # < bb_ makes it more unique to buildben
+        "{bb_today}": TODAY,
         "<my_project>": PR_NAME,
         "{my_project}": PR_NAME,
     }
