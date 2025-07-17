@@ -8,9 +8,11 @@
 
 <!-- --- Title ---------------------------------------------------- -->
 # `{my_project}`: A Template
-*Part of:*
+
 
 <!-- --- Logo ----------------------------------------------------- -->
+*Part of:*
+
 <a href="https://hisqu.de" target="_blank">
   <img 
   src="https://avatars.githubusercontent.com/u/196629600?s=200&v=4" 
