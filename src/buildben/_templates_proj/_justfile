@@ -71,9 +71,37 @@ reinstall:
     {{PY}} -m pip install -e .[dev]
 alias reins := reinstall
 
+
+# =====================================================================
+# === Upgrade
+# =====================================================================
+
 # Upgrade all pins in-place
 upgrade:                        
     just install-compile --upgrade
+
+
+# Echo the full git+ URL for a dependency declared in pyproject.toml
+giturl-from-toml dep:
+    # Find first uncommented line with the dependency name and extract the git URL
+    @git_url=$(grep -E "^[[:space:]]*\"{{dep}}[[:space:]]*@[[:space:]]*git\\+" pyproject.toml \
+        | head -n1 \
+        | sed -E 's/^.*(git\+[^@",#]+).*/\1/') ;\
+    if [ -z "$git_url" ]; then \
+        echo "🛑  '{{dep}}' not found in pyproject.toml" >&2 ;\
+        exit 1 ;\
+    fi ;\
+    echo "$git_url"
+alias gurl := giturl-from-toml   # optional shorthand
+
+# Install the dependency from its Git-URL without compiling requirements
+install-giturl-from-toml dep:
+    just _venv-guard
+    url=$(just gurl {{dep}}) ;\
+    {{PY}} -m pip install "$url"
+    just compile-requirements 
+alias insgurl := install-giturl-from-toml 
+
 
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
