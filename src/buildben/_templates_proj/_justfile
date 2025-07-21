@@ -94,15 +94,15 @@ giturl-from-toml dep:
     echo "$git_url"
 alias gurl := giturl-from-toml   # optional shorthand
 
-# Install the dependency from its Git-URL without compiling requirements
-install-giturl-from-toml dep:
+# (Re-)Install the dependency from its Git-URL
+install-only dep:
     just _venv-guard
     url=$(just gurl {{dep}}) ;\
-    {{PY}} -m pip install "$url"
-    just compile-requirements 
-alias insgurl := install-giturl-from-toml 
-
-
+    {{PY}} -m pip uninstall -y "{{dep}}" || true ;\
+    {{PY}} -m pip install "$url" ;\
+    pip-compile --upgrade-package "{{dep}} @ ${url}" pyproject.toml -o requirements.txt ;\
+    pip-compile --upgrade-package "{{dep}} @ ${url}" --extra dev pyproject.toml -o dev-requirements.txt ;\
+alias only := install-only
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # === Add custom recipes below!
