@@ -37,6 +37,7 @@ CACHEDIR.TAG
 # === Jupyter ==========================================================
 .ipynb_checkpoints
 */.ipynb_checkpoints/*
+*.interactive
 
 ### IPython
 profile_default/
