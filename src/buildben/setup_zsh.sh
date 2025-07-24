@@ -49,6 +49,7 @@ if ! grep -q 'zsh-syntax-highlighting' "$RCFILE"; then
     sed -i '' 's/^plugins=(/plugins=(zsh-syntax-highlighting /' "$RCFILE"
 fi
 
+# !! Remember to restart the terminal or run `source ~/.zshrc` to apply changes !!
 
 
 
@@ -65,6 +66,25 @@ fi
 if ! grep -q 'direnv hook zsh' "$RCFILE"; then
     echo 'eval "$(direnv hook zsh)"' >>"$RCFILE"
 fi
+
+# !! Remember to restart the terminal or run `source ~/.zshrc` to apply changes !!
+
+
+# === pipx =================================================
+sudo apt install -y pipx || brew install pipx
+pipx ensurepath          # Add pipx to PATH, if not already done
+pipx upgrade-all         # !! Never run pipx with sudo !!
+
+
+# === buildben =================================================
+# git clone https://github.com/markur4/buildben.git
+# cd buildben         # Needed, `pipx install buildben` does NOT work!
+# pipx install -e .   # Editable for direct modifications.
+
+# === just  =================================================
+sudo apt install -y just || brew install just
+
+
 
 # === Finished ========================================================
 echo "Add MesloLGS NF font to your terminal for full Powerlevel10k glyphs."
