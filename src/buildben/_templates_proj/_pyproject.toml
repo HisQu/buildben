@@ -64,9 +64,10 @@ dev = [
     # "scipy",
     # --- IO ----------------------------
     "jupytext",      # < Jupyter Notebook export
+    "dill",          # < Extended pickle for complex objects
+    # "sacred",        # < Experiment management
     # ---Example Data --------------
     # "neddata @ git+https://github.com/HisQu/neddata.git",
-    # "neddata @ file:///home/kuric/_REPOS/neddata"
 ]
 
 # =====================================================================
