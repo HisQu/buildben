@@ -3,23 +3,34 @@ Template file
 """
 
 # %%
+# --- Standard Lib --------
 from pathlib import Path
 
-### Local Imports
+# --- Dependencies --------
+import pandas as pd
+
+# --- Local Imports -------
 # import <my_project>.utils as u
 
-### Enviornment Variables
-# from <my_project> import env
-# env.env.read_env(".paths.env")  # < Load custom .env files during runtime 
-# if __name__ == "__main__":
-#     env.setup()  # < Loads .envrc from project root for development tasks
+# --- Typing --------------
+from typing import Any
+
 
 # %%
+# --- Environment Variables ---
+# from <my_project> import env
 
+# env.env.read_str("ENV_VAR")  # < env.env is an instance of environs.Env
+# env.env.read_env(".paths.env")  # < Load local .env files like this
+# if __name__ == "__main__":
+    # env.load_direnv()  # < Loads .envrc from project root for development tasks
+
+
+# %%
 
 
 # %%
 if __name__ == "__main__":
     from pprint import pprint
-    
+
     # %%
