@@ -4,7 +4,8 @@ Template file
 
 # %%
 # --- Standard Lib --------
-from pprint import pprint
+# from pprint import pprint
+from rich import print as rprint
 from pathlib import Path
 
 # --- Dependencies --------
