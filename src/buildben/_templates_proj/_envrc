@@ -18,6 +18,7 @@ export PIP_REQUIRE_VIRTUALENV=1
 
 # === direnv / venv ===================================================
 layout python3 # > create & activate a venv under .direnv/
+# layout python python3.12  # < Specify version like this
 
 # === Install pip-tools ===============================================
 
