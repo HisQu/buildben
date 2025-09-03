@@ -21,6 +21,7 @@ dependencies = [
     "ipykernel",
     # "dotenv",      # < Loads .env files
     "environs",      # < Loads .env files, but better
+    "loguru",        # < Logging library
     # --- Pretty Stuff -------------------
     "tabulate",      # < Pretty tables
     "tqdm",          # < Progress bars
