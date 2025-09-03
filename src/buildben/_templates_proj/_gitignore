@@ -1,5 +1,6 @@
 # === Logs =============================================================
-logs/
+*logs*/
+.logs*/
 
 # === Data =============================================================
 data/
@@ -11,6 +12,7 @@ db/
 # These are ignored until renamed to prevent premature publishing
 *.bb_template*
 *.IGNORE*
+.IGNORE/
 
 # === Development ======================================================
 .devtools/
