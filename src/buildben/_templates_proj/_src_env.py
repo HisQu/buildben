@@ -22,6 +22,7 @@ from typing import Sequence
 
 env: Env = Env()  # < Create a global Env Wrapper (copies available variables)
 
+
 def import_vars(*names: str, allow_blank: bool = False) -> tuple[str, ...]:
     """
     Return the requested environment variables **in order**.
@@ -123,6 +124,7 @@ def _load_direnv_envrc(cwd: str | Path = ".", quiet: bool = False) -> None:
         child_env.setdefault("DIRENV_LOG_FORMAT", "")
 
     ### Run direnv .envrc
+    payload = ""
     try:
         payload = subprocess.check_output(
             ["direnv", "export", "json"],
@@ -132,6 +134,11 @@ def _load_direnv_envrc(cwd: str | Path = ".", quiet: bool = False) -> None:
             stderr=subprocess.DEVNULL if quiet else None,
         )
         os.environ.update(json.loads(payload))  # idempotent; no new venv
+    except json.JSONDecodeError as e:
+        raise RuntimeError(
+            f"Failed to parse direnv output from '{cwd}': {e}\n"
+            f"Actual output received:\n{payload[0:1000]} ... (<truncated>)"
+        )
     except (FileNotFoundError, subprocess.CalledProcessError):
         # > direnv binary missing
         # > .envrc not yet allowed
