@@ -115,8 +115,9 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ```bash
 git clone https://github.com/markur4/buildben.git
 cd buildben         # Needed, `pipx install buildben` does NOT work!
-pipx install -e .   # Editable for direct modifications.
+uv tool install --editable  # Installs buildben in a dedicated venv managed by uv
 ```
+<!-- pipx install -e .   # Editable for direct modifications. -->
 
 #### 3. Install [`just`](https://github.com/casey/just):
 ```bash
