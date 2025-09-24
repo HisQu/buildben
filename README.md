@@ -40,12 +40,15 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 
 #### Main dependencies:
 <!-- List your main dependencies here and explain why they're important. -->
-- **[`pipx`](https://pipx.pypa.io)**: The recommended home for `buildben`, making it accessible globally while keeping the OS-Python clean
-- **[`pip-tools`](https://github.com/jazzband/pip-tools)**: Used to re-compute the venv requirements and sync them.
+- **[`uv`](https://github.com/astral-sh/uv)**: Awesome fast dependency manager & virtual environment tool, etc.
 - **[`direnv`](https://direnv.net/)**: Auto-loads project-specific environment and provides  one-liners for environment management.
 - **[`just`](https://github.com/casey/just)**: For running tasks to manage build tools & the virtual environment.
 - **`Docker`:** Used to create snapshots of your project (optional). 
 
+<!-- Dev dependencies: 
+- **[`pipx`](https://pipx.pypa.io)**: The recommended home for `buildben`, making it accessible globally while keeping the OS-Python clean
+- **[`pip-tools`](https://github.com/jazzband/pip-tools)**: Used to re-compute the venv requirements and sync them.
+-->
 
 <hr>
 </div>
@@ -92,6 +95,7 @@ pip install -e buildben    # venv recommended
 
 ### 🏗️ Full Install (recommended): 
 
+<!-- 
 #### 1. Install [`pipx`](https://pipx.pypa.io/stable/installation/):
 To use `buildben`  globally and to keep the OS-python clean, we recommend `pipx`.
 ```bash
@@ -100,6 +104,11 @@ sudo apt install pipx        # For Ubuntu
 # py -m pip install --user pipx   # For Windows (Not tested!)
 pipx ensurepath                   # Add pipx to PATH, if not already done
 pipx upgrade-all                  # !! Never run pipx with sudo !!
+```
+-->
+#### 1. Install [`uv`](https://github.com/astral-sh/uv):
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 #### 2. Clone & install `buildben`:
