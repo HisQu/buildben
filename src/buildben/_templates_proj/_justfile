@@ -12,7 +12,7 @@
 #   See: uv concepts: lock/sync, uv export, uv pip compile.
 #
 # Dependencies: uv (and optionally direnv). Python itself is handled by uv.
-# ============================================================================
+# =====================================================================
 
 # Let recipes use Bash features and fail-fast in pipelines
 set shell := ["bash", "-euo", "pipefail", "-c"]
@@ -21,9 +21,9 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 default:
     @just --list
 
-# ----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 # Internal guards (kept private so they don't clutter `just --list`)
-# ----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 [private]
 _check-uv:
     @command -v uv >/dev/null || { \
@@ -37,28 +37,26 @@ _note-direnv:
         test -n "${VIRTUAL_ENV-}" || echo "ℹ direnv detected but VIRTUAL_ENV not active. Run: direnv allow && direnv reload"; \
     fi
 
-# ----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 # Clean / environment helpers
-# ----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 
-# Remove transient junk: uv cache,  __pycache__, .pytest_cache, .mypy_cache, .ruff_cache
-# Does NOT touch uv.lock or your venv.
+# Remove transient junk: uv cache,  __pycache__, .pytest_cache, .mypy_cache, .ruff_cache. Does NOT touch uv.lock or your venv.
 clean:
     @echo "🧹 Cleaning caches and build artifacts..."
     find . -type d -name "__pycache__" -prune -exec rm -rf {} + || true
     rm -rf .pytest_cache .mypy_cache .ruff_cache dist build *.egg-info || true
     uv cache prune -y || true
 
-# If you use direnv-managed venvs, this rebuilds it from scratch.
-# Safe to run even if you don't use direnv; it just no-ops on reload failure.
+# If you use direnv-managed venvs, this rebuilds it from scratch. Safe to run even if you don't use direnv; it just no-ops on reload failure.
 reset-venv:
     @echo "♻ Rebuilding virtual environment (if present)..."
     rm -rf .venv || true
     direnv reload || true
 
-# ----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 # Install flows
-# ----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 # Key rule: CI and teammates should *not* relock by accident.
 # We therefore install with `--locked` which errors if uv.lock is stale.
 # If it errors, you intentionally run `just lock-install` or `just upgrade`.
@@ -73,21 +71,23 @@ alias ins := install
 # Lock + install in one go (use when you’ve changed dependencies on purpose).
 lock-install:
     just lock
+    just _note-direnv
     uv sync --all-groups --locked
 alias loins := lock-install
 
-# ----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 # Locking and upgrading
-# ----------------------------------------------------------------------------
-# `lock` updates uv.lock based on pyproject.toml and optional args you pass.
+# ---------------------------------------------------------------------
 # Examples:
 #   just lock                   # resolve using current constraints
 #   just lock --upgrade         # allow upgrades while resolving
 #   just lock --python 3.12     # resolve for a specific interpreter
+
+# Creates uv.lock based on pyproject.toml and converts requirements.txt & pylock.toml.
 lock *ARGS:
     just _check-uv
-    just export-reqs
     uv lock {{ARGS}}
+    just export-reqs
 
 # Opinionated upgrade path: bump pins, then install from the new lock.
 upgrade:
@@ -95,18 +95,16 @@ upgrade:
     uv sync --all-groups --locked
 alias up := upgrade
 
-# ----------------------------------------------------------------------------
-# Exports for non-uv tooling (pip, Docker, scanners, Dependabot-ish things)
-# ----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# Export other lock-files formats
+# ---------------------------------------------------------------------
 # By default we export two files from the *lock* so other tools can install
 # the same, pinned set without running uv’s resolver.
 #
 # - requirements.txt        → main dependencies
 # - requirements-dev.txt    → includes dev group (linters, test, etc.)
-#
-# If you prefer a pip-tools "compiled" file from pyproject instead, see target
-# `pip-compile`. Don’t mix both for the same filename or you’ll confuse future-you.
 
+# Exports requirements.txt, requirements-dev.txt, and pylock.toml from uv.lock.
 export-reqs:
     just _check-uv
     # Export locked main deps in classic requirements format
@@ -118,11 +116,12 @@ export-reqs:
 alias ex := export-reqs
 
 
-# ----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
 # Convenience
-# ----------------------------------------------------------------------------
-# Runs your package’s CLI or module under the locked environment.
+# ---------------------------------------------------------------------
+
 # Example: just run -- python -m yourpkg --help
+# Runs your package’s CLI or module under the locked environment.
 run *CMD:
     just _check-uv
     uv run --locked -- {{CMD}}
