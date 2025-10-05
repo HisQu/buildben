@@ -1,109 +1,140 @@
-# Template from buildben copied to <my_project>/justfile
-# This is a collection of recipes callable from the CLI
-# Helpful links for just:
-# - Documentation: https://just.systems/man/en/
-# - Cheat Sheet: https://cheatography.com/linux-china/cheat-sheets/justfile/
-# Dependencies: python3, direnv
+# ============================================================================
+# Justfile for Python projects using uv + pyproject.toml
+# ============================================================================
+# Why this exists:
+# - One command to install exactly what's in uv.lock (safe for CI).
+# - A clear, explicit path to re-lock/upgrade when you WANT changes.
+# - Optional exports for the "I only understand requirements.txt" crowd.
+#
+# References (summarized):
+# - uv auto-locks by default; --locked disables that and errors if stale. 
+# - uv can export a requirements.txt-style file and can also "compile" one.
+#   See: uv concepts: lock/sync, uv export, uv pip compile.
+#
+# Dependencies: uv (and optionally direnv). Python itself is handled by uv.
+# ============================================================================
 
-# Allow `just deps-sync --upgrade --dry-run` pattern
-set shell := ["bash", "-cu"]
+# Let recipes use Bash features and fail-fast in pipelines
+set shell := ["bash", "-euo", "pipefail", "-c"]
 
+# Run `just` with no recipe to list tasks
+default:
+    @just --list
 
-
-# === Shortcuts / CI entrypoint =======================================
-
-# Runs when you type just
-default: 
-    just --list
-
-
-# =====================================================================
-# === Virtual-environment 
-# =====================================================================
-
-### Store python executable from virtual environment
-PY := "${VIRTUAL_ENV-}/bin/python"
-
-# Hidden helper that must succeed first
+# ----------------------------------------------------------------------------
+# Internal guards (kept private so they don't clutter `just --list`)
+# ----------------------------------------------------------------------------
 [private]
-_venv-guard:
-    @test -n "${VIRTUAL_ENV-}" || { \
-        echo "✗ VIRTUAL_ENV is not set, Virtual environment inactive — run 'direnv reload' first" >&2; \
-        exit 1; \
+_check-uv:
+    @command -v uv >/dev/null || { \
+        echo "✗ uv not found. Install from https://docs.astral.sh/uv/ then retry." >&2; \
+        exit 127; \
     }
-    
-# Deletes .direnv, recreates it, installs all requirements and <my_project> (editable)
+
+[private]
+_note-direnv:
+    @if command -v direnv >/dev/null; then \
+        test -n "${VIRTUAL_ENV-}" || echo "ℹ direnv detected but VIRTUAL_ENV not active. Run: direnv allow && direnv reload"; \
+    fi
+
+# ----------------------------------------------------------------------------
+# Clean / environment helpers
+# ----------------------------------------------------------------------------
+
+# Remove transient junk: uv cache,  __pycache__, .pytest_cache, .mypy_cache, .ruff_cache
+# Does NOT touch uv.lock or your venv.
+clean:
+    @echo "🧹 Cleaning caches and build artifacts..."
+    find . -type d -name "__pycache__" -prune -exec rm -rf {} + || true
+    rm -rf .pytest_cache .mypy_cache .ruff_cache dist build *.egg-info || true
+    uv cache prune -y || true
+
+# If you use direnv-managed venvs, this rebuilds it from scratch.
+# Safe to run even if you don't use direnv; it just no-ops on reload failure.
 reset-venv:
-    rm -rf .direnv        
-    direnv reload   # direnv will rebuild on reload
-    direnv exec . just install-compile  # Make requirements.txt & install deps
-alias resve := reset-venv
+    @echo "♻ Rebuilding virtual environment (if present)..."
+    rm -rf .venv || true
+    direnv reload || true
 
-# =====================================================================
-# === Installations
-# =====================================================================
+# ----------------------------------------------------------------------------
+# Install flows
+# ----------------------------------------------------------------------------
+# Key rule: CI and teammates should *not* relock by accident.
+# We therefore install with `--locked` which errors if uv.lock is stale.
+# If it errors, you intentionally run `just lock-install` or `just upgrade`.
 
-# Resolves dependency versions and creates requirements.txt + dev-requirements.txt
-compile-requirements *ARGS:
-    pip-compile pyproject.toml -o requirements.txt {{ARGS}}
-    pip-compile --extra dev pyproject.toml -o dev-requirements.txt {{ARGS}}
-alias comre:= compile-requirements
-
-# Compiles all requirements & installs <my_project> in editable mode
-install-compile *ARGS:
-    just _venv-guard
-    just compile-requirements {{ARGS}}
-    just install
-alias insco := install-compile
-
-# Only Installs: requirements.txt & <my_project> in editable mode
+# Install exactly what's in uv.lock. No surprises. CI should use this.
 install:
-    just _venv-guard
-    if ! [[ -e requirements.txt ]]; then echo "✗ Didn't find requirements.txt! Run 'just install-compile'!" >&2; exit 1; fi
-    pip-sync requirements.txt dev-requirements.txt  
-    {{PY}} -m pip install -e .[dev]
+    just _check-uv
+    just _note-direnv
+    uv sync --all-groups --locked
 alias ins := install
 
-# Uninstalls <my_project>, and installs it in editable mode
-reinstall:
-    just _venv-guard
-    {{PY}} -m pip uninstall -y "${PROJECT_NAME}"
-    {{PY}} -m pip install -e .[dev]
-alias reins := reinstall
+# Lock + install in one go (use when you’ve changed dependencies on purpose).
+lock-install:
+    just lock
+    uv sync --all-groups --locked
+alias loins := lock-install
+
+# ----------------------------------------------------------------------------
+# Locking and upgrading
+# ----------------------------------------------------------------------------
+# `lock` updates uv.lock based on pyproject.toml and optional args you pass.
+# Examples:
+#   just lock                   # resolve using current constraints
+#   just lock --upgrade         # allow upgrades while resolving
+#   just lock --python 3.12     # resolve for a specific interpreter
+lock *ARGS:
+    just _check-uv
+    just export-reqs
+    uv lock {{ARGS}}
+
+# Opinionated upgrade path: bump pins, then install from the new lock.
+upgrade:
+    just lock --upgrade
+    uv sync --all-groups --locked
+alias up := upgrade
+
+# ----------------------------------------------------------------------------
+# Exports for non-uv tooling (pip, Docker, scanners, Dependabot-ish things)
+# ----------------------------------------------------------------------------
+# By default we export two files from the *lock* so other tools can install
+# the same, pinned set without running uv’s resolver.
+#
+# - requirements.txt        → main dependencies
+# - requirements-dev.txt    → includes dev group (linters, test, etc.)
+#
+# If you prefer a pip-tools "compiled" file from pyproject instead, see target
+# `pip-compile`. Don’t mix both for the same filename or you’ll confuse future-you.
+
+export-reqs:
+    just _check-uv
+    # Export locked main deps in classic requirements format
+    uv export --format requirements-txt > requirements.txt
+    # Export locked dev deps (pyproject optional group "dev") to a separate file
+    uv export --group dev --format requirements-txt > requirements-dev.txt
+    # Also emit a TOML lock export (handy for auditing)
+    uv export -o pylock.toml
+alias ex := export-reqs
 
 
-# =====================================================================
-# === Upgrade
-# =====================================================================
+# ----------------------------------------------------------------------------
+# Convenience
+# ----------------------------------------------------------------------------
+# Runs your package’s CLI or module under the locked environment.
+# Example: just run -- python -m yourpkg --help
+run *CMD:
+    just _check-uv
+    uv run --locked -- {{CMD}}
 
-# Upgrade all pins in-place
-upgrade:                        
-    just install-compile --upgrade
+# Print effective dependency tree (won’t modify lock when used with --locked)
+tree:
+    just _check-uv
+    uv tree --locked || uv tree
 
-
-# Echo the full git+ URL for a dependency declared in pyproject.toml
-giturl-from-toml dep:
-    # Find first uncommented line with the dependency name and extract the git URL
-    @git_url=$(grep -E "^[[:space:]]*\"{{dep}}[[:space:]]*@[[:space:]]*git\\+" pyproject.toml \
-        | head -n1 \
-        | sed -E 's/^.*(git\+[^@",#]+).*/\1/') ;\
-    if [ -z "$git_url" ]; then \
-        echo "🛑  '{{dep}}' not found in pyproject.toml" >&2 ;\
-        exit 1 ;\
-    fi ;\
-    echo "$git_url"
-alias gurl := giturl-from-toml   # optional shorthand
-
-# (Re-)Install the dependency from its Git-URL
-install-only dep:
-    just _venv-guard
-    url=$(just gurl {{dep}}) ;\
-    {{PY}} -m pip uninstall -y "{{dep}}" || true ;\
-    {{PY}} -m pip install "$url" ;\
-    pip-compile --upgrade-package "{{dep}} @ ${url}" pyproject.toml -o requirements.txt ;\
-    pip-compile --upgrade-package "{{dep}} @ ${url}" --extra dev pyproject.toml -o dev-requirements.txt ;\
-alias only := install-only
-
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# === Add custom recipes below!
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Show uv + Python info for debugging bug reports
+diagnose:
+    just _check-uv
+    uv --version
+    uv python list || true
+    uv pip -v || true

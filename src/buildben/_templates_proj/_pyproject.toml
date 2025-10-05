@@ -47,11 +47,9 @@ dependencies = [
 # === Extra Dependencies
 # =====================================================================
 
-[project.optional-dependencies]
+[dependency-groups]
 ### pip install -e .[dev]
 dev = [
-    # --- Packaging helpers ------------
-    # "pip-tools>=7.4",   # < Dependency management: pip-compile
     # --- Testing ----------------------
     "pytest>=8.2",
     # "pytest-xdist",     # < Multi-core testing

@@ -1,42 +1,45 @@
 #!/bin/bash
-# Template from buildben copied to <my_project>/.envrc
+### Template from buildben copied to project_root/.envrc
 # !! This script is executes EVERY TIME you enter the directory !!
 
 # === Environment Variables ===========================================
 ### direnv changes into directory of .envrc and runs subshell, so $PWD is always project root.
-PROJECT_NAME=$(basename "$PWD")
-PROJECT_ROOT=$PWD
+export PROJECT_NAME=$(basename "$PWD")
+export PROJECT_ROOT=$PWD
 
-export PROJECT_NAME
-export PROJECT_ROOT
-
-# > Make pip hard-fail if pip is run outside a venv
+# > hard-fail if someone runs pip outside the venv
 export PIP_REQUIRE_VIRTUALENV=1
 
 # > Uncomment to pin tool versions
 # export PIPX_HOME=$PWD/.build-tools
 
-# === direnv / venv ===================================================
-layout python3 # > create & activate a venv under .direnv/
-# layout python python3.12  # < Specify version like this
 
-# === Install pip-tools ===============================================
+# === Virtual Environment =============================================
+# > Put the project venv under .venv/ like 
+export UV_PROJECT_ENVIRONMENT="$PWD/.venv"
 
-python -m pip show pip-tools >/dev/null 2>&1 || (
-    echo "Installing pip-tools!" &&
-        python -m pip install --quiet "pip-tools>=7.4"
-)
+# > Create/sync; exit non-zero if lock is violated.
+# !! Python version specified in pyproject.toml !!
+uv sync --frozen # --quiet
+
+# > Activate the venv so plain `python` / `pip` work in terminals & tools
+# > uv writes an activation script in the venv site
+source "$UV_PROJECT_ENVIRONMENT/bin/activate"
+
+
 
 # === Echo all env vars & info ======================================
 echo
-echo "=== Project-Related Environment Variables ==="
-echo "PROJECT_NAME: $PROJECT_NAME"
-echo "PROJECT_ROOT: $PROJECT_ROOT"
-echo "VIRTUAL_ENV:  $VIRTUAL_ENV"
-echo "PIP_REQUIRE_VIRTUALENV: $PIP_REQUIRE_VIRTUALENV"
+echo "=== Project Environment Variables ====="
+printf "PROJECT_NAME:  %s\n" "$PROJECT_NAME"
+printf "PROJECT_ROOT:  %s\n" "$PROJECT_ROOT"
+printf "VIRTUAL_ENV:   %s\n" "$VIRTUAL_ENV"
+printf "PIP_REQUIRE_VIRTUALENV: %s\n" "$PIP_REQUIRE_VIRTUALENV"
 echo
-echo "=== Buildben Dependencies ==="
-echo "pip-tools: {$(python -m pip show pip-tools | grep Version)}"
+echo "=== Python Info ======================="
+printf "python:        %s\n" "$(python --version 2>&1) from $(which python)"
+printf "pip:           %s\n" "$(pip --version)"
+printf "uv:            %s\n" "$(uv --version) from  $(which uv)"
 echo
 
 # === Secrets =========================================================
