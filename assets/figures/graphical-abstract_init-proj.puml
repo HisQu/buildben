@@ -69,7 +69,7 @@ BBinitcli <-left- TEMP : copied by
 
 package "Project" as P <<Directory & Environment>>{  
 
-  rectangle "**Python Tools**: \n• ""pip-tools"" (compile/sync) \n• Virtual-environment\n• ..." as PyTools 
+  rectangle "**Python Tools**: \n• ""uv"" \n• Virtual-environment\n• ..." as PyTools 
   rectangle "**Universal Tools**: \n• ""direnv""\n• ""just""\n• ..." as Tools 
 }
 
