@@ -17,10 +17,16 @@ from typing import Sequence
 
 # %%
 # =====================================================================
-# === Public Helper "env" for connecting to the environment
+# === env: Handle for connecting to the environment
 # =====================================================================
 
 env: Env = Env()  # < Create a global Env Wrapper (copies available variables)
+
+
+# %%
+# =====================================================================
+# === Public Helpers
+# =====================================================================
 
 
 def import_vars(*names: str, allow_blank: bool = False) -> tuple[str, ...]:
@@ -54,17 +60,9 @@ def import_vars(*names: str, allow_blank: bool = False) -> tuple[str, ...]:
     return tuple(values)
 
 
-if __name__ == "__main__":
-    a, b = import_vars("PROJECT_NAME", "BASE_URL")
-    print(a, b)
-    # %%
-    # !! Throws error
-    # import_vars("PROJECT_name", "BASE_URL")
-
-
 # %%
 # =====================================================================
-# === For Developers: Import .envrc
+# === Import .envrc
 # =====================================================================
 # !!! Only editable pip-installs will retain a .envrc !!!
 
@@ -74,7 +72,9 @@ def load_direnv(quiet: bool = False):
     PROJECT_ROOT = _find_project_root()
     if PROJECT_ROOT is None:
         raise RuntimeError("Could not find project root directory.")
-    _load_direnv_envrc(cwd=PROJECT_ROOT, quiet=quiet)
+    if "DIRENV_DIR" in os.environ:  # > Skip if already inside a direnv session
+        return  # !! Early exit; 2nd Call causes JSONDecodeError
+    _load_envrc(cwd=PROJECT_ROOT, quiet=quiet)
 
 
 # --- Private Helpers -------------------------------------------------
@@ -104,26 +104,14 @@ def _find_project_root(
         print(m)
 
 
-if __name__ == "__main__":
-    print(_find_project_root(Path(".")))
-    print(_find_project_root(None))
-
-
-# %%
-def _load_direnv_envrc(cwd: str | Path = ".", quiet: bool = False) -> None:
+def _load_envrc(cwd: str | Path = ".", quiet: bool = False) -> None:
     """Merge the official .envrc into the current environment"""
-
-    ### Skip if we already ran inside a direnv session
-    if "DIRENV_DIR" in os.environ:
-        return  # !! Early exit; 2nd Call causes JSONDecodeError
-
-    ### Prepare child-process environment
+    # --- Prepare child-process environment ---
     child_env = os.environ.copy()  # < Lives only until child process spawns
     if quiet:
         # > Empty string silences *all* log lines from direnv
         child_env.setdefault("DIRENV_LOG_FORMAT", "")
-
-    ### Run direnv .envrc
+    # --- Run direnv .envrc ---
     payload = ""
     try:
         payload = subprocess.check_output(
@@ -146,9 +134,29 @@ def _load_direnv_envrc(cwd: str | Path = ".", quiet: bool = False) -> None:
         pass
 
 
+# => Demo =============================================================
+
 if __name__ == "__main__":
+    pass
+    # %%
+    ### Find project root
     root = _find_project_root()
-    if root:
-        _load_direnv_envrc(cwd=root)
-    print(os.getenv("PROJECT_ROOT"))
-    print(os.getenv("BASE_URL"))
+    print("Project root:", root)
+    print("Project root '.':", _find_project_root(Path(".")))
+    print("Project root None:", _find_project_root(None))
+
+    # %%
+    ### Load .envrc
+    load_direnv()
+    print("$PROJECT_ROOT", os.getenv("PROJECT_ROOT"))
+    print("$BASE_URL", os.getenv("BASE_URL"))
+
+    # %%
+    ### Ignore subsequent loads
+    load_direnv()
+
+    # %%
+    ### Import multiple vars at once
+    a, b = import_vars("PROJECT_NAME", "PROJECT_ROOT")
+    print("$PROJECT_NAME", a)
+    print("$PROJECT_ROOT", b)
