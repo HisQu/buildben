@@ -15,14 +15,16 @@ export PROJECT_ROOT=$PWD
 export PIP_REQUIRE_VIRTUALENV=1
 # > Uncomment to pin tool versions
 # export PIPX_HOME=$PWD/.build-tools
-# > Put the project venv under .direnv/ like your current habit
-export UV_PROJECT_ENVIRONMENT="$PWD/.venv"
 
 
 # === venv ============================================================
+export UV_PROJECT_ENVIRONMENT="$PWD/.venv"
 # > Create/sync; exit non-zero if lock is violated.
 # > Uses Python version specified in pyproject.toml !!
-uv sync --frozen # --quiet
+# > --frozen: Sync from uv.lock while ignoring pyproject.toml
+# > --locked: Exit non-zero if pyproject.toml differs from uv.lock
+uv sync --check
+uv sync --frozen --all-extras
 # > Activate the venv so plain `python` / `pip` work in terminals & tools
 # > uv writes an activation script in the venv site
 source "$UV_PROJECT_ENVIRONMENT/bin/activate"

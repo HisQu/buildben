@@ -25,17 +25,18 @@ default:
 # Internal guards (kept private so they don't clutter `just --list`)
 # ---------------------------------------------------------------------
 [private]
+_note-direnv:
+    @if command -v direnv >/dev/null; then \
+        test -n "${VIRTUAL_ENV-}" || echo "ℹ direnv detected but VIRTUAL_ENV not active. Run: direnv allow && direnv reload"; \
+    fi
+
+[private]
 _check-uv:
     @command -v uv >/dev/null || { \
         echo "✗ uv not found. Install from https://docs.astral.sh/uv/ then retry." >&2; \
         exit 127; \
     }
 
-[private]
-_note-direnv:
-    @if command -v direnv >/dev/null; then \
-        test -n "${VIRTUAL_ENV-}" || echo "ℹ direnv detected but VIRTUAL_ENV not active. Run: direnv allow && direnv reload"; \
-    fi
 
 # ---------------------------------------------------------------------
 # Clean / environment helpers
@@ -51,7 +52,7 @@ clean:
 # If you use direnv-managed venvs, this rebuilds it from scratch. Safe to run even if you don't use direnv; it just no-ops on reload failure.
 reset-venv:
     @echo "♻ Rebuilding virtual environment (if present)..."
-    rm -rf .venv || true
+    rm -rf "$UV_PROJECT_ENVIRONMENT" || true
     direnv reload || true
 
 # ---------------------------------------------------------------------
@@ -60,20 +61,14 @@ reset-venv:
 # Key rule: CI and teammates should *not* relock by accident.
 # We therefore install with `--locked` which errors if uv.lock is stale.
 # If it errors, you intentionally run `just lock-install` or `just upgrade`.
+# > --frozen: Sync from uv.lock while ignoring pyproject.toml
+# > --locked: Exit non-zero if pyproject.toml differs from uv.lock
 
-# Install exactly what's in uv.lock. No surprises. CI should use this.
-install:
+# Install or sync everything from uv.lock into venv. (CI should use this)
+sync:
+    just _note-direnv
     just _check-uv
-    just _note-direnv
     uv sync --all-groups --locked
-alias ins := install
-
-# Lock + install in one go (use when you’ve changed dependencies on purpose).
-lock-install:
-    just lock
-    just _note-direnv
-    uv sync --all-groups --locked
-alias loins := lock-install
 
 # ---------------------------------------------------------------------
 # Locking and upgrading
@@ -83,37 +78,17 @@ alias loins := lock-install
 #   just lock --upgrade         # allow upgrades while resolving
 #   just lock --python 3.12     # resolve for a specific interpreter
 
-# Creates uv.lock based on pyproject.toml and converts requirements.txt & pylock.toml.
+# Creates uv.lock based on pyproject.toml and exports pylock.toml.
 lock *ARGS:
     just _check-uv
     uv lock {{ARGS}}
-    just export-reqs
+    uv export -o pylock.toml --quiet
 
-# Opinionated upgrade path: bump pins, then install from the new lock.
+# Re-lock then install from the new lock.
 upgrade:
     just lock --upgrade
     uv sync --all-groups --locked
 alias up := upgrade
-
-# ---------------------------------------------------------------------
-# Export other lock-files formats
-# ---------------------------------------------------------------------
-# By default we export two files from the *lock* so other tools can install
-# the same, pinned set without running uv’s resolver.
-#
-# - requirements.txt        → main dependencies
-# - requirements-dev.txt    → includes dev group (linters, test, etc.)
-
-# Exports requirements.txt, requirements-dev.txt, and pylock.toml from uv.lock.
-export-reqs:
-    just _check-uv
-    # Export locked main deps in classic requirements format
-    uv export --format requirements-txt > requirements.txt
-    # Export locked dev deps (pyproject optional group "dev") to a separate file
-    uv export --group dev --format requirements-txt > requirements-dev.txt
-    # Also emit a TOML lock export (handy for auditing)
-    uv export -o pylock.toml
-alias ex := export-reqs
 
 
 # ---------------------------------------------------------------------
@@ -136,4 +111,4 @@ diagnose:
     just _check-uv
     uv --version
     uv python list || true
-    uv pip -v || true
+    uv sync --check
