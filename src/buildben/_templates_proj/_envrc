@@ -1,46 +1,50 @@
 #!/bin/bash
-### Template from buildben copied to project_root/.envrc
+# --- .envrc from buildben template ---
 # !! This script is executes EVERY TIME you enter the directory !!
 
 # === Environment Variables ===========================================
-### direnv changes into directory of .envrc and runs subshell, so $PWD is always project root.
+# > direnv changes into directory of .envrc and runs subshell, so $PWD is always project root.
 export PROJECT_NAME=$(basename "$PWD")
 export PROJECT_ROOT=$PWD
-
 # > hard-fail if someone runs pip outside the venv
 export PIP_REQUIRE_VIRTUALENV=1
-
 # > Uncomment to pin tool versions
 # export PIPX_HOME=$PWD/.build-tools
-
-
-# === Virtual Environment =============================================
-# > Put the project venv under .venv/ like 
+# > Put the project venv under .direnv/ like your current habit
 export UV_PROJECT_ENVIRONMENT="$PWD/.venv"
 
-# > Create/sync; exit non-zero if lock is violated.
-# !! Python version specified in pyproject.toml !!
-uv sync --frozen # --quiet
 
+# === venv ============================================================
+# > Create/sync; exit non-zero if lock is violated.
+# > Uses Python version specified in pyproject.toml !!
+uv sync --frozen # --quiet
 # > Activate the venv so plain `python` / `pip` work in terminals & tools
 # > uv writes an activation script in the venv site
 source "$UV_PROJECT_ENVIRONMENT/bin/activate"
 
 
 
-# === Echo all env vars & info ======================================
-echo
-echo "=== Project Environment Variables ====="
-printf "PROJECT_NAME:  %s\n" "$PROJECT_NAME"
-printf "PROJECT_ROOT:  %s\n" "$PROJECT_ROOT"
-printf "VIRTUAL_ENV:   %s\n" "$VIRTUAL_ENV"
-printf "PIP_REQUIRE_VIRTUALENV: %s\n" "$PIP_REQUIRE_VIRTUALENV"
-echo
-echo "=== Python Info ======================="
-printf "python:        %s\n" "$(python --version 2>&1) from $(which python)"
-printf "pip:           %s\n" "$(pip --version)"
-printf "uv:            %s\n" "$(uv --version) from  $(which uv)"
-echo
+# === Echo env vars & info ============================================
+W=24
 
-# === Secrets =========================================================
-[[ -f ./.secrets.env ]] && source_env ./.secrets.env
+printf "%-*s  %s\n" $W "--- Info .envrc --------" " -----------------------------------------"
+# --- Environment Variables
+printf "%*s : %s\n" $W '$PROJECT_NAME' "$PROJECT_NAME"
+printf "%*s : %s\n" $W '$PROJECT_ROOT' "$PROJECT_ROOT"
+printf "%*s : %s\n" $W '$VIRTUAL_ENV' "$VIRTUAL_ENV"
+printf "%*s : %s\n" $W '$PIP_REQUIRE_VIRTUALENV' "$PIP_REQUIRE_VIRTUALENV"
+# --- Info
+printf "%*s : %s\n" $W "Date" "$(date)"
+printf "%*s : %s\n" $W "python" "$(python --version 2>&1) from $(which python)"
+printf "%*s : %s\n" $W "pip" "$(pip --version)"
+printf "%*s : %s\n" $W "uv" "$(uv --version) from $(which uv)"
+printf "%-*s  %s\n" $W "------------------------" " -----------------------------------------"
+
+# === Load further .env files =========================================
+dotenv_if_exists ./.secrets.env
+
+
+# === Source further runtime configs ==================================
+# source_env_if_exists ./.my.envrc
+# > Fallback
+# [[ -f ./.secrets.env ]] && source_env ./.secrets.env
