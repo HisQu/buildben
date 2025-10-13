@@ -2,7 +2,12 @@
 # --- .envrc from buildben template ---
 # !! This script is executes EVERY TIME you enter the directory !!
 
-# === Environment Variables ===========================================
+# === $PATH ===========================================================
+# > uv is located there
+PATH_add ~/.local/bin
+
+
+# === New Environment Variables =======================================
 # > direnv changes into directory of .envrc and runs subshell, so $PWD is always project root.
 export PROJECT_NAME=$(basename "$PWD")
 export PROJECT_ROOT=$PWD
@@ -39,6 +44,7 @@ printf "%*s : %s\n" $W "python" "$(python --version 2>&1) from $(which python)"
 printf "%*s : %s\n" $W "pip" "$(pip --version)"
 printf "%*s : %s\n" $W "uv" "$(uv --version) from $(which uv)"
 printf "%-*s  %s\n" $W "------------------------" " -----------------------------------------"
+
 
 # === Load further .env files =========================================
 dotenv_if_exists ./.secrets.env
