@@ -123,10 +123,14 @@ def _load_envrc(cwd: str | Path = ".", quiet: bool = False) -> None:
         )
         os.environ.update(json.loads(payload))  # idempotent; no new venv
     except json.JSONDecodeError as e:
-        raise RuntimeError(
-            f"Failed to parse direnv output from '{cwd}': {e}\n"
-            f"Actual output received:\n{payload[0:1000]} ... (<truncated>)"
-        )
+        m = f"Failed to parse direnv output from '{cwd}': {e}\n"
+        if len(payload) > 1000:
+            m += f"Actual output received:\n{payload[0:1000]} ... (<truncated>)"
+        elif payload:
+            m += f"Actual output received:\n{payload}"
+        else:
+            m += "No output received."
+        raise RuntimeError(m)
     except (FileNotFoundError, subprocess.CalledProcessError):
         # > direnv binary missing
         # > .envrc not yet allowed
