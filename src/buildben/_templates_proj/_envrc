@@ -1,40 +1,53 @@
 #!/bin/bash
 # --- .envrc from buildben template ---
-# !! This script is executes EVERY TIME you enter the directory !!
+# !! Requires `direnv` 
+# !! This script is executed EVERY TIME you enter the directory !!
+
 
 # === $PATH ===========================================================
 # > uv is located there
 PATH_add ~/.local/bin
 
 
+
 # === New Environment Variables =======================================
 # > direnv changes into directory of .envrc and runs subshell, so $PWD is always project root.
 export PROJECT_NAME=$(basename "$PWD")
 export PROJECT_ROOT=$PWD
-# > hard-fail if someone runs pip outside the venv
-export PIP_REQUIRE_VIRTUALENV=1
-# > Uncomment to pin tool versions
-# export PIPX_HOME=$PWD/.build-tools
+
 
 
 # === venv ============================================================
-export UV_PROJECT_ENVIRONMENT="$PWD/.venv"
-# > Create/sync; exit non-zero if lock is violated.
-# > Uses Python version specified in pyproject.toml !!
-# > --frozen: Sync from uv.lock while ignoring pyproject.toml
-# > --locked: Exit non-zero if pyproject.toml differs from uv.lock
-uv sync --check
-uv sync --frozen --all-extras
-# > Activate the venv so plain `python` / `pip` work in terminals & tools
-# > uv writes an activation script in the venv site
-source "$UV_PROJECT_ENVIRONMENT/bin/activate"
+
+layout_uv() {
+    ### Config uv-managed venv
+    export UV_PROJECT_ENVIRONMENT="$PWD/.venv"
+    # > Force uv to use managed Python, disallow fallback to system Python
+    export UV_MANAGED_PYTHON=1
+    ### Create venv or check differences between venv and pyproject.toml / uv.lock
+    if [[ -d "$UV_PROJECT_ENVIRONMENT" ]]; then
+        echo "-- Checking venv ---------------------------------------------------"
+        uv sync --check || echo "⚠️  Environment differs from lockfile."
+    else
+        echo "-- 🏗️  Creating project virtual environment at $UV_PROJECT_ENVIRONMENT ..."
+        # > --seed: Install `pip`, `setuptools`, and `wheel` into the new venv
+        uv venv --seed "$UV_PROJECT_ENVIRONMENT"
+        # > --all-extras: Install all optional dependencies (dev, test, docs, ...)
+        # > --frozen: Sync from uv.lock without changing it (ignoring the pyproject.toml)
+        uv sync --frozen --all-extras
+    fi
+    source "$UV_PROJECT_ENVIRONMENT"/bin/activate
+}
+
+layout_uv
+export PIP_REQUIRE_VIRTUALENV=1 # > hard-fail if someone runs pip outside the venv
 
 
 
 # === Echo env vars & info ============================================
 W=24
 
-printf "%-*s  %s\n" $W "--- Info .envrc --------" " -----------------------------------------"
+printf "%-*s  %s\n" $W "-- Info ---------------" " -----------------------------------------"
 # --- Environment Variables
 printf "%*s : %s\n" $W '$PROJECT_NAME' "$PROJECT_NAME"
 printf "%*s : %s\n" $W '$PROJECT_ROOT' "$PROJECT_ROOT"
