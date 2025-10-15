@@ -112,3 +112,13 @@ diagnose:
     uv --version
     uv python list || true
     uv sync --check
+
+
+
+# ---------------------------------------------------------------------
+# Example recipe written in python (executes venv/python):
+# pyyy:
+#     #!/usr/bin/env python3
+#     import sys
+#     print(sys.executable)
+#     print('Hello from python!')
