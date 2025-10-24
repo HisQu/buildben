@@ -22,6 +22,8 @@ db/
 # === .env =============================================================
 .env
 .secrets.env
+.env.secrets
+.env.secret
 .env.prod
 # .envrc
 *Zone.Identifier

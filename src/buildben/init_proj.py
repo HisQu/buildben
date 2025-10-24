@@ -101,12 +101,13 @@ def _run(args: argparse.Namespace) -> None:
         "_gitignore": PROOT / ".gitignore",
         "_pyproject.toml": PROOT / "pyproject.toml",
         "_envrc": PROOT / ".envrc",
+        "_env.sh": PROOT / ".env.sh",
         "_justfile": PROOT / "justfile",
         ### PR_ROOT/.github:
         "_github_codecov.yml": PROOT / ".github" / "workflows_inactive" / "codecov.yml",
         ### PR_ROOT/src:
         "_src_main.py": PROOT / "src" / args.name / "main.py",
-        "_src_env.py": PROOT / "src" / args.name / "env.py",
+        "_src_env_boot.py": PROOT / "src" / args.name / "env_boot.py",
         ### PR_ROOT/src/utils:
         "_utils_stdlib.py": PROOT / "src" / args.name / "utils" / "stdlib.py",
         ### .IGNORE - Files are git-ignored until renamed manually:

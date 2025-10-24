@@ -9,16 +9,16 @@
 PATH_add ~/.local/bin
 
 
+# === Load .env and .envrc files ======================================
+source_env_if_exists ./.env.sh
+dotenv_if_exists ./.env
+dotenv_if_exists ./.env.secret
 
-# === New Environment Variables =======================================
-# > direnv changes into directory of .envrc and runs subshell, so $PWD is always project root.
-export PROJECT_NAME=$(basename "$PWD")
-export PROJECT_ROOT=$PWD
-
+# > Fallback
+# [[ -f ./.secrets.env ]] && source_env ./.secrets.env
 
 
 # === venv ============================================================
-
 layout_uv() {
     ### Config uv-managed venv
     export UV_PROJECT_ENVIRONMENT="$PWD/.venv"
@@ -38,7 +38,6 @@ layout_uv() {
     fi
     source "$UV_PROJECT_ENVIRONMENT"/bin/activate
 }
-
 layout_uv
 export PIP_REQUIRE_VIRTUALENV=1 # > hard-fail if someone runs pip outside the venv
 
@@ -46,7 +45,6 @@ export PIP_REQUIRE_VIRTUALENV=1 # > hard-fail if someone runs pip outside the ve
 
 # === Echo env vars & info ============================================
 W=24
-
 printf "%-*s  %s\n" $W "-- Info ---------------" " -----------------------------------------"
 # --- Environment Variables
 printf "%*s : %s\n" $W '$PROJECT_NAME' "$PROJECT_NAME"
@@ -55,17 +53,9 @@ printf "%*s : %s\n" $W '$VIRTUAL_ENV' "$VIRTUAL_ENV"
 printf "%*s : %s\n" $W '$PIP_REQUIRE_VIRTUALENV' "$PIP_REQUIRE_VIRTUALENV"
 # --- Info
 printf "%*s : %s\n" $W "Date" "$(date)"
-printf "%*s : %s\n" $W "python" "$(python --version 2>&1) from $(which python)"
+printf "%*s : %s\n" $W "python" "$(python -S --version 2>&1) from $(which python)"
 printf "%*s : %s\n" $W "pip" "$(pip --version)"
 printf "%*s : %s\n" $W "uv" "$(uv --version) from $(which uv)"
 printf "%-*s  %s\n" $W "------------------------" " -----------------------------------------"
 
 
-# === Load further .env files =========================================
-dotenv_if_exists ./.secrets.env
-
-
-# === Source further runtime configs ==================================
-# source_env_if_exists ./.my.envrc
-# > Fallback
-# [[ -f ./.secrets.env ]] && source_env ./.secrets.env
