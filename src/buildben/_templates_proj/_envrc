@@ -24,17 +24,24 @@ layout_uv() {
     export UV_PROJECT_ENVIRONMENT="$PWD/.venv"
     # > Force uv to use managed Python, disallow fallback to system Python
     export UV_MANAGED_PYTHON=1
-    ### Create venv or check differences between venv and pyproject.toml / uv.lock
-    if [[ -d "$UV_PROJECT_ENVIRONMENT" ]]; then
-        echo "-- Checking venv ---------------------------------------------------"
-        uv sync --check || echo "⚠️  Environment differs from lockfile."
-    else
-        echo "-- 🏗️  Creating project virtual environment at $UV_PROJECT_ENVIRONMENT ..."
+    
+    ### Re-evaluate .envrc when these change
+    watch_file pyproject.toml
+    watch_file uv.lock
+    
+    ### Make .venv if not exists
+    echo "-- Checking venv ---------------------------------------------------"
+    if [[ ! -d "$UV_PROJECT_ENVIRONMENT" ]]; then
+        echo "-- 🏗️  Creating .venv at $UV_PROJECT_ENVIRONMENT ..."
         # > --seed: Install `pip`, `setuptools`, and `wheel` into the new venv
         uv venv --seed "$UV_PROJECT_ENVIRONMENT"
         # > --all-extras: Install all optional dependencies (dev, test, docs, ...)
         # > --frozen: Sync from uv.lock without changing it (ignoring the pyproject.toml)
         uv sync --frozen --all-extras
+    ### Check for differences
+    else
+        uv sync --check || echo "⚠️  uv.lock differs from .venv!"
+        uv lock --check || echo "⚠️  uv.lock differs from pyproject.toml!"
     fi
     source "$UV_PROJECT_ENVIRONMENT"/bin/activate
 }
