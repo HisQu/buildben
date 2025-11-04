@@ -60,7 +60,7 @@ reset-venv:
 # ---------------------------------------------------------------------
 # Key rule: CI and teammates should *not* relock by accident.
 # We therefore install with `--locked` which errors if uv.lock is stale.
-# If it errors, you intentionally run `just lock-install` or `just upgrade`.
+# If it errors, you intentionally run `just lock` or `just upgrade`.
 # > --frozen: Sync from uv.lock while ignoring pyproject.toml
 # > --locked: Exit non-zero if pyproject.toml differs from uv.lock
 
