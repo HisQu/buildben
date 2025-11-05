@@ -19,6 +19,7 @@ requires-python = ">=3.12"
 dependencies = [
     # --- Core packages ------------------
     "ipykernel",
+    "ipywidgets",    # < e.g. For loading bars
     # "dotenv",      # < Loads .env files
     "environs",      # < Loads .env files, but better
     "loguru",        # < Logging library
