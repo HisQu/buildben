@@ -23,21 +23,26 @@
 <br>
 
 <!-- --- Badges --------------------------------------------------- -->
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Code style:
 black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 
 </div>
 
+<!-- --- URLs --------------------------------------------------- -->
+[`direnv`]: https://direnv.net/
+[`just`]: https://github.com/casey/just?tab=readme-ov-file#packages
+[`uv`]: https://github.com/astral-sh/uv?tab=readme-ov-file#uv
+
+
 <!-- ============================================================== -->
 <!-- ============================================================== -->
 
 <div style="width: 85%; margin: 2rem auto; text-align: justify;">
 <hr>
-<h3> Abstract </h3>
 
-
-####  `{my_project}` ...
+###  `{my_project}` ...
 <!-- Summarize the top 3 features -->
 - ... integrates cool things like lorem ipsum dolor
 - ... standardizes Dolor sit amet dolor blah bla
@@ -74,10 +79,11 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 
 <!-- toc -->
 
-1. [📦 Installation](#-installation)
-2. [🚀 Usage](#-usage)
-3. [💻  Development](#--development)
-4. [📚  Examples / Documentation](#--examples--documentation)
+1. [`{my_project}`: A Template](#my_project-a-template)
+   1. [📦 Installation](#-installation)
+   2. [🚀 Usage](#-usage)
+   3. [💻  Development](#--development)
+   4. [📚  Examples / Documentation](#--examples--documentation)
 
 <!-- tocstop -->
 <!-- /toc -->
@@ -89,7 +95,10 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 ## 📦 Installation
 
 ### Prerequisites:
-- Python >= 3.11 (preferrably venv)
+- `Python >=3.12,<3.13`
+- `git`
+- `uv` (optional)
+
 
 ### Install with `pip`:
 #### 1. Install system dependencies:
@@ -97,9 +106,10 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 apt update
 apt install python3.12
 ```
+<!-- git clone https://github.com/{github_username}/{my_project}.git -->
 #### 2. Clone & Install `{my_project}`:
 ``` bash
-git clone https://github.com/{github_username}/{my_project}.git
+git clone https://github.com/HisQu/{my_project}.git
 pip install -e {my_project} # Editable install (use venv)
 ```
 
