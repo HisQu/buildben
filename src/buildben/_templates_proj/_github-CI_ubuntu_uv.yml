@@ -24,6 +24,12 @@ jobs:
       
       - name: Checkout
         uses: actions/checkout@v5
+      
+      # Requires Personal access tokens:
+      # In GitHub, go to Settings → Developer settings → Personal access tokens.
+      - name: Configure git for private GitHub deps
+        run: |
+          git config --global url."https://oauth2:${{ secrets.HISQU_GH_PAT }}@github.com/".insteadOf "https://github.com/"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
