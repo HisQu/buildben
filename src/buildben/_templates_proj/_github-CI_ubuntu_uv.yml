@@ -1,0 +1,38 @@
+name: CI ubuntu uv
+
+run-name: ${{ github.actor }} • ${{ github.event_name }} • CI on ubuntu with uv
+
+on: [push, pull_request]
+
+jobs:
+  ci_ubuntu_uv:
+    name: CI on ubuntu with uv
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false  # Continue other jobs even if one fails
+      matrix:
+        python-version:
+          - "3.12"
+          - "3.13"
+          - "3.14"
+
+    steps:
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential 
+      
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      - name: Install project from uv.lock
+        run: uv sync --locked --all-extras --dev
+
+      # - name: Run tests
+      #   run: uv run --locked pytest tests

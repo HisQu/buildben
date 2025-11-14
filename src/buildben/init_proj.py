@@ -104,17 +104,18 @@ def _run(args: argparse.Namespace) -> None:
         "_env.sh": PROOT / ".env.sh",
         "_justfile": PROOT / "justfile",
         ### PR_ROOT/.github:
-        "_github_codecov.yml": PROOT / ".github" / "workflows_inactive" / "codecov.yml",
+        "_github-codecov.yml": PROOT / ".github" / "workflows_inactive" / "codecov.yml",
+        "_github-CI_ubuntu_uv.yml": PROOT / ".github" / "workflows_inactive" / "CI_ubuntu_uv.yml",
         ### PR_ROOT/src:
-        "_src_main.py": PROOT / "src" / args.name / "main.py",
-        "_src_env_boot.py": PROOT / "src" / args.name / "env_boot.py",
+        "_src-main.py": PROOT / "src" / args.name / "main.py",
+        "_src-env_boot.py": PROOT / "src" / args.name / "env_boot.py",
         ### PR_ROOT/src/utils:
-        "_utils_stdlib.py": PROOT / "src" / args.name / "utils" / "stdlib.py",
+        "_utils-stdlib.py": PROOT / "src" / args.name / "utils" / "stdlib.py",
         ### .IGNORE - Files are git-ignored until renamed manually:
         "_README.IGNORE.md": PROOT / "README.IGNORE.md",
-        "_assets_flowchart.IGNORE.mmd": PROOT / "assets" / "flowchart.IGNORE.mmd",
-        "_assets_classdiagram.IGNORE.mmd": PROOT / "assets" / "classdiagram.IGNORE.mmd",
-        "_assets_diagram.IGNORE.puml": PROOT / "assets" / "diagram.IGNORE.puml",
+        "_assets-flowchart.IGNORE.mmd": PROOT / "assets" / "flowchart.IGNORE.mmd",
+        "_assets-classdiagram.IGNORE.mmd": PROOT / "assets" / "classdiagram.IGNORE.mmd",
+        "_assets-diagram.IGNORE.puml": PROOT / "assets" / "diagram.IGNORE.puml",
     }
     # fmt: on
 
