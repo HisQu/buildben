@@ -27,6 +27,7 @@ jobs:
       
       # Requires Personal access tokens:
       # In GitHub, go to Settings → Developer settings → Personal access tokens.
+      # Permissions (all read-only): Metadata, Contents, Commit statuses, Pull requests
       - name: Configure git for private GitHub deps
         run: |
           git config --global url."https://oauth2:${{ secrets.HISQU_GH_PAT }}@github.com/".insteadOf "https://github.com/"
