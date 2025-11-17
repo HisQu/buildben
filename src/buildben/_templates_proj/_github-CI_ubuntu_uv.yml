@@ -36,8 +36,12 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python-version }}
-          enable-cache: true
-
+          enable-cache: auto
+      
+      # For local, re-used environments, ensure a clean venv before uv sync
+      - name: Remove venv before uv sync 
+        run: rm -rf .venv
+      
       - name: Install project from uv.lock
         run: uv sync --locked --all-extras --dev
 

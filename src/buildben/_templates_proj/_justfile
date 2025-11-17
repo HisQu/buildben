@@ -143,8 +143,13 @@ py-switch version="3.14":
 # Testing
 # ---------------------------------------------------------------------
 
+# Run GitHub Actions triggered by push locally using act
 gitactions:
-    act push --secret-file .env.secret -P ubuntu-latest=catthehacker/ubuntu:act-latest
+    act push \
+      --secret-file .env.secret \
+      -P ubuntu-latest=catthehacker/ubuntu:act-latest \
+      --container-options "-v $HOME/.act-uv-cache:/root/.cache/uv" \
+      --action-offline-mode
 
 
 
