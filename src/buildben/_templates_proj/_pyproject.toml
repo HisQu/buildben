@@ -87,9 +87,9 @@ where = ["src"]                       # < Scan only src/ for packages
 # namespaces = false                     # < Implicit namespace packages ok
 
 
-# === Include data *inside* the package =======
+# === Include non-py files *inside* the package =======
 [tool.setuptools.package-data]
-"<my_project>" = [
+"*" = [
     "data/**/*.xlsx",         # src/<my_project>/data/
     "images/**/*.{png,jpg}",  # src/<my_project>/images/
     ]
@@ -118,32 +118,27 @@ where = ["src"]                       # < Scan only src/ for packages
 
 # Black code-formatter defaults
 [tool.black]
-line-length = 80
+line-length = 88
 target-version = ["py312"]
 exclude = '''
 /(
     \.venv
-  | \venv
+  | venv
   | \.direnv
   | build
   | dist
 )/
-'''  # TOML uses single quotes for regex; see Black docs
+'''
 
 # Ruff (linter) – keep rules in sync with Black
-# [tool.ruff]
-# line-length = 88
-# unsafe-fixes = true
+[tool.ruff]
+line-length = 88
+unsafe-fixes = true
 
-# Pytest: minimal example
+# Pytest configration (This replaces `pytest.ini`)
 [tool.pytest.ini_options]
 # addopts = "-ra -q"   # < run tests quietly, show only errors and warnings
 testpaths = ["tests"]
-
-
-# Just – optional, but makes 'just --list' self-documenting
-[tool.just]
-shell = "bash"
 
 # ===========================
 # End of file
