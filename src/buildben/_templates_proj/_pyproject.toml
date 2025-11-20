@@ -14,7 +14,7 @@ version     = "0.1.0"
 description = "Short, one-line summary."
 authors     = [{ name = "<github_username>", email = "you@example.com" }]
 readme      = "README.md"
-license     = { text = "MIT" }
+license     = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     # --- Core packages ------------------
