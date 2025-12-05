@@ -51,6 +51,10 @@ dependencies = [
 [dependency-groups]
 ### pip install -e .[dev]
 dev = [
+    # --- Interactive development -------
+    "jupyterlab",    # < Brings notebook, widgets, ipykernel, etc.
+    # "ipywidgets",  # < e.g. For loading bars. Broken at this point?
+    "jupytext",      # < Jupyter Notebook export
     # --- Testing ----------------------
     "pytest>=8.2",
     # "pytest-xdist",     # < Multi-core testing
@@ -65,7 +69,6 @@ dev = [
     # "plotastic",
     # "scipy",
     # --- IO ----------------------------
-    "jupytext",      # < Jupyter Notebook export
     "dill",          # < Extended pickle for complex objects
     # "sacred",        # < Experiment management
     # ---Example Data --------------
