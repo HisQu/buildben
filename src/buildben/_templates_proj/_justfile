@@ -91,6 +91,19 @@ upgrade *ARGS:
     uv sync --all-groups --locked
 
 
+# Re-lock with --upgrade ONLY git-based dependencies & uv sync from the new lock.
+upgrade-repos *ARGS:
+    @echo "⬆️  Upgrading only git-based dependencies to latest revisions..."
+    uv lock \
+        # --upgrade-package mongodbapi \
+        # --upgrade-package gta \
+        # --upgrade-package embedding \
+        # --upgrade-package haiu \
+        {{ARGS}}
+    uv sync --all-groups --locked
+alias uprep := upgrade-repos
+
+
 # --- Python upgrade -------
 
 # Gets the currently uv-installed python version.
