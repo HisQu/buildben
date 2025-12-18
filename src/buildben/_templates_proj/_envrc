@@ -10,7 +10,7 @@ PATH_add ~/.local/bin
 
 
 # === Load .env and .envrc files ======================================
-source_env_if_exists ./.env.sh
+# source_env_if_exists ./.env.sh
 dotenv_if_exists ./.env
 dotenv_if_exists ./.env.secret
 

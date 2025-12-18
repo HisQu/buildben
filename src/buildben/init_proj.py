@@ -101,7 +101,7 @@ def _run(args: argparse.Namespace) -> None:
         "_gitignore": PROOT / ".gitignore",
         "_pyproject.toml": PROOT / "pyproject.toml",
         "_envrc": PROOT / ".envrc",
-        "_env.sh": PROOT / ".env.sh",
+        # "_env.sh": PROOT / ".env.sh",
         "_justfile": PROOT / "justfile",
         ### PR_ROOT/.github:
         "_github-codecov.yml": PROOT / ".github" / "workflows_inactive" / "codecov.yml",
@@ -153,7 +153,7 @@ def _run(args: argparse.Namespace) -> None:
             👉 Next Steps:
                 cd "{PROOT}"
                 direnv allow       # Trust .envrc
-                just insco         # Install dependencies
+                just               # List available recipes
             
             Happy hacking 🎉
             """
