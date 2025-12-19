@@ -82,14 +82,6 @@ def _run(args: argparse.Namespace) -> None:
     for dir in directories:
         dir.mkdir(parents=True, exist_ok=True)
 
-    utils.create__init__(PROOT / "src" / args.name)
-    utils.create__init__(
-        PROOT / "src" / args.name / "utils",
-        imports=["stdlib"],
-        # < x = u.stdlib.my_function()
-        # < import <my_project>.utils as u
-    )
-
     # =================================================================
     # === Copy template files
     # =================================================================
@@ -101,16 +93,15 @@ def _run(args: argparse.Namespace) -> None:
         "_gitignore": PROOT / ".gitignore",
         "_pyproject.toml": PROOT / "pyproject.toml",
         "_envrc": PROOT / ".envrc",
-        # "_env.sh": PROOT / ".env.sh",
         "_justfile": PROOT / "justfile",
         ### PR_ROOT/.github:
         "_github-codecov.yml": PROOT / ".github" / "workflows_inactive" / "codecov.yml",
         "_github-CI_ubuntu_uv.yml": PROOT / ".github" / "workflows_inactive" / "CI_ubuntu_uv.yml",
         ### PR_ROOT/src:
         "_src-main.py": PROOT / "src" / args.name / "main.py",
-        "_src-env_boot.py": PROOT / "src" / args.name / "env_boot.py",
         ### PR_ROOT/src/utils:
         "_utils-stdlib.py": PROOT / "src" / args.name / "utils" / "stdlib.py",
+        "_utils-path_resolver.py": PROOT / "src" / args.name / "utils" / "path_resolver.py",
         ### .IGNORE - Files are git-ignored until renamed manually:
         "_README.IGNORE.md": PROOT / "README.IGNORE.md",
         "_assets-flowchart.IGNORE.mmd": PROOT / "assets" / "flowchart.IGNORE.mmd",
@@ -121,6 +112,19 @@ def _run(args: argparse.Namespace) -> None:
 
     tmpl_dir = Path(__file__).resolve().parent / "_templates_proj"
     utils.copy_templates(transfers=transfers, tmpl_dir=tmpl_dir)
+
+    # =================================================================
+    # === __init__.py files
+    # =================================================================
+    utils.create_init_dot_py(PROOT / "src" / args.name)
+    # > This is copied
+    utils.create_init_dot_py(
+        PROOT / "src" / args.name / "utils",
+        imports=["stdlib", "path_resolver"],
+        flatten_functions=True,
+        # < x = u.stdlib.my_function()
+        # < import <my_project>.utils as u
+    )
 
     # =================================================================
     # === Placeholder substitution

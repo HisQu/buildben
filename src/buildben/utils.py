@@ -7,6 +7,8 @@ import subprocess
 import shutil
 from pathlib import Path
 from textwrap import dedent
+import ast
+from collections.abc import Iterable
 
 from typing import Iterable, Sequence
 
@@ -147,27 +149,116 @@ def warn_dir_overwrite(dir: Path) -> None:
 
 
 # %%
-def create__init__(dir: Path, imports: Iterable[str] | None = None) -> None:
-    """
-    Creates dir/__init__.py. If *imports* is given, writes a
-    single line into the __init__.py.:  from . import <comma-separated
-    names>
+# =====================================================================
+# === Create __init__.py
+# =====================================================================
 
-    Parameters
-    ----------
-    dir : Path
-        Directory that should behave as a Python package.
-    imports : iterable[str] | None
-        Helper-module names to import eagerly, e.g. ("fileio", "pd").
-        Pass None (default) to leave the file empty.
-    """
-    init_path: Path = dir / "__init__.py"
+def _module_source_path(pkg_dir: Path, module_name: str) -> Path:
+    """Resolve a module name to a source path inside *pkg_dir*.
 
-    if imports:  # write the import line
-        line = f"from . import {', '.join(imports)}\n"
-        init_path.write_text(line, encoding="utf-8")
-    else:  # just “touch” the file
+    Supports:
+    - <pkg_dir>/<module_name>.py
+    - <pkg_dir>/<module_name>/__init__.py
+    """
+    file_path = pkg_dir / f"{module_name}.py"
+    if file_path.is_file():
+        return file_path
+
+    pkg_init = pkg_dir / module_name / "__init__.py"
+    if pkg_init.is_file():
+        return pkg_init
+
+    raise FileNotFoundError(
+        f"Cannot find module '{module_name}' as '{file_path}' or '{pkg_init}'."
+    )
+
+
+def _top_level_function_names(py_path: Path, include_private: bool) -> list[str]:
+    """Extract top-level function names (def/async def) from a Python source file."""
+    src = py_path.read_text(encoding="utf-8")
+    tree = ast.parse(src, filename=str(py_path))
+
+    names: list[str] = []
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if not include_private and node.name.startswith("_"):
+                continue
+            names.append(node.name)
+
+    names.sort()
+    return names
+
+
+def _format_from_import_block(module_name: str, names: list[str]) -> str:
+    """Format a re-export block: from .mod import (a, b, c)."""
+    if not names:
+        return ""
+
+    lines: list[str] = [f"from .{module_name} import (\n"]
+    for name in names:
+        lines.append(f"    {name},\n")
+    lines.append(")\n")
+    return "".join(lines)
+
+
+def create_init_dot_py(
+    pkg_dir: Path,
+    imports: Iterable[str] | None = None,
+    *,
+    flatten_functions: bool = False,
+    include_private: bool = False,
+) -> None:
+    """Create ``__init__.py`` inside *pkg_dir*.
+
+    If *imports* is provided, write::
+
+        from . import <comma-separated names>
+
+    If *flatten_functions* is True, also re-export top-level functions from each
+    listed module, so users can do::
+
+        import my_project.utils as u
+        u.some_function(...)
+
+    :param pkg_dir: Directory that should behave as a Python package.
+    :param imports: Module names to import eagerly, relative to *pkg_dir*.
+    :param flatten_functions: If True, re-export top-level functions from each module.
+    :param include_private: If True, include names starting with ``_``.
+    :raises FileNotFoundError: If a requested module file cannot be found.
+    :raises ValueError: If flattened function names collide across modules.
+    """
+    init_path = pkg_dir / "__init__.py"
+    modules = list(imports) if imports else []
+
+    if not modules:
         init_path.touch(exist_ok=True)
+        return
+
+    parts: list[str] = [f"from . import {', '.join(modules)}\n"]
+
+    if flatten_functions:
+        seen: dict[str, str] = {}
+
+        for module_name in modules:
+            source_path = _module_source_path(pkg_dir, module_name)
+            func_names = _top_level_function_names(
+                source_path, include_private=include_private
+            )
+
+            for fn in func_names:
+                prev = seen.get(fn)
+                if prev is not None and prev != module_name:
+                    raise ValueError(
+                        f"Flattened name conflict: '{fn}' in both '{prev}' and '{module_name}'."
+                    )
+                seen[fn] = module_name
+
+            block = _format_from_import_block(module_name, func_names)
+            if block:
+                parts.append("\n")
+                parts.append(block)
+
+    init_path.write_text("".join(parts), encoding="utf-8")
 
 
 # %%
