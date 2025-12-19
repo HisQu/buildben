@@ -9,6 +9,9 @@ from importlib.machinery import ModuleSpec
 
 from types import ModuleType
 
+# --- Deps -----------------------------
+from dotenv import dotenv_values, find_dotenv
+
 try:
     from holylog import LOG
 except ImportError:
@@ -51,31 +54,85 @@ def package_root_dir(mod: ModuleType) -> Path:
     )
 
 
-def require_env(var_name: str) -> str:
-    """Return a required environment variable or raise.
+def _read_dotenv_var(env_file: Path, var_name: str) -> str | None:
+    """Read *var_name* from *env_file* without mutating os.environ."""
+    env_path = env_file.expanduser().resolve()
+    if not env_path.is_file():
+        raise RuntimeError(f".env file not found: {env_path}")
+
+    values = dotenv_values(
+        env_path
+    )  # < Returns dict. Does not set os.environ. :contentReference[oaicite:1]{index=1}
+    return values.get(var_name)
+
+
+def require_env(
+    var_name: str,
+    *,
+    env_file: str | Path | None = None,
+    allow_os_env: bool = True,
+) -> str:
+    """Return a required variable from a specific .env file or os.environ, or raise.
+
+    Resolution order:
+    1) env_file (If provided)
+    2) os.environ (If allow_os_env=True)
 
     :param var_name: Environment variable name.
+    :param env_file: Optional path to a specific .env file to read.
+    :param allow_os_env: If False, do not consult os.environ.
     :raises RuntimeError: If the variable is not set or empty.
     """
-    value = os.getenv(var_name)
+    value: str | None = None
+
+    if env_file is not None:
+        env_file = Path(find_dotenv(str(env_file)))
+        value = _read_dotenv_var(env_file, var_name)
+    if (value is None or not value.strip()) and allow_os_env:
+        value = os.getenv(var_name)
     if value is None or not value.strip():
+        where = []
+        if env_file is not None:
+            where.append(f".env file ({Path(env_file).expanduser().resolve()})")
+        if allow_os_env:
+            where.append("process environment")
+        where_txt = " and ".join(where) if where else "nowhere"
+
         raise RuntimeError(
             f"Missing required environment variable: {var_name}\n"
-            f"Set it in your shell or .env, e.g.\n"
+            f"Searched: {where_txt}\n"
+            f"Set it, e.g.\n"
             f"  {var_name}=/absolute/path/to/opa_rag"
         )
     return value
 
 
-def get_local_dir_from_env(env_var: str) -> Path:
+def get_local_dir_from_env(
+    env_var: str,
+    *,
+    env_file: str | Path | None = None,
+    allow_os_env: bool = True,
+) -> Path:
     """Return the local root directory for user-writable resources.
 
-    Enforced via environment variable to keep behavior deterministic.
+    Enforced via a single source to keep behavior deterministic.
 
     :param env_var: Name of the env var holding the root path.
+    :param env_file: Optional path to a specific .env file to read.
+    :param allow_os_env: If False, do not consult os.environ.
     """
-    root = Path(require_env(env_var)).expanduser().resolve()
-    LOG.info(f"Using '{env_var}' from environment: '{root}'.")
+    root = (
+        Path(require_env(env_var, env_file=env_file, allow_os_env=allow_os_env))
+        .expanduser()
+        .resolve()
+    )
+    if env_file is not None:
+        env_file = Path(env_file)
+        LOG.info(
+            f"Using '{env_var}' from .env file '{Path(env_file).expanduser().resolve()}': '{root}'."
+        )
+    else:
+        LOG.info(f"Using '{env_var}' from environment: '{root}'.")
     return root
 
 

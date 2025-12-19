@@ -92,13 +92,15 @@ def _run(args: argparse.Namespace) -> None:
         ### PR_ROOT:
         "_gitignore": PROOT / ".gitignore",
         "_pyproject.toml": PROOT / "pyproject.toml",
-        "_envrc": PROOT / ".envrc",
+        "_.envrc": PROOT / ".envrc",
+        "_.env.template": PROOT / ".env.template",
         "_justfile": PROOT / "justfile",
         ### PR_ROOT/.github:
         "_github-codecov.yml": PROOT / ".github" / "workflows_inactive" / "codecov.yml",
         "_github-CI_ubuntu_uv.yml": PROOT / ".github" / "workflows_inactive" / "CI_ubuntu_uv.yml",
         ### PR_ROOT/src:
         "_src-main.py": PROOT / "src" / args.name / "main.py",
+        "_src-paths.py": PROOT / "src" / args.name / "paths.py",
         ### PR_ROOT/src/utils:
         "_utils-stdlib.py": PROOT / "src" / args.name / "utils" / "stdlib.py",
         "_utils-path_resolver.py": PROOT / "src" / args.name / "utils" / "path_resolver.py",

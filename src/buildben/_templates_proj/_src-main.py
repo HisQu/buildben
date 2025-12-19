@@ -1,6 +1,4 @@
-"""
-Template file
-"""
+"""Entry Point"""
 
 # %%
 # --- Standard Lib --------
@@ -13,20 +11,13 @@ from IPython.display import display
 import pandas as pd
 
 # --- Local Imports -------
-# import <my_project>.utils as u
+import <my_project>.utils as ut
+import <my_project>.paths as P
+
 
 # --- Typing --------------
 from typing import Any
 
-
-# %%
-# --- Environment Variables ---
-# from <my_project> import env
-
-# env.env.read_str("ENV_VAR")  # < env.env is an instance of environs.Env
-# env.env.read_env(".paths.env")  # < Load local .env files like this
-# if __name__ == "__main__":
-    # env.load_direnv()  # < Loads .envrc from project root for development tasks
 
 
 # %%
@@ -34,6 +25,7 @@ from typing import Any
 
 # %%
 if __name__ == "__main__":
-    from pprint import pprint
-
-    # %%
+    with ut.timer("Main Test Script Execution"):
+        print(P.ROOT_PKG)
+        
+        from pprint import pprint
