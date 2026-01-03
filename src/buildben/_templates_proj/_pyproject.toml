@@ -23,6 +23,7 @@ dependencies = [
     # "dotenv",      # < Loads .env files
     "environs",      # < Loads .env files, but better
     "loguru",        # < Logging library
+    "tyro",          # < CLI argument parser
     # --- Pretty Stuff -------------------
     "tabulate",      # < Pretty tables
     "tqdm",          # < Progress bars
@@ -30,7 +31,8 @@ dependencies = [
     # --- Numerical ----------------------
     "numpy",
     "openpyxl",      # < Opens excel files
-    "pandas",
+    # "pandas",
+    # "pillow",        # < Image processing
     # --- Plotting -----------------------
     # "matplotlib",
     # "seaborn",
