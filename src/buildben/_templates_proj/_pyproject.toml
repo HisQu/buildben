@@ -17,12 +17,16 @@ readme      = "README.md"
 license     = "MIT"
 requires-python = ">=3.12"
 dependencies = [
+    # === Install from PyPI ===================================
     # --- Core packages ------------------
     "ipykernel",
     "ipywidgets",    # < e.g. For loading bars
     # "dotenv",      # < Loads .env files
     "environs",      # < Loads .env files, but better
     "loguru",        # < Logging library
+    # --- CLI ---------------------------
+    "typer",  # < CLI from functions
+    "tyro",   # < CLI from dataclasses
     # --- Pretty Stuff -------------------
     "tabulate",      # < Pretty tables
     "tqdm",          # < Progress bars
@@ -41,7 +45,22 @@ dependencies = [
     # "tiktoken",
     # "openai",
     # "torch",
+
+    # === Install from Github =================================
+    # "neddata @ git+https://github.com/HisQu/neddata.git",
+
+    # === Install as editable =================================
+    # "haiu"  # < Specify below under [tool.uv.sources] and [tool.pyright]  !
 ]
+
+# == This Allows refactoring across repo boundaries
+# !! Comment out before packaging !!
+# [tool.uv.sources]
+# haiu = { path = "../haiu", editable = true }
+# [tool.pyright]
+# include = ["src", "../haiu/src"]
+# extraPaths = ["src", "../haiu/src"]
+
 
 
 # =====================================================================
@@ -51,6 +70,7 @@ dependencies = [
 [dependency-groups]
 ### pip install -e .[dev]
 dev = [
+    # === Install from PyPI ===================================
     # --- Interactive development -------
     "jupyterlab",    # < Brings notebook, widgets, ipykernel, etc.
     # "ipywidgets",  # < e.g. For loading bars. Broken at this point?
@@ -68,11 +88,9 @@ dev = [
     "seaborn",
     # "plotastic",
     # "scipy",
-    # --- IO ----------------------------
+    # --- IO -----------------------------
     "dill",          # < Extended pickle for complex objects
     # "sacred",        # < Experiment management
-    # ---Example Data --------------
-    # "neddata @ git+https://github.com/HisQu/neddata.git",
 ]
 
 # =====================================================================

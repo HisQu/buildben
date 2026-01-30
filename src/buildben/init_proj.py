@@ -36,7 +36,7 @@ def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
         "-t",
         "--target-dir",
         default=".",
-        help="Directory in which to create project",
+        help="(Parent-)Directory in which to create a project-directory",
     )
     p.add_argument(
         "-g", "--git-init", action="store_true", help="Initialise git repo"
