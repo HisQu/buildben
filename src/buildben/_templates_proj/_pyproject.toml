@@ -34,7 +34,8 @@ dependencies = [
     # --- Numerical ----------------------
     "numpy",
     "openpyxl",      # < Opens excel files
-    "pandas",
+    # "pandas",
+    # "pillow",        # < Image processing
     # --- Plotting -----------------------
     # "matplotlib",
     # "seaborn",
