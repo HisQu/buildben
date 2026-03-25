@@ -138,24 +138,11 @@ where = ["src"]                       # < Scan only src/ for packages
 # === Tool configurations
 # =====================================================================
 
-# Black code-formatter defaults
-[tool.black]
-line-length = 88
-target-version = ["py312"]
-exclude = '''
-/(
-    \.venv
-  | venv
-  | \.direnv
-  | build
-  | dist
-)/
-'''
-
-# Ruff (linter) – keep rules in sync with Black
+# Ruff (linter and formatter)
 [tool.ruff]
-line-length = 88
-unsafe-fixes = true
+line-length = 80
+# unsafe-fixes = true
+
 
 # Pytest configration (This replaces `pytest.ini`)
 [tool.pytest.ini_options]
