@@ -78,7 +78,8 @@ dev = [
     "jupytext",      # < Jupyter Notebook export
     # --- Testing ----------------------
     "pytest>=8.2",
-    # "pytest-xdist",     # < Multi-core testing
+    "pytest-asyncio",  # < Async testing
+    "pytest-xdist",    # < Multi-core testing
     # "pytest-cov",       # < Code-Coverage
     # --- Linting / formatting ---------
     # "black>=25.1",
@@ -146,7 +147,7 @@ line-length = 80
 
 # Pytest configration (This replaces `pytest.ini`)
 [tool.pytest.ini_options]
-# addopts = "-ra -q"   # < run tests quietly, show only errors and warnings
+addopts = "-n auto"  # < Use as many cores as available
 testpaths = ["tests"]
 
 # ===========================
