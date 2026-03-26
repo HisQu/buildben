@@ -147,7 +147,7 @@ line-length = 80
 
 # Pytest configration (This replaces `pytest.ini`)
 [tool.pytest.ini_options]
-addopts = "-n auto"  # < Use as many cores as available
+addopts = "-n 6"  # < Use 6 cores
 testpaths = ["tests"]
 
 # ===========================
