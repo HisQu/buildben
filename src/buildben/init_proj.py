@@ -93,6 +93,7 @@ def _run(args: argparse.Namespace) -> None:
         "_gitignore": PROOT / ".gitignore",
         "_pyproject.toml": PROOT / "pyproject.toml",
         "_.envrc": PROOT / ".envrc",
+        "_.envrc.private": PROOT / ".envrc.private",
         "_.env.template": PROOT / ".env.template",
         "_justfile": PROOT / "justfile",
         ### PR_ROOT/.github:

@@ -1,45 +1,46 @@
-# === Logs =============================================================
+# === Logs ======================================================
 *logs*/
 .logs*/
 
-# === Data =============================================================
+# === Data ======================================================
 data/
 db/
 .alt/
 .old/
 
-# === buildben templates ===============================================
+# === buildben templates ========================================
 # These are ignored until renamed to prevent premature publishing
 *.bb_template*
 *.IGNORE*
 .IGNORE/
 
-# === Development ======================================================
+# === Development ===============================================
 .devtools/
 .vscode/
 # .gitignore
 
-# === .env =============================================================
+# === .env ======================================================
+.envrc.private
 .env
 .secrets.env
 .env.secrets
 .env.secret
 .env.prod
+.env.local
+.env.1password
 # .envrc
-*Zone.Identifier
 
-# === Virtual Environments =============================================
+# === Virtual Environments ======================================
 .venv/
 venv/
 venv.bak/
 .direnv/
 CACHEDIR.TAG
 
-# === Docker ===========================================================
+# === Docker ====================================================
 .docker/
 
-# === Jupyter ==========================================================
-.ipynb_checkpoints
+# === Jupyter ===================================================
 */.ipynb_checkpoints/*
 *.interactive
 
@@ -47,7 +48,7 @@ CACHEDIR.TAG
 profile_default/
 ipython_config.py
 
-# === Python ===========================================================
+# === Python ====================================================
 ### Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -159,7 +160,7 @@ poetry.toml
 ### LSP config files
 pyrightconfig.json
 
-# === MacOS ============================================================
+# === MacOS =====================================================
 .DS_Store
 .AppleDouble
 .LSOverride
@@ -189,5 +190,6 @@ Temporary Items
 # iCloud generated files
 *.icloud
 
-# === Windows ==========================================================
+# === Windows ===================================================
 ~$*
+*Zone.Identifier
