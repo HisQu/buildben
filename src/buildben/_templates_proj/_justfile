@@ -1,6 +1,6 @@
-# ============================================================================
+# ===============================================================
 # Justfile for Python projects using uv + pyproject.toml
-# ============================================================================
+# ===============================================================
 # Why this exists:
 # - One command to install exactly what's in uv.lock (safe for CI).
 # - A clear, explicit path to re-lock/upgrade when you WANT changes.
@@ -12,7 +12,7 @@
 #   See: uv concepts: lock/sync, uv export, uv pip compile.
 #
 # Dependencies: uv (and optionally direnv). Python itself is handled by uv.
-# =====================================================================
+# ===============================================================
 
 # Let recipes use Bash features and fail-fast in pipelines
 set shell := ["bash", "-euo", "pipefail", "-c"]
@@ -21,9 +21,9 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 default:
     @just --list
 
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------
 # Internal guards (kept private so they don't clutter `just --list`)
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------
 [private]
 _note-direnv:
     @if command -v direnv >/dev/null; then \
@@ -39,9 +39,9 @@ _check-uv:
     }
 
 
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------
 # Clean / environment helpers
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------
 
 # Remove transient junk: uv cache,  __pycache__, .pytest_cache, .mypy_cache, .ruff_cache. Does NOT touch uv.lock or your venv.
 clean:
@@ -56,9 +56,9 @@ reset-venv:
     rm -rf "$UV_PROJECT_ENVIRONMENT" || true
     direnv reload || true
 
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------
 # Install flows
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------
 # Key rule: CI and teammates should *not* relock by accident.
 # We therefore install with `--locked` which errors if uv.lock is stale.
 # If it errors, you intentionally run `just lock` or `just upgrade`.
@@ -71,9 +71,9 @@ sync:
     just _check-uv
     uv sync --all-extras --locked
 
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------
 # Locking and upgrading
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------
 # Examples:
 #   just lock                   # resolve using current constraints
 #   just lock --upgrade         # allow upgrades while resolving
@@ -152,9 +152,9 @@ py-switch version="3.14":
 
 
 
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------
 # Testing
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------
 
 # Run GitHub Actions triggered by push locally using act
 gitactions:
@@ -166,9 +166,9 @@ gitactions:
 
 
 
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------
 # Convenience
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------
 
 # Example: just run -- python -m yourpkg --help
 # Runs your package’s CLI or module under the locked environment.
@@ -189,7 +189,7 @@ diagnose:
     uv sync --check
 
 
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------
 # Example recipe written in python (executes venv/python):
 # pyyy:
 #     #!/usr/bin/env python3

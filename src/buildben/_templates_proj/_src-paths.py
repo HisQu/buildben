@@ -29,14 +29,14 @@ D_<NAME>     # Directory
 # =====================================================================
 # !! Read-only! ---
 
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------
 # -- Package Root 
 import <my_project>
 
 ROOT_PKG: Path = ut.package_root_dir(<my_project>)
 LOG.debug(f"📂 Opa-Rag package directory: '{ROOT_PKG}'")
 
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------
 # -- Paths to Resources
 # D_PROMPTS = ROOT_PKG / "prompt"
 # TEMPLATES_YAML = D_PROMPTS / "templates.yaml"
@@ -52,7 +52,7 @@ LOG.debug(f"📂 Opa-Rag package directory: '{ROOT_PKG}'")
 # =====================================================================
 # > Stuff the program reads & writes somewhere on the filesystem outside of the package
 
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------
 # -- Storage Root from env variable
 
 ROOT_STORAGE = ut.get_local_dir_from_env(
@@ -60,14 +60,14 @@ ROOT_STORAGE = ut.get_local_dir_from_env(
     env_file=".env.template",
 )
 
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------
 # -- Top Level Dirs
 
 # D_CORPUS = ROOT_STORAGE / "rag_corpus"
 # D_WORKDIR = ROOT_STORAGE / "rag_workdir"
 # D_RETRIEVED = ROOT_STORAGE / "rag_retrieved"
 
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------
 # -- Sub Dirs and Files
 
 # D_TEXTS = D_CORPUS / "texts"
@@ -81,7 +81,7 @@ ROOT_STORAGE = ut.get_local_dir_from_env(
 # ENT_JSON = D_ONTO / "from_owl-entities.json"
 # REL_JSON = D_ONTO / "from_owl-relationships.json"
 
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------
 # -- Output files
 
 # SUBSET_OWL = D_RETRIEVED / "from_lightrag_subset.owl"
