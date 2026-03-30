@@ -16,9 +16,7 @@ authors     = [{ name = "markur4", email = "you@example.com" }]
 readme      = "README.md"
 license     = "MIT"
 requires-python = ">=3.12"
-dependencies = [
-    "pytest>=9.0.2",
-]
+dependencies = []
 # !! Dependencies would clutter the OS-Python! 
 # !! We can't call pipx from pyproject.toml!
 # dependencies = []  # !! -> LEAVE EMPTY !!!
@@ -46,7 +44,7 @@ where = ["src"]                       # < Scan only src/ for packages
 
 
 # =====================================================================
-# === Extra Dependencies 
+# === Optional Dependencies
 # =====================================================================
 
 [project.optional-dependencies]
@@ -55,8 +53,8 @@ dev = [
 #     # --- Packaging helpers ------------
 #     "pip-tools>=7.4",   # < Installed in .direnv venv
 #     # --- Testing ----------------------
-    "pytest>=8.2",
-#     "pytest-xdist",     # < Multi-core testing
+    "pytest>=9.0.2",
+    "pytest-xdist",     # < Multi-core testing
 #     "pytest-cov",       # < Code-Coverage
 #     # --- Linting / formatting ---------
 #     # "black>=25.1",
@@ -76,6 +74,10 @@ bube = "buildben.cli:main"
 # =====================================================================
 # === Tool configurations
 # =====================================================================
+
+[tool.pytest.ini_options]
+addopts = "-n 6"  # < Use 6 cores
+testpaths = ["tests"]
 
 [tool.pip-tools]
 generate-hashes = true

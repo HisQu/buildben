@@ -65,10 +65,10 @@ dependencies = [
 
 
 # =====================================================================
-# === Extra Dependencies
+# === Optional Dependencies
 # =====================================================================
 
-[dependency-groups]
+[project.optional-dependencies]
 ### pip install -e .[dev]
 dev = [
     # === Install from PyPI ===================================

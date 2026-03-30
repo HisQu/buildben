@@ -38,9 +38,8 @@ def _run(cmd: list[str], *, cwd: Path, env: dict[str, str]) -> None:
 @pytest.fixture()
 def bube_test_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Create a scaffolded project named 'bube_test_tmp' and clean it up afterwards."""
-    # == Import your scaffolder =================================================
-    # > This assumes your scaffolder code is in src/myproj/main.py
-    from myproj import main as scaffolder
+    # == Import the real scaffolder =============================================
+    import buildben.init_proj as scaffolder
 
     # -- Make the test non-interactive -----------------------------------------
     # > If warn_dir_overwrite ever prompts, CI will hang. Nobody wants that.
@@ -94,5 +93,4 @@ def test_scaffolded_project_runs_pytest(bube_test_project: Path) -> None:
     env["PYTHONPATH"] = src_dir + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
 
     _run([sys.executable, "-m", "pytest", "-q"], cwd=proot, env=env)
-
 

@@ -69,7 +69,7 @@ reset-venv:
 sync:
     just _note-direnv
     just _check-uv
-    uv sync --all-groups --locked
+    uv sync --all-extras --locked
 
 # ---------------------------------------------------------------------
 # Locking and upgrading
@@ -88,7 +88,7 @@ lock *ARGS:
 # Re-lock with --upgrade & install from the new lock.
 upgrade *ARGS:
     just lock --upgrade {{ARGS}}
-    uv sync --all-groups --locked
+    uv sync --all-extras --locked
 
 
 # Re-lock with --upgrade ONLY git-based dependencies & uv sync from the new lock.
@@ -100,7 +100,7 @@ upgrade-repos *ARGS:
         # --upgrade-package embedding \
         # --upgrade-package haiu \
         {{ARGS}}
-    uv sync --all-groups --locked
+    uv sync --all-extras --locked
 alias uprep := upgrade-repos
 
 
@@ -143,7 +143,7 @@ py-switch version="3.14":
     # Re-lock and install from the new lock.
     uv lock --upgrade --python {{version}}
     uv export -o pylock.toml --quiet
-    uv sync --all-groups --locked
+    uv sync --all-extras --locked
     # Sanity print
     python -c 'import sys, sysconfig; print(sys.version); print(sys.executable)'
     echo "✅ Upgraded Python to {{version}} and re-synced dependencies."

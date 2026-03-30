@@ -1,31 +1,22 @@
-"""Entry Point"""
+"""Minimal module entry point for <my_project>."""
 
-# %%
-# --- Standard Lib --------
-# from pprint import pprint
-from rich import print as rprint
-from pathlib import Path
+from __future__ import annotations
 
-# --- Dependencies --------
-from IPython.display import display
-import pandas as pd
-
-# --- Local Imports -------
-import <my_project>.utils as ut
-import <my_project>.paths as P
+import argparse
 
 
-# --- Typing --------------
-from typing import Any
+def build_parser() -> argparse.ArgumentParser:
+    """Create the starter CLI parser for the scaffolded project."""
+    return argparse.ArgumentParser(
+        prog="<my_project>",
+        description="Starter entry point for the scaffolded project.",
+    )
 
 
+def main() -> None:
+    """Parse CLI arguments for the scaffolded project entry point."""
+    build_parser().parse_args()
 
-# %%
 
-
-# %%
 if __name__ == "__main__":
-    with ut.timer("Main Test Script Execution"):
-        print(P.ROOT_PKG)
-        
-        from pprint import pprint
+    main()

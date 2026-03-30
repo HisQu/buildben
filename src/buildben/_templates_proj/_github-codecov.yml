@@ -8,17 +8,15 @@ jobs:
     runs-on: ubuntu-latest
     name: Setup testenv, run tests, upload coverage  
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-python@v2
+    - uses: actions/checkout@v5
+    - uses: astral-sh/setup-uv@v7
       with:
-        python-version: '3.11'
-    # => pip freeze > requirements.txt
-    - name: Install requirements 
-      run: pip install -r requirements.txt
-    - name: Install <my_project> (in editable mode! Otherwise 0% coverage)
-      run: pip install -e .[dev]
+        python-version: '3.12'
+        enable-cache: auto
+    - name: Install project from uv.lock
+      run: uv sync --locked --all-extras
     - name: Run tests and collect coverage
-      run: pytest tests --cov --cov-report=xml 
+      run: uv run --locked pytest tests --cov --cov-report=xml 
     - name: Upload coverage reports to Codecov with GitHub Action
       uses: codecov/codecov-action@v3
       with:
