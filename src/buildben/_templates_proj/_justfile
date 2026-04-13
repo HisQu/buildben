@@ -50,11 +50,12 @@ clean:
     rm -rf .pytest_cache .mypy_cache .ruff_cache dist build *.egg-info || true
     uv cache prune -y || true
 
-# If you use direnv-managed venvs, this rebuilds it from scratch. Safe to run even if you don't use direnv; it just no-ops on reload failure.
+
+# Rebuilds python venv from uv.lock
 reset-venv:
-    @echo "♻ Rebuilding virtual environment (if present)..."
-    rm -rf "$UV_PROJECT_ENVIRONMENT" || true
-    direnv reload || true
+    @echo "♻ Rebuilding virtual environment..."
+    uv venv --seed --clear
+    uv sync --frozen --all-extras
 
 # ---------------------------------------------------------------
 # Install flows
