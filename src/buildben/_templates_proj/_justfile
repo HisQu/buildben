@@ -104,51 +104,24 @@ upgrade-repos *ARGS:
 alias uprep := upgrade-repos
 
 
-# --- Python upgrade -------
+# --- Switch python versions -------
 
-# Gets the currently uv-installed python version.
-py-version:
+# Switches major Python version for the project. Usage: just py-switch 3.13t
+py-switch version="3.13":
     #!/usr/bin/env bash
     set -euo pipefail
-    # Get current Python version (stderr-safe)
-    old="$(python -V 2>&1 | awk '{print $2}')"
-    # Match installed uv runtime id with that version
-    old_id="$(
-      uv python list --only-installed \
-      | awk -v v="$old" '$1 ~ "^cpython-" v "-" { print $1; exit }'
-    )"
-    printf '%s\n' "$old_id"
-
-# Usage:
-#   just py-switch                # default 3.13
-#   just py-switch 3.14      # when your requires-python allows it
-#   just py-switch 3.13t     # free-threaded (no-GIL) build
-# Rebuilds .venv with new python version (!! Must be allowed in pyproject.toml !!): pins, recreates venv, re-locks, syncs.
-py-switch version="3.14":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    just _check-uv
-    # Get old version for messages.
-    old=$(just python-version)
-    echo "🐍 Upgrading Python from $old to {{version}} ..."
-    # Update uv so it knows about new CPython patches (uv freezes runtime lists per release).
-    # Install latest patch for this minor (or explicit variant like 3.13t).
-    # Record the project’s interpreter request in .python-version.
-    uv self update
+    echo "🐍 Switching project Python to {{version}}"
+    # > Ensure the requested interpreter exists.
     uv python install {{version}}
+    # > Persist the project's default interpreter request.
     uv python pin {{version}}
-    # Recreate the venv with that interpreter. ($PWD points to parent dir of justfile).
-    rm -rf "$UV_PROJECT_ENVIRONMENT"
-    uv venv --python {{version}} --seed "$UV_PROJECT_ENVIRONMENT"
-    # Re-lock and install from the new lock.
-    uv lock --upgrade --python {{version}}
-    uv export -o pylock.toml --quiet
-    uv sync --all-extras --locked
-    # Sanity print
-    python -c 'import sys, sysconfig; print(sys.version); print(sys.executable)'
-    echo "✅ Upgraded Python to {{version}} and re-synced dependencies."
-    echo "🧹 Remove old version with:"
-    echo "      uv python uninstall $old"
+    # > Recreate the project venv with that interpreter.
+    uv venv --python {{version}} --seed --clear
+    # > Sync dependencies for the recreated environment.
+    uv sync --all-extras
+    # > Verify via uv, so shell activation state cannot mislead you.
+    uv run python -c 'import sys; print(sys.version); print(sys.executable)'
+
 
 
 
