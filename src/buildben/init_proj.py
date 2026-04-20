@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
+
 import argparse
 import re
 
@@ -11,7 +12,6 @@ from pathlib import Path
 from textwrap import dedent
 
 from . import utils
-
 
 # ================================================================== #
 # === CLI wiring                                                     #
@@ -71,6 +71,7 @@ def _run(args: argparse.Namespace) -> None:
         PROOT / "tests",
         PROOT / "assets",
         PROOT / "examples",
+        PROOT / ".codex",
         # PR_ROOT / "experiments",
         PROOT / ".github" / "workflows",
         PROOT / ".github" / "workflows_inactive",
@@ -96,6 +97,9 @@ def _run(args: argparse.Namespace) -> None:
         "_.envrc.private": PROOT / ".envrc.private",
         "_.env.template": PROOT / ".env.template",
         "_justfile": PROOT / "justfile",
+        "_AGENTS.md": PROOT / "AGENTS.md",
+        ### PR_ROOT/.codex
+        "_.codex_config.toml": PROOT / ".codex" / ".codex_config.toml",
         ### PR_ROOT/.github:
         "_github-codecov.yml": PROOT / ".github" / "workflows_inactive" / "codecov.yml",
         "_github-CI_ubuntu_uv.yml": PROOT / ".github" / "workflows_inactive" / "CI_ubuntu_uv.yml",
