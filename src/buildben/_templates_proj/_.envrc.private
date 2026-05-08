@@ -3,12 +3,12 @@
 # > Get this path in Powershell using `where.exe op`
 OP="/mnt/c/Users/kuric/AppData/Local/Microsoft/WinGet/Packages/AgileBits.1Password.CLI_Microsoft.Winget.Source_8wekyb3d8bbwe/op.exe"
 
-dotenv <(
+eval "$(
   "$OP" inject <<'EOF'
-HAIURAG_GITHUB_API_PAT="{{ op://HisQu/HISQU_GH_PAT/Anmeldedaten }}"
-HAIU_OPENAI_API_KEY="{{ op://HisQu/SAIA_APIKEY_GS/Anmeldedaten }}"
+export HAIURAG_GITHUB_API_PAT="{{ op://HisQu/HISQU_GH_PAT/Anmeldedaten }}"
+export HAIU_OPENAI_API_KEY="{{ op://HisQu/SAIA_APIKEY_GS/Anmeldedaten }}"
 EOF
-)
+)"
 
 
 
