@@ -23,7 +23,8 @@ dependencies = [
     "ipywidgets",    # < e.g. For loading bars
     # "dotenv",      # < Loads .env files
     "environs",      # < Loads .env files, but better
-    "loguru",        # < Logging library
+    # "loguru",        # < Logging library
+    "structlog",     # < Stdlib-backed structured logging
     # --- CLI ---------------------------
     "typer",  # < CLI from functions
     "tyro",   # < CLI from dataclasses
