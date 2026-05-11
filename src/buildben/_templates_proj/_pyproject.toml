@@ -74,24 +74,22 @@ dev = [
     # === Install from PyPI ===================================
     # --- Interactive development -------
     "jupyterlab",    # < Brings notebook, widgets, ipykernel, etc.
-    # "ipywidgets",  # < e.g. For loading bars. Broken at this point?
-    "jupytext",      # < Jupyter Notebook export
+    "ipywidgets",    # < Needed for interactive widgets; also installs/configures widget frontend support.
+    # "jupytext",    # < Needed for paired text notebooks / .py notebook workflows.
     # --- Testing ----------------------
     "pytest>=8.2",
     "pytest-asyncio",  # < Async testing
     "pytest-xdist",    # < Multi-core testing
     # "pytest-cov",       # < Code-Coverage
-    # --- Linting / formatting ---------
-    # "black>=25.1",
-    # "ruff>=0.4",
+    # --- Code-Quality ---------
+    "pyright>=1.1",  # < Type checker
+    "ruff>=0.4",  # < Linter and formatter
     # "mypy>=1.10",
     # --- Plotting -----------------------
     "matplotlib",
     "seaborn",
     # "plotastic",
-    # "scipy",
     # --- IO -----------------------------
-    "dill",          # < Extended pickle for complex objects
     # "sacred",        # < Experiment management
 ]
 
@@ -138,6 +136,23 @@ where = ["src"]                       # < Scan only src/ for packages
 # =====================================================================
 # === Tool configurations
 # =====================================================================
+
+# -- Pylance prioritizes this over vs. code-level settings!
+[tool.pyright]
+typeCheckingMode = "basic"
+pythonVersion = "3.12"  # Enforce the minimum supported python version
+pythonPlatform = "All"
+include = ["src"]
+exclude = [
+    "tests", # < Tests may be dirty.
+    "**/example_data",
+    "**/old",
+    "**/__pycache__",
+    "venv", ".venv", ".direnv",
+    "build", "dist", "*.egg-info",
+    "**/node_modules", 
+    "**/.*",
+]
 
 # Ruff (linter and formatter)
 [tool.ruff]
