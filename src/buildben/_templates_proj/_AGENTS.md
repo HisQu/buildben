@@ -9,8 +9,13 @@
 
 ## Project rules
 - Do not duplicate helpers or re-implement existing utilities without checking first.
+- Import `<my_project>`-owned utility helpers through the facade: `import haiu.utils as ut`.
+- Use explicit `ut.` prefixes at call sites, for example `LOG = ut.get_logger(__name__)`.
+- For facade `__init__.py` files, prefer clean batch re-export imports plus file-level `# ruff: noqa: F401`; do not use redundant `symbol as symbol` aliases solely to satisfy Ruff.
 - Update `README.md` if a change affects usage or setup.
 - Add minimal `__main__` demo code only when it improves discoverability or manual testing.
+- If a test needs a lighter setup, add or reuse a dedicated test helper instead of widening production code to `Any`.
+- If a boundary is truly dynamic, model that boundary explicitly; do not probe strict domain objects defensively.
 
 ## Verification
 - Review the diff for duplicate helpers, naming drift, unnecessary abstractions, and regressions.
