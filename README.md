@@ -57,7 +57,7 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 
 
 <div align="center">
-<img src="https://raw.githubusercontent.com/HisQu/buildben/refs/heads/main/assets/figures/graphical-abstract_init-proj/graphical-abstract_init-proj-graphviz.svg" alt="graphical-abstract_init-proj-graphviz.svg" width="600px" style="background-color:transparent">
+<img src="./assets/figures/graphical-abstract_init-proj-graphviz.svg" alt="graphical-abstract_init-proj-graphviz.svg" width="600px" style="background-color:transparent">
   <p><em> 
   <b> Graphical Abstract </b>
   </em></p>
@@ -161,7 +161,7 @@ bube        # Prints help when no args are given
 
 
 <div align="center">
-<img src="https://raw.githubusercontent.com/HisQu/buildben/main/assets/figures/diagram/diagram-graphviz.svg" alt="diagram-graphviz.svg" width="1000px" style="background-color:transparent">
+<img src="./assets/figures/diagram-graphviz.svg" alt="diagram-graphviz.svg" width="1000px" style="background-color:transparent">
   <p><em> 
   <b> Architecture of projects </b>
   </em></p>
@@ -296,7 +296,7 @@ sudo apt-get install graphviz              # For Ubuntu
 #### Render the repository figures:
 
 ```bash
-uv run python assets/figures/render_all_figs.py
+uv run python tools/render_figures/all_figs.py
 ```
 <br>
 
@@ -402,4 +402,3 @@ direction LR
   Clothes --o Human : "0..*" (aggregation)
 
 ```
-

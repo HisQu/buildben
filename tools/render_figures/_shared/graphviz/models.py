@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from graphviz_support.theme import NODE_BORDER, RECT_FILL
+from _shared.graphviz.theme import NODE_BORDER, RECT_FILL
 
 
 # ===============================================================

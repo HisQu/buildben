@@ -67,7 +67,7 @@
 <!-- Graphical Abstract goes here: -->
 <!-- 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/HisQu/buildben/main/assets/figures/diagram/diagram-graphviz.svg"
+  <img src="https://github.com/HisQu/buildben/raw/main/assets/figures/diagram-graphviz.svg"
        width="800px" alt="Management of Virtual Environments & Dependencies" >
   <p><em> 
   <b> Graphical Abstract: </b> 
@@ -218,4 +218,3 @@ python -m {my_project} sample_data.csv --output plot.png
 
 
 <br>
-

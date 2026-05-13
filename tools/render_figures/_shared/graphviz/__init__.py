@@ -1,6 +1,6 @@
 """Shared helpers for repository-local Graphviz figure scripts."""
 
-from graphviz_support.drawing import (
+from _shared.graphviz.drawing import (
     add_classifier_node,
     add_package,
     add_text_box,
@@ -8,9 +8,9 @@ from graphviz_support.drawing import (
     create_graph,
     invisible_edge,
 )
-from graphviz_support.models import ClassifierNode, TextBox
-from graphviz_support.rendering import render_figure
-from graphviz_support.theme import (
+from _shared.graphviz.models import ClassifierNode, TextBox
+from _shared.graphviz.rendering import render_figure
+from _shared.graphviz.theme import (
     BLACK,
     BLUE,
     BLUE_FILL,

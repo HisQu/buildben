@@ -85,7 +85,7 @@ I myself don't understand them fully either, *I simply trust the best practices.
 
 
 <center>
-<img src="../figures/graphical-abstract_init-proj/graphical-abstract_init-proj-graphviz.svg" alt="graphical-abstract_init-proj-graphviz.svg" width="900px" style="background-color:transparent">
+<img src="../figures/graphical-abstract_init-proj-graphviz.svg" alt="graphical-abstract_init-proj-graphviz.svg" width="900px" style="background-color:transparent">
 
 </center>
 
@@ -196,7 +196,7 @@ matplotlib-inline==0.1.7
 <!-- ------------------------------------------------------------- -->
 ## My Projects before `buildben`: Architecture
 
-<img src="../figures/diagram-simple/diagram-simple-graphviz.svg" alt="diagram-simple-graphviz.svg" width="1200px" style="background-color:transparent; float: center; ">
+<img src="../figures/diagram-simple-graphviz.svg" alt="diagram-simple-graphviz.svg" width="1200px" style="background-color:transparent; float: center; ">
 
 <center>
 
@@ -290,7 +290,7 @@ pip install -e .                   # Editable install
 
 
 <center>
-<img src="../figures/graphical-abstract_init-proj/graphical-abstract_init-proj-graphviz.svg" alt="graphical-abstract_init-proj-graphviz.svg" width="900px" style="background-color:transparent">
+<img src="../figures/graphical-abstract_init-proj-graphviz.svg" alt="graphical-abstract_init-proj-graphviz.svg" width="900px" style="background-color:transparent">
 
 </center>
 
@@ -353,7 +353,7 @@ just install-compile
 <!-- ------------------------------------------------------------- -->
 
 ## With `buildben`:
-<img src="../figures/diagram/diagram-graphviz.svg" alt="diagram-graphviz.svg" width="1200px" style="background-color:transparent; float: center; ">
+<img src="../figures/diagram-graphviz.svg" alt="diagram-graphviz.svg" width="1200px" style="background-color:transparent; float: center; ">
 
 <!-- _footer: "" -->
 <!-- _header: "" -->
@@ -363,7 +363,7 @@ just install-compile
 ## Without `buildben`: 
 
 
-<img src="../figures/diagram-simple/diagram-simple-graphviz.svg" alt="diagram-simple-graphviz.svg" width="1200px" style="background-color:transparent; float: center; ">
+<img src="../figures/diagram-simple-graphviz.svg" alt="diagram-simple-graphviz.svg" width="1200px" style="background-color:transparent; float: center; ">
   
 <!-- _footer: "" -->
 <!-- _header: "" -->
@@ -684,7 +684,7 @@ from <my_project>.<package>.<module> import <your_class>, <your_variable>
 # `pip-tools`
 <!-- ============================================================= -->
 
-<img src="../figures/diagram/diagram-graphviz.svg" alt="diagram-graphviz.svg" width="1200px" style="background-color:transparent; float: center; ">
+<img src="../figures/diagram-graphviz.svg" alt="diagram-graphviz.svg" width="1200px" style="background-color:transparent; float: center; ">
 
 <!-- _footer: "" -->
 <!-- _header: "" -->

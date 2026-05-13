@@ -11,7 +11,7 @@ from graphviz import Digraph
 # == Paths
 # ===============================================================
 
-FIGURES_DIR = Path(__file__).resolve().parents[1]
+FIGURES_DIR = Path(__file__).resolve().parents[4] / "assets" / "figures"
 GRAPHVIZ_SUFFIX = "graphviz"
 
 
@@ -34,7 +34,7 @@ def render_figure(
     :return: ``None``. Graphviz writes the files.
     """
 
-    output_dir = FIGURES_DIR / figure_name
+    output_dir = FIGURES_DIR
     output_name = f"{figure_name}-{output_suffix}"
     output_dir.mkdir(parents=True, exist_ok=True)
     graph.render(

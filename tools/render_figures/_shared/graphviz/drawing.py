@@ -6,9 +6,9 @@ from collections.abc import Iterable
 
 from graphviz import Digraph
 
-from graphviz_support.labels import classifier_label, edge_label, text_box_label
-from graphviz_support.models import ClassifierNode, TextBox
-from graphviz_support.theme import BLACK, FONT, FONT_SIZE
+from _shared.graphviz.labels import classifier_label, edge_label, text_box_label
+from _shared.graphviz.models import ClassifierNode, TextBox
+from _shared.graphviz.theme import BLACK, FONT, FONT_SIZE
 
 
 # ===============================================================

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from graphviz import Digraph
 
-from graphviz_support import (
+from _shared.graphviz import (
     BLACK,
     BLUE,
     BLUE_FILL,

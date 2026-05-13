@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from html import escape
 
-from graphviz_support.models import ClassifierNode, TextBox
-from graphviz_support.theme import (
+from _shared.graphviz.models import ClassifierNode, TextBox
+from _shared.graphviz.theme import (
     FONT,
     FONT_SIZE,
     GRAY_FILL,
