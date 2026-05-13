@@ -86,9 +86,11 @@ dev = [
     "pyright>=1.1",  # < Type checker
     "ruff>=0.4",  # < Linter and formatter
     # "mypy>=1.10",
+    # --- Code-Optimization -------------
+    "pyinstrument>=5.1",  # < Low-overhead profiling reports
     # --- Plotting -----------------------
-    "matplotlib",
-    "seaborn",
+    # "matplotlib",
+    # "seaborn",
     # "plotastic",
     # --- IO -----------------------------
     # "sacred",        # < Experiment management
