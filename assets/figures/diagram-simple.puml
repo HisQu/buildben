@@ -52,34 +52,37 @@ skinparam class<<Config>><<Pkg>><<Lock-Files>><<File>><<Lock-File>> {
 
 ' === Packages (now ordered GE → PDIR → VENV) ===
 package "Operating System" as GE <<Global Environment>> {
-    interface "python" as PY  <<CLI>> {
-        +python -m venv .venv
+    interface "uv" as UVG  <<CLI>> {
+        +python install()
+        +venv()
+        +lock()
+        +sync()
+        +run()
     }
 }
 
 package "Project Directory" as PDIR <<Directory>> {
-    class "proj-requirements.txt"   as REQ_PROJ <<File>>{
+    class "pyproject.toml"   as PPRT <<Config>>{
         +Dependencies
+        +Project Metadata
     }
-    class "requirements.txt"         as REQ <<Lock-File>>{
+    class "uv.lock"         as LOCK <<Lock-File>>{
         +Dependencies
         +Versions
+        +Sources
     }
     class "main.py\n(or other code)" as APP <<File>>
 }
 
 
 
-package .venv" as VENV <<Virtual Environment>> {
-    interface "pip"          as PIP <<CLI>> {
-        +install()
-    }
+package ".venv" as VENV <<Virtual Environment>> {
     class "Python Dependencies" as PKG <<Pkg>>
 }
 
 ' === Hidden arrows to lock horizontal order ===
-GE   -[hidden]-> PDIR
-PDIR -[hidden]-> VENV
+GE   -right[hidden]-> PDIR
+PDIR -right[hidden]-> VENV
 
 ' === Visible blue arrows (same semantics) ===
 <style>
@@ -92,10 +95,10 @@ arrow {
 </style>
 
 
-REQ_PROJ <-- USER : collects
-REQ <-- USER : pip freezes
+PPRT <-- USER : edits
+LOCK <-- UVG  : resolves
 
-REQ <-- PIP  : compiles
+LOCK <-- USER : reviews
 
 ' === SPecial Straight Arrows =============
 <style>
@@ -113,9 +116,9 @@ abstract "User" as USER <<Actor>> {
     +code()
 }
 
-PIP --> PKG  : installs
-PY  -[thickness=4]-> VENV : **creates**
-USER  --> VENV : creates, \n (de-)activates \n& manages 
+UVG --> PKG  : syncs
+UVG  -[thickness=4]-> VENV : **creates**
+USER  --> VENV : runs uv, \n activates \n& manages 
 
 <style>
 arrow {
@@ -125,6 +128,7 @@ arrow {
 }
 </style>
 APP --> PKG  : requires
-REQ <-- PIP  : requires
+PPRT <-- UVG  : reads\ndependency specs
+LOCK <-- UVG  : reads
 
 @enduml

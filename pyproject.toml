@@ -47,19 +47,22 @@ where = ["src"]                       # < Scan only src/ for packages
 # === Optional Dependencies
 # =====================================================================
 
-[project.optional-dependencies]
 ### pip install -e .[dev]
+# [dependency-groups] # !! this only works with uv!
+[project.optional-dependencies]
 dev = [
-#     # --- Packaging helpers ------------
-#     "pip-tools>=7.4",   # < Installed in .direnv venv
-#     # --- Testing ----------------------
+    # --- Packaging helpers ------------
+    # "pip-tools>=7.4",   # < Installed in .direnv venv
+    # --- Testing ----------------------
     "pytest>=9.0.2",
     "pytest-xdist",     # < Multi-core testing
-#     "pytest-cov",       # < Code-Coverage
-#     # --- Linting / formatting ---------
-#     # "black>=25.1",
-#     # "ruff>=0.4",
-#     # "mypy>=1.10",
+    # "pytest-cov",       # < Code-Coverage
+    # --- Linting / formatting ---------
+    # "black>=25.1",
+    # "ruff>=0.4",
+    # "mypy>=1.10",
+    # --- Visualization ---------
+    "graphviz"
 ]
 
 # =====================================================================

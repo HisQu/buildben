@@ -59,8 +59,9 @@ package "Operating System" as GE <<Global Environment>> {
         +init-proj()
         +add-experiment()
     }
-    interface "pip / pipx"    as PIP <<CLI>>{
-        +install()
+    interface "uv"    as UVG <<CLI>>{
+        +tool install()
+        +tool run()
     }
     
     interface "just"          as J   <<CLI>>
@@ -91,26 +92,27 @@ package "Project Directory" as PDIR <<Directory>> {
         +ENV_VARS
     }
     
-    class "requirements.txt \ndev-requirements.txt" as RE   <<Lock-Files>> {
+    class "uv.lock\npylock.toml" as LOCK   <<Lock-Files>> {
         +Dependencies
-        +Versions & Hashes
+        +Versions & Sources
     }
 }
 
 ' === Package: Virtual Environment =============
-package ".direnv" as VENV <<Virtual Environment>> {
-    interface "pip-tools"               as PT  <<Tool>>{
-        +pip-compile()
-        +pip-sync()
+package ".venv" as VENV <<Virtual Environment>> {
+    interface "uv"               as UVV  <<Tool>>{
+        +venv()
+        +lock()
+        +sync()
+        +run()
     }
     class "python dependencies"     as PD  <<Pkg>>
-    ' VE o-- PD : contains
-    
-    interface "pip"                     as PIPvenv <<CLI>> {
-        +install(editable)
-        +uninstall()
-    }
 }
+
+
+' === Hidden arrows to lock horizontal order ===
+GE   -[hidden]right-> PDIR
+PDIR -[hidden]right-> VENV
 
 
 ' =====================================================================
@@ -126,7 +128,7 @@ arrow {
 }
 </style>
 
-PIP --> B : installs
+UVG --> B : installs\nas tool
 
 ' =========================
 
@@ -137,10 +139,9 @@ arrow {
 }
 </style>
 
-' PT --> PD <<test>> : installs 
 B -[thickness=4]-> PDIR : **copies**\n**templates**\n**(cookiecutter)** 
-PT  --> RE : compiles\n& syncs
-PDIR <-- PIPvenv : editable install
+UVV  --> LOCK : resolves\n& exports
+PDIR <-- UVV : editable install
 
 ' === SPecial Straight Arrows =============
 <style>
@@ -151,11 +152,10 @@ arrow {
 }
 </style>
 
-' ERC --> PT : installs
-PIPvenv --> PD : installs
-PT --> PD : syncs
-ERC -[thickness=4]-> VENV : **Auto-**\n**creates** \n**& activates**
-JF --> VENV : manages
+UVG -[thickness=4]-> VENV : **creates**\n**.venv**
+UVV --> PD : syncs
+ERC --> VENV : activates
+JF --> UVV : runs
 
 
 ' === Dependencies =============
@@ -173,11 +173,8 @@ D   <-- ERC : requires
 J   <-- JF  : requires
 D   <-- JF  : requires
 
-' JF  --> PT  
-PT --> PPRT : requires
-
-PPRT <-- PIPvenv: requires
+PPRT <-- UVV: reads\ndependency specs
 
 ' ERC -left-  JF     : interacts
-' PPRT ..> PT    : read by
+' PPRT ..> UVV    : read by
 @enduml

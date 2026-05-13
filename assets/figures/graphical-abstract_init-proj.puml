@@ -69,11 +69,11 @@ BBinitcli <-left- TEMP : copied by
 
 package "Project" as P <<Directory & Environment>>{  
 
-  rectangle "**Python Tools**: \n• ""uv"" \n• Virtual-environment\n• ..." as PyTools 
+  rectangle "**Python Tools**: \n• ""uv sync"" \n• ""uv.lock""\n• "".venv""\n• ..." as PyTools 
   rectangle "**Universal Tools**: \n• ""direnv""\n• ""just""\n• ..." as Tools 
 }
 
-rectangle "**Python Standards**: \n• PEP 405: Virtual-environment \n• PEP 621: ""pyproject.toml""\n• PEP 660: Editable install\n•  PEP 751: Lock-files\n•  PyPA: ""src/""-Layout" as Standards  #f27f72dc
+rectangle "**Python Standards**: \n• PEP 405: Virtual-environment \n• PEP 621: ""pyproject.toml""\n• PEP 660: Editable install\n• PEP 751: Lock-files\n• uv: ""uv.lock"" workflow\n• PyPA: ""src/""-Layout" as Standards  #f27f72dc
 
 
 <style>

@@ -57,7 +57,7 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 
 
 <div align="center">
-<img src="https://raw.githubusercontent.com/HisQu/buildben/refs/heads/main/assets/figures/graphical-abstract_init-proj/graphical-abstract_init-proj.svg" alt="graphical-abstract_init-proj.svg" width="600px" style="background-color:transparent">
+<img src="https://raw.githubusercontent.com/HisQu/buildben/refs/heads/main/assets/figures/graphical-abstract_init-proj/graphical-abstract_init-proj-puml.svg" alt="graphical-abstract_init-proj-puml.svg" width="600px" style="background-color:transparent">
   <p><em> 
   <b> Graphical Abstract </b>
   </em></p>
@@ -161,7 +161,7 @@ bube        # Prints help when no args are given
 
 
 <div align="center">
-<img src="https://raw.githubusercontent.com/HisQu/buildben/main/assets/figures/diagram/diagram.svg" alt="graphical-abstract_init-proj.svg" width="1000px" style="background-color:transparent">
+<img src="https://raw.githubusercontent.com/HisQu/buildben/main/assets/figures/diagram/diagram-puml.svg" alt="diagram-puml.svg" width="1000px" style="background-color:transparent">
   <p><em> 
   <b> Architecture of projects </b>
   </em></p>
@@ -401,7 +401,6 @@ direction LR
   Clothes --o Human : "0..*" (aggregation)
 
 ```
-
 
 
 
