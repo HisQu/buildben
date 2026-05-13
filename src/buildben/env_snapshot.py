@@ -68,7 +68,7 @@ def _run(args: argparse.Namespace) -> None:
     SETUP_DIR: Path = EXP_DIR / "_setup"
     EXP_DIR.mkdir(parents=True, exist_ok=True)
     SETUP_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     ### Outputs
     LOCK_FP: Path = SETUP_DIR / "requirements.lock"
     LOCK_REL: Path = LOCK_FP.relative_to(PR_ROOT)
@@ -106,9 +106,7 @@ def _run(args: argparse.Namespace) -> None:
         "-m",
         tag_msg,
     ]
-    subprocess.run(
-        cmd, cwd=PR_ROOT, check=False
-    )  # Don't fail if already exists
+    subprocess.run(cmd, cwd=PR_ROOT, check=False)  # Don't fail if already exists
 
     # =================================================================
     # === Make a wheel and sdist
@@ -141,7 +139,7 @@ def _run(args: argparse.Namespace) -> None:
         str(PR_ROOT / "pyproject.toml"),
     ]
     # print("\n".join(cmd))  # < Print command for debugging
-    subprocess.run(cmd) # !! Uncomment
+    subprocess.run(cmd)  # !! Uncomment
 
     print(f"📌  Environment frozen to {LOCK_REL}")
 
@@ -263,9 +261,7 @@ def _run(args: argparse.Namespace) -> None:
             """
         )
 
-        size = utils.run_command(
-            f"docker image ls | grep {commit_hash}"
-        ).split()[-1]
+        size = utils.run_command(f"docker image ls | grep {commit_hash}").split()[-1]
 
         print(f"🐳  Done building [Imagesize = {size}]")
 
@@ -276,8 +272,6 @@ def _run(args: argparse.Namespace) -> None:
     if dockerize:
         print(f"🚀  Run interactively:\tdocker run -it {image_tag}")
         print(f"👉  Push to ??:\tdocker push {image_tag}")
-        print(
-            f"🚮  Remove image:\tdocker image rm {image_tag}   (layers stay deduped)"
-        )
+        print(f"🚮  Remove image:\tdocker image rm {image_tag}   (layers stay deduped)")
 
     # %%

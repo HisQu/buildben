@@ -5,6 +5,7 @@ buildben.init_experim – scaffold a new experiment folder.
 Usage from CLI aggregator:
     buildben add-experim -n MY_TEST [--no-venv] [--no-freeze]
 """
+
 from __future__ import annotations
 import os
 import argparse, datetime as dt, shutil, subprocess, sys
@@ -19,8 +20,11 @@ from . import utils
 # ================================================================== #
 
 CMD_NAME = "add-experim"  # < Name of the CLI-command
-CMD_ALIASES = ["exp"] # < Alias shortcut of the CLI-command
-DOC = f"Create a dated experiment scaffold inside ./experiments/. Aliases: {CMD_ALIASES}"
+CMD_ALIASES = ["exp"]  # < Alias shortcut of the CLI-command
+DOC = (
+    f"Create a dated experiment scaffold inside ./experiments/. Aliases: {CMD_ALIASES}"
+)
+
 
 def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
     p: argparse.ArgumentParser = subparsers.add_parser(
@@ -36,11 +40,9 @@ def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
         help="Experiment Name (e.g. validation, benchmark, etc.)",
     )
     p.add_argument("--no-venv", action="store_true", help="Skip venv creation")
-    p.add_argument(
-        "--no-freeze", action="store_true", help="Skip pip-compile lock"
-    )
+    p.add_argument("--no-freeze", action="store_true", help="Skip pip-compile lock")
     # > Entrypoint, retrieved as args.func in cli.py
-    p.set_defaults(func=_run) 
+    p.set_defaults(func=_run)
 
 
 # ================================================================== #
@@ -64,7 +66,9 @@ def _run(args: argparse.Namespace) -> None:
 
     directories: list[Path] = [
         # EXP_ROOT / "env", # ?? This would complicate .dockerignore logic
-        PR_ROOT / "experiments" / "resources", # < Potential use for experiments, must be manually copied into input!
+        PR_ROOT
+        / "experiments"
+        / "resources",  # < Potential use for experiments, must be manually copied into input!
         EXP_ROOT / "input",
         EXP_ROOT / "interm-output",
         EXP_ROOT / "output",

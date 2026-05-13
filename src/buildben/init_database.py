@@ -21,6 +21,7 @@ CMD_NAME = "init-database"  # < Name of the CLI-command
 CMD_ALIASES = ["data"]  # < Alias shortcut of the CLI-command
 DOC = f"Scaffolds a new data repository with similair layout as any Python project. Aliases: {CMD_ALIASES}"
 
+
 ### TODO: This is identical to init_proj.py. Make a common base class or function to avoid duplication.
 def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
     """Attach the init-proj sub-parser to the CLI aggregator."""
@@ -38,12 +39,8 @@ def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
         default=".",
         help="Directory in which to create project",
     )
-    p.add_argument(
-        "-g", "--git-init", action="store_true", help="Initialise git repo"
-    )
-    p.add_argument(
-        "-u", "--github-user", default="github-user", help="Github Username"
-    )
+    p.add_argument("-g", "--git-init", action="store_true", help="Initialise git repo")
+    p.add_argument("-u", "--github-user", default="github-user", help="Github Username")
     # > Entrypoint, retrieved as args.func in cli.py
     p.set_defaults(func=_run)  # !! call _run(args) when chosen
 
@@ -52,7 +49,9 @@ def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
 # === implementation                                                 #
 # ================================================================== #
 def _run(args: argparse.Namespace) -> None:
-    raise NotImplementedError("init_data is not implemented yet. Please use init_proj instead.")
+    raise NotImplementedError(
+        "init_data is not implemented yet. Please use init_proj instead."
+    )
 
     # =================================================================
     # === Copy template files (from init_proj.py)

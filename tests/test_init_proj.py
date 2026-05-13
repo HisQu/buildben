@@ -90,7 +90,8 @@ def test_scaffolded_project_runs_pytest(bube_test_project: Path) -> None:
     # == Run pytest inside the generated project ================================
     env = os.environ.copy()
     src_dir = str(proot / "src")
-    env["PYTHONPATH"] = src_dir + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    env["PYTHONPATH"] = src_dir + (
+        os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else ""
+    )
 
     _run([sys.executable, "-m", "pytest", "-q"], cwd=proot, env=env)
-

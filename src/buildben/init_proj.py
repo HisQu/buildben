@@ -38,12 +38,8 @@ def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
         default=".",
         help="(Parent-)Directory in which to create a project-directory",
     )
-    p.add_argument(
-        "-g", "--git-init", action="store_true", help="Initialise git repo"
-    )
-    p.add_argument(
-        "-u", "--github-user", default="github-user", help="Github Username"
-    )
+    p.add_argument("-g", "--git-init", action="store_true", help="Initialise git repo")
+    p.add_argument("-u", "--github-user", default="github-user", help="Github Username")
     # > Entrypoint, retrieved as args.func in cli.py
     p.set_defaults(func=_run)  # !! call _run(args) when chosen
 

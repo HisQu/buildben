@@ -110,7 +110,7 @@ def find_project_root(
         if any((candidate / s).exists() for s in sentinels):
             return candidate  # < Found!
     raise RuntimeError(
-        f"Not inside a project; " f"looked for {sentinels} starting at {here}"
+        f"Not inside a project; looked for {sentinels} starting at {here}"
     )
 
 
@@ -152,6 +152,7 @@ def warn_dir_overwrite(dir: Path) -> None:
 # =====================================================================
 # === Create __init__.py
 # =====================================================================
+
 
 def _module_source_path(pkg_dir: Path, module_name: str) -> Path:
     """Resolve a module name to a source path inside *pkg_dir*.
@@ -279,8 +280,6 @@ def substitute_placeholders(
         fp.write_text(text, encoding="utf-8")
         # > Pathlib closes the file automatically
     print(f"✓  Placeholders substituted: {list(placeholders.keys())}")
-
-
 
 
 # %%

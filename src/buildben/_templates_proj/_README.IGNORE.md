@@ -24,8 +24,14 @@
 
 <!-- --- Badges --------------------------------------------------- -->
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
-[![Code style:
-black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
+
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Pyright](https://img.shields.io/badge/type%20checked-pyright-blue)](https://microsoft.github.io/pyright/)
+[![pytest](https://img.shields.io/badge/tested%20with-pytest-0A9EDC)](https://docs.pytest.org/)
+<!-- [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/HisQu/haiu/blob/main/LICENSE) -->
+
+
 
 
 </div>
@@ -61,7 +67,7 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 <!-- Graphical Abstract goes here: -->
 <!-- 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/HisQu/buildben/main/assets/diagram/diagram.svg" 
+  <img src="https://raw.githubusercontent.com/HisQu/buildben/main/assets/figures/diagram/diagram-puml.svg"
        width="800px" alt="Management of Virtual Environments & Dependencies" >
   <p><em> 
   <b> Graphical Abstract: </b> 
@@ -212,6 +218,5 @@ python -m {my_project} sample_data.csv --output plot.png
 
 
 <br>
-
 
 
