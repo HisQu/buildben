@@ -109,7 +109,6 @@ def _run(args: argparse.Namespace) -> None:
         "_README.IGNORE.md": PROOT / "README.IGNORE.md",
         "_assets-flowchart.IGNORE.mmd": PROOT / "assets" / "flowchart.IGNORE.mmd",
         "_assets-classdiagram.IGNORE.mmd": PROOT / "assets" / "classdiagram.IGNORE.mmd",
-        "_assets-diagram.IGNORE.puml": PROOT / "assets" / "diagram.IGNORE.puml",
     }
     # fmt: on
 

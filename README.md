@@ -57,7 +57,7 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 
 
 <div align="center">
-<img src="https://raw.githubusercontent.com/HisQu/buildben/refs/heads/main/assets/figures/graphical-abstract_init-proj/graphical-abstract_init-proj-puml.svg" alt="graphical-abstract_init-proj-puml.svg" width="600px" style="background-color:transparent">
+<img src="https://raw.githubusercontent.com/HisQu/buildben/refs/heads/main/assets/figures/graphical-abstract_init-proj/graphical-abstract_init-proj-graphviz.svg" alt="graphical-abstract_init-proj-graphviz.svg" width="600px" style="background-color:transparent">
   <p><em> 
   <b> Graphical Abstract </b>
   </em></p>
@@ -161,7 +161,7 @@ bube        # Prints help when no args are given
 
 
 <div align="center">
-<img src="https://raw.githubusercontent.com/HisQu/buildben/main/assets/figures/diagram/diagram-puml.svg" alt="diagram-puml.svg" width="1000px" style="background-color:transparent">
+<img src="https://raw.githubusercontent.com/HisQu/buildben/main/assets/figures/diagram/diagram-graphviz.svg" alt="diagram-graphviz.svg" width="1000px" style="background-color:transparent">
   <p><em> 
   <b> Architecture of projects </b>
   </em></p>
@@ -283,19 +283,20 @@ code --install-extension vstirbu.vscode-mermaid-preview
 ``Mermaid`` runs natively in GitHub & Markdown-tools.
 
 
-### [`PlantUML`](https://plantuml.com/) - For Big Figures
+### [`Graphviz`](https://graphviz.org/) - For Big Figures
 
-#### Install [`graphviz`](https://github.com/graphp/graphviz?tab=readme-ov-file#install) & Java (e.g. [`temurin`](https://adoptium.net/de/)):
+#### Install the system layout engine:
 
 ```bash
-sudo apt-get install temurin-21-jdk graphviz     # For Ubuntu
-# brew install temurin graphviz                  # For MacOS
-# winget install EclipseAdoptium.Temurin.21.JDK  # Windows 
-# winget install -e --id Graphviz.Graphviz       # Windows
+sudo apt-get install graphviz              # For Ubuntu
+# brew install graphviz                    # For MacOS
+# winget install -e --id Graphviz.Graphviz # Windows
 ```
-#### Install VS Code Extension:
+
+#### Render the repository figures:
+
 ```bash
-code --install-extension jebbs.plantuml
+uv run python assets/figures/render_all_figs.py
 ```
 <br>
 
@@ -310,11 +311,11 @@ code --install-extension jebbs.plantuml
 
 ### Diagrams
 
-| **Feature**       | **``Mermaid``**                                         | **``PlantUML``**                                                   |
+| **Feature**       | **``Mermaid``**                                         | **``Graphviz``**                                                   |
 | ----------------- | --------------------------------------------------- | -------------------------------------------------------------- |
-| **Ease of Use**   | 🟢 Simple, Markdown-like syntax; quick to learn and use  | 🟢  Easy to learn; DSL based on Graphviz’s DOT            |
-| **Integration**   | 🟢 Native to GitHub and Markdown-tools, no extra installs      | 🟡  Requires `Java`+`Graphviz`; either install it or use their server |
-| **Functionality** | 🔴 Limited styling and diagram types                     | 🟢 Extensive theming (`skinparam`, CSS); supports UML, BPMN, C4, etc.  |
+| **Ease of Use**   | 🟢 Simple, Markdown-like syntax; quick to learn and use  | 🟡 DOT-based layout with Python helper scripts |
+| **Integration**   | 🟢 Native to GitHub and Markdown-tools, no extra installs      | 🟡 Requires the Graphviz system package |
+| **Functionality** | 🔴 Limited styling and diagram types                     | 🟢 Strong graph layout, SVG/PNG export, reusable styling helpers |
 
 
 
@@ -401,6 +402,4 @@ direction LR
   Clothes --o Human : "0..*" (aggregation)
 
 ```
-
-
 
