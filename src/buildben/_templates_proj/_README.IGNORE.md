@@ -65,6 +65,14 @@
 
 
 <!-- Graphical Abstract goes here: -->
+
+<!-- | ![Graphical abstract](./assets/figures/graphical-abstract_init-proj-graphviz.svg) |
+|:--:|
+| **Fig. 1 - Graphical Abstract:** Buildben creates scaffolds for Python projects adhering to Python PEP standards. |
+
+<br> -->
+
+<!-- HTML-version of Graphical Abstract -->
 <!-- 
 <div align="center">
   <img src="https://github.com/HisQu/buildben/raw/main/assets/figures/diagram-graphviz.svg"
@@ -74,6 +82,10 @@
   Management of Virtual Environments & Dependencies. Red dashed lines are Dependencies.
   </em></p>
 </div> 
+
+
+
+
 -->
 
 
