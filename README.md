@@ -56,23 +56,33 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 
 
 
-<div align="center">
-<img src="./assets/figures/graphical-abstract_init-proj-graphviz.svg" alt="graphical-abstract_init-proj-graphviz.svg" width="600px" style="background-color:transparent">
-  <p><em> 
-  <b> Graphical Abstract </b>
-  </em></p>
-</div>
+<!-- <div align="center">
+<img src="./assets/figures/graphical-abstract_init-proj-graphviz.svg" alt="graphical-abstract_init-proj-graphviz.png" width="600px" style="background-color:transparent">
+  <p>
+  <b> Graphical Abstract</b>: Buildben creates scaffolds for python projects adhering to Python PEP-standards.
+  </p>
+</div> -->
+
+
+
+
+| ![Graphical abstract](./assets/figures/graphical-abstract_init-proj-graphviz.svg) |
+|:--:|
+| **Fig. 1 - Graphical Abstract:** Buildben creates scaffolds for Python projects adhering to Python PEP standards. |
 
 <br>
+
+
 
 ### Table of Contents
 
 <!-- toc -->
 
-1. [📦 Installation](#-installation)
-2. [🚀 Usage](#-usage)
-3. [❓Optional Installs](#optional-installs)
-4. [📚  Examples / Documentation](#--examples--documentation)
+1. [`buildben`: build-benedictions](#buildben-build-benedictions)
+   1. [📦 Installation](#-installation)
+   2. [🚀 Usage](#-usage)
+   3. [❓Optional Installs](#optional-installs)
+   4. [📚  Examples / Documentation](#--examples--documentation)
 
 <!-- tocstop -->
 <!-- /toc -->

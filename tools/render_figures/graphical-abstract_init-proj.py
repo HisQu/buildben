@@ -110,7 +110,7 @@ def build_graphical_abstract_init_proj() -> Digraph:
         graph,
         "BBinitcli",
         "Tools",
-        "creates project scaffold (buildben is no dependency of project)",
+        "creates project scaffold\n(buildben is no dependency of project)",
         BLUE,
         bold=True,
         penwidth="4",
