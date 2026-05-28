@@ -77,7 +77,6 @@ sync:
     just _check-uv
     uv sync --all-extras --all-groups --locked
 alias install := sync
-alias all := rag-dev
 
 # ---------------------------------------------------------------
 # Locking and upgrading
