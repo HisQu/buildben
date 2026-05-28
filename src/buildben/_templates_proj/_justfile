@@ -68,38 +68,10 @@ reset-venv:
 # > --no-default-groups: Skip uv's default groups, including dev, for runtime-only installs.
 # > --frozen: Sync from uv.lock while ignoring pyproject.toml
 # > --locked: Exit non-zero if pyproject.toml differs from uv.lock
-#
-# Pip equivalents (requires pip with dependency group support):
-#   python -m pip install -e "."
-#   python -m pip install -e ".[rag]"
-#   python -m pip install -e "." --group dev
-#   python -m pip install -e ".[rag]" --group dev
 
-# Install only the package and minimal runtime dependencies.
-core:
-    just _note-direnv
-    just _check-uv
-    uv sync --locked --no-default-groups
-
-# Install runtime dependencies plus all published optional extras.
-rag:
-    just _note-direnv
-    just _check-uv
-    uv sync --locked --all-extras --no-default-groups
-
-# Install runtime dependencies plus all local development groups.
-dev:
-    just _note-direnv
-    just _check-uv
-    uv sync --locked --all-groups
-
-# Install runtime dependencies, all published extras, and all local groups.
-rag-dev:
-    just _note-direnv
-    just _check-uv
-    uv sync --locked --all-extras --all-groups
 
 # Install or sync everything from uv.lock into venv. (CI should use this)
+# `python -m pip install -e ".[<all_extras>]" --group dev`
 sync:
     just _note-direnv
     just _check-uv
