@@ -54,7 +54,7 @@ clean:
 reset-venv:
     @echo "♻ Rebuilding virtual environment..."
     uv venv --seed --clear
-    uv sync --frozen --all-extras
+    uv sync --frozen --all-extras --all-groups
 
 
 # ---------------------------------------------------------------
@@ -63,14 +63,49 @@ reset-venv:
 # Key rule: CI and teammates should *not* relock by accident.
 # We therefore install with `--locked` which errors if uv.lock is stale.
 # If it errors, you intentionally run `just lock` or `just upgrade`.
+# > --all-extras: Install all published extras from [project.optional-dependencies], such as rag.
+# > --all-groups: Install all local groups from [dependency-groups], such as dev.
+# > --no-default-groups: Skip uv's default groups, including dev, for runtime-only installs.
 # > --frozen: Sync from uv.lock while ignoring pyproject.toml
 # > --locked: Exit non-zero if pyproject.toml differs from uv.lock
+#
+# Pip equivalents (requires pip with dependency group support):
+#   python -m pip install -e "."
+#   python -m pip install -e ".[rag]"
+#   python -m pip install -e "." --group dev
+#   python -m pip install -e ".[rag]" --group dev
+
+# Install only the package and minimal runtime dependencies.
+core:
+    just _note-direnv
+    just _check-uv
+    uv sync --locked --no-default-groups
+
+# Install runtime dependencies plus all published optional extras.
+rag:
+    just _note-direnv
+    just _check-uv
+    uv sync --locked --all-extras --no-default-groups
+
+# Install runtime dependencies plus all local development groups.
+dev:
+    just _note-direnv
+    just _check-uv
+    uv sync --locked --all-groups
+
+# Install runtime dependencies, all published extras, and all local groups.
+rag-dev:
+    just _note-direnv
+    just _check-uv
+    uv sync --locked --all-extras --all-groups
 
 # Install or sync everything from uv.lock into venv. (CI should use this)
 sync:
     just _note-direnv
     just _check-uv
-    uv sync --all-extras --locked
+    uv sync --all-extras --all-groups --locked
+alias install := sync
+alias all := rag-dev
 
 # ---------------------------------------------------------------
 # Locking and upgrading
@@ -84,12 +119,12 @@ sync:
 lock *ARGS:
     just _check-uv
     uv lock {{ARGS}}
-    uv export -o pylock.toml --quiet
+    uv export -o pylock.toml --all-extras --all-groups --quiet
 
 # Re-lock with --upgrade & install from the new lock.
 upgrade *ARGS:
     just lock --upgrade {{ARGS}}
-    uv sync --all-extras --locked
+    uv sync --all-extras --all-groups --locked
 
 
 # Re-lock with --upgrade ONLY git-based dependencies & uv sync from the new lock.
@@ -101,7 +136,7 @@ upgrade-repos *ARGS:
         # --upgrade-package embedding \
         # --upgrade-package haiu \
         {{ARGS}}
-    uv sync --all-extras --locked
+    uv sync --all-extras --all-groups --locked
 alias uprep := upgrade-repos
 
 
@@ -119,7 +154,7 @@ py-switch version="3.13":
     # > Recreate the project venv with that interpreter.
     uv venv --python {{version}} --seed --clear
     # > Sync dependencies for the recreated environment.
-    uv sync --frozen --all-extras
+    uv sync --frozen --all-extras --all-groups
     # > Verify via uv, so shell activation state cannot mislead you.
     uv run python -c 'import sys; print(sys.version); print(sys.executable)'
 
@@ -159,7 +194,7 @@ diagnose:
     just _check-uv
     uv --version
     uv python list || true
-    uv sync --check
+    uv sync --check --all-extras --all-groups
 
 
 # ---------------------------------------------------------------

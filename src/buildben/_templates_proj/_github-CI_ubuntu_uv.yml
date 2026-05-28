@@ -60,7 +60,7 @@ jobs:
         run: rm -rf .venv
 
       - name: Install project from uv.lock
-        run: uv sync --locked --all-extras
+        run: uv sync --locked --all-extras --all-groups
 
       # -- Run Tests ----------------------------------
       # - name: Run tests

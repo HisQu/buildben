@@ -128,8 +128,14 @@ apt install python3.12
 #### 2. Clone & Install `{my_project}`:
 ``` bash
 git clone https://github.com/HisQu/{my_project}.git
-pip install -e {my_project} # Editable install (use venv)
+cd {my_project}
+python -m pip install -e "."              # Core runtime dependencies
+python -m pip install -e ".[rag]"         # Core + published RAG extra
+python -m pip install -e "." --group dev  # Core + local dev tools
+python -m pip install -e ".[rag]" --group dev
 ```
+The `rag` commands apply after the commented `rag` extra in `pyproject.toml` is
+uncommented and populated.
 
 #### ✅ Verify installation: 
 ```bash
@@ -175,8 +181,8 @@ python3 -m {my_project}
 
 *!! Pytest not yet Implemented!*
 ```bash
-pip install -e <myproject>[dev] # Install testing dependencies from pyproject.toml
-pytest                # Run tests
+python -m pip install -e "." --group dev  # Install testing tools from [dependency-groups]
+pytest                                    # Run tests
 ```
 </details>
 

@@ -17,9 +17,61 @@ readme      = "README.md"
 license     = "MIT"
 requires-python = ">=3.12"
 dependencies = []
-# !! Dependencies would clutter the OS-Python! 
+# !! Dependencies would clutter the OS-Python!
 # !! We can't call pipx from pyproject.toml!
 # dependencies = []  # !! -> LEAVE EMPTY !!!
+
+# =====================================================================
+# === Optional Feature Dependencies
+# =====================================================================
+
+# Optional dependencies are published package extras. Use them for feature
+# stacks that users may want at runtime, but that should not be installed by
+# default. Keep heavy feature sets here, not in [dependency-groups].
+#
+# Install commands:
+#   python -m pip install -e ".[rag]"
+#   uv sync --locked --all-extras --no-default-groups
+#
+# [project.optional-dependencies]
+# rag = [
+#     # "huggingface-hub",  # < Hugging Face model/data downloads
+#     # "openai",           # < OpenAI API client
+#     # "tiktoken",         # < Token counting for OpenAI-compatible models
+#     # "scikit-learn",     # < Vectorizers, metrics, and classical ML helpers
+#     # "torch",            # < Heavy tensor/ML runtime
+# ]
+
+
+# =====================================================================
+# === Local Dependency Groups
+# =====================================================================
+
+# Dependency groups are local-only development environments. Build backends do
+# not publish them as package metadata, so they are the right home for pytest,
+# ruff, pyright, notebooks, profiling, and docs helpers.
+#
+# Install commands:
+#   python -m pip install -e "." --group dev
+#   python -m pip install -e ".[rag]" --group dev
+#   uv sync --locked --all-groups
+#   uv sync --locked --all-extras --all-groups
+[dependency-groups]
+dev = [
+    # --- Testing ----------------------
+    "pytest>=9.0.2",
+    "pytest-xdist",     # < Multi-core testing
+    # "pytest-cov",       # < Code-Coverage
+    # --- Code-Quality ---------
+    "pyright>=1.1",  # < Type checker
+    "ruff>=0.4",    # < Linter and formatter
+    # --- Code-Optimization -------------
+    "pyinstrument>=5.1",  # < Low-overhead profiling reports
+    # --- Visualization ---------
+    # "matplotlib",
+    # "seaborn",
+    "graphviz",
+]
 
 
 # =====================================================================
@@ -42,30 +94,6 @@ where = ["src"]                       # < Scan only src/ for packages
     "_templates_experiment/**/*",  # src/buildben/templates/**/*
     ]
 
-
-# =====================================================================
-# === Optional Dependencies
-# =====================================================================
-
-### pip install -e .[dev]
-# [dependency-groups] # !! this only works with uv!
-[project.optional-dependencies]
-dev = [
-    # --- Testing ----------------------
-    "pytest>=9.0.2",
-    "pytest-xdist",     # < Multi-core testing
-    # "pytest-cov",       # < Code-Coverage
-    # --- Code-Quality ---------
-    "pyright>=1.1",  # < Type checker
-    "ruff>=0.4",    # < Linter and formatter
-    # --- Code-Optimization -------------
-    "pyinstrument>=5.1",  # < Low-overhead profiling reports
-    # --- Visualization ---------
-    # "matplotlib",
-    # "seaborn",
-    "graphviz"
-]
-
 # =====================================================================
 # === Terminal entry points
 # =====================================================================
@@ -82,7 +110,3 @@ bube = "buildben.cli:main"
 [tool.pytest.ini_options]
 addopts = "-n 6"  # < Use 6 cores
 testpaths = ["tests"]
-
-[tool.pip-tools]
-generate-hashes = true
-requirement-files = ["requirements.txt"]

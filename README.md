@@ -47,7 +47,7 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 
 <!-- Dev dependencies: 
 - **[`pipx`](https://pipx.pypa.io)**: The recommended home for `buildben`, making it accessible globally while keeping the OS-Python clean
-- **[`pip-tools`](https://github.com/jazzband/pip-tools)**: Used to re-compute the venv requirements and sync them.
+- **Dependency groups:** Local dev tools live in `[dependency-groups]` and install with `python -m pip install -e "." --group dev`.
 -->
 
 <hr>
@@ -100,7 +100,8 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 ### 🏃Quick & Dirty:
 ```bash
 git clone https://github.com/markur4/buildben.git
-pip install -e buildben    # venv recommended
+cd buildben
+python -m pip install -e "."    # venv recommended
 ```
 
 ### 🏗️ Full Install (recommended): 
@@ -195,18 +196,24 @@ cd <my_project_name> # Changing directory will auto-create the venv
 # direnv allow
 ```
 
-#### Install dependencies & create ``(dev-)requirements.txt`` :
+#### Install dependency profiles:
 ```bash
-just install-compile  # Executes `pip-compile` & `pip-sync` from pip-tools
-# just insco          # Alias for `install-compile`
+python -m pip install -e "."              # Core runtime dependencies
+python -m pip install -e ".[rag]"         # Core + published RAG extra
+python -m pip install -e "." --group dev  # Core + local dev tools
+python -m pip install -e ".[rag]" --group dev
 ```
-<details> <summary> What's pip-compile? </summary>
+The `rag` commands apply after the commented `rag` extra in `pyproject.toml` is
+uncommented and populated.
+<details> <summary> Equivalent uv / just commands </summary>
 
-  - ``just`` auto-navigates to the directory of the justfile (project root).
-  - **`pip-compile`:** 
-    - Resolves environment defined by dependencies listed in `pyproject.toml`. 
-    - Similair to `pip freeze`, this creates ``requirements.txt`` and ``dev-requirements.txt``, including all versions and sources.
-  - **`pip-sync`:** Installs dependencies from ``requirements.txt`` and ``dev-requirements.txt``
+  - `just core`: `uv sync --locked --no-default-groups`
+  - `just rag`: `uv sync --locked --all-extras --no-default-groups`
+  - `just dev`: `uv sync --locked --all-groups`
+  - `just rag-dev`: `uv sync --locked --all-extras --all-groups`
+  - `--all-extras` installs published extras from `[project.optional-dependencies]`, such as `rag`.
+  - `--all-groups` installs local dependency groups from `[dependency-groups]`, such as `dev`.
+  - `--no-default-groups` skips uv's default local groups for a runtime-only install.
 
 </details>
 

@@ -7,6 +7,8 @@ import os
 import shutil
 import subprocess
 import sys
+import tomllib
+from collections.abc import Generator
 from pathlib import Path
 
 import pytest
@@ -36,7 +38,10 @@ def _run(cmd: list[str], *, cwd: Path, env: dict[str, str]) -> None:
 
 
 @pytest.fixture()
-def bube_test_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def bube_test_project(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Generator[Path, None, None]:
     """Create a scaffolded project named 'bube_test_tmp' and clean it up afterwards."""
     # == Import the real scaffolder =============================================
     import buildben.init_proj as scaffolder
@@ -95,3 +100,47 @@ def test_scaffolded_project_runs_pytest(bube_test_project: Path) -> None:
     )
 
     _run([sys.executable, "-m", "pytest", "-q"], cwd=proot, env=env)
+
+
+def test_scaffolded_project_uses_dependency_group_template(
+    bube_test_project: Path,
+) -> None:
+    """Assert generated dependency docs and commands match the template policy."""
+    proot = bube_test_project
+
+    pyproject_path = proot / "pyproject.toml"
+    pyproject_text = pyproject_path.read_text(encoding="utf-8")
+    pyproject = tomllib.loads(pyproject_text)
+
+    project = pyproject["project"]
+    assert project["dependencies"] == ["python-dotenv"]
+
+    optional_dependencies = project.get("optional-dependencies", {})
+    assert "dev" not in optional_dependencies
+    assert "# [project.optional-dependencies]" in pyproject_text
+    assert "# rag = [" in pyproject_text
+
+    dependency_groups = pyproject["dependency-groups"]
+    assert {"pytest>=8.2", "pyright>=1.1", "ruff>=0.4"} <= set(dependency_groups["dev"])
+
+    envrc_text = (proot / ".envrc").read_text(encoding="utf-8")
+    assert "--all-extras" in envrc_text
+    assert "--all-groups" in envrc_text
+    assert "--no-default-groups" in envrc_text
+    assert "uv sync --frozen --all-extras --all-groups" in envrc_text
+
+    justfile_text = (proot / "justfile").read_text(encoding="utf-8")
+    assert 'python -m pip install -e "."' in justfile_text
+    assert 'python -m pip install -e ".[rag]"' in justfile_text
+    assert 'python -m pip install -e "." --group dev' in justfile_text
+    assert 'python -m pip install -e ".[rag]" --group dev' in justfile_text
+    assert "uv sync --locked --no-default-groups" in justfile_text
+    assert "uv sync --locked --all-extras --no-default-groups" in justfile_text
+    assert "uv sync --locked --all-groups" in justfile_text
+    assert "uv sync --locked --all-extras --all-groups" in justfile_text
+
+    readme_text = (proot / "README.IGNORE.md").read_text(encoding="utf-8")
+    assert 'python -m pip install -e "."' in readme_text
+    assert 'python -m pip install -e ".[rag]"' in readme_text
+    assert 'python -m pip install -e "." --group dev' in readme_text
+    assert 'python -m pip install -e ".[rag]" --group dev' in readme_text
