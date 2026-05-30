@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tomllib
+import xml.etree.ElementTree as ET
 from collections.abc import Generator
 from pathlib import Path
 
@@ -144,3 +145,46 @@ def test_scaffolded_project_uses_dependency_group_template(
     assert 'python -m pip install -e ".[rag]"' in readme_text
     assert 'python -m pip install -e "." --group dev' in readme_text
     assert 'python -m pip install -e ".[rag]" --group dev' in readme_text
+
+
+def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> None:
+    """Assert generated projects include the reusable docs scaffold."""
+    proot = bube_test_project
+
+    docs_files = [
+        proot / "docs" / "README.md",
+        proot / "docs" / "How-To-User-Guides.md",
+        proot / "docs" / "Development.md",
+        proot / "docs" / "References.md",
+        proot / "docs" / "Explanations.md",
+    ]
+    svg_path = proot / "docs" / "assets" / "docs-reading-map.svg"
+
+    for docs_file in docs_files:
+        assert docs_file.is_file(), docs_file
+
+    assert svg_path.is_file()
+    ET.parse(svg_path)
+
+    all_docs = "\n\n".join(path.read_text(encoding="utf-8") for path in docs_files)
+
+    for placeholder in (
+        "{my_project}",
+        "<my_project>",
+        "{github_username}",
+        "<github_username>",
+    ):
+        assert placeholder not in all_docs
+        assert placeholder not in svg_path.read_text(encoding="utf-8")
+
+    for docs_file in docs_files:
+        text = docs_file.read_text(encoding="utf-8")
+        assert any(line.startswith("# 1. ") for line in text.splitlines())
+        assert "> [!NOTE]" in text
+        assert "> Related:" in text or "> Related links:" in text
+
+    assert "Backlink:" not in all_docs
+    assert "Backlinks:" not in all_docs
+
+    readme_text = (proot / "README.IGNORE.md").read_text(encoding="utf-8")
+    assert "docs/README.md" in readme_text

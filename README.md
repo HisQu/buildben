@@ -188,6 +188,14 @@ bube init-proj \   # Long Alias for `bube proj`
   -g               # Initializes git repo and commits scaffold
 ```
 
+The generated project includes a `docs/` scaffold with:
+
+- `docs/README.md` for the documentation reading map and authoring rules.
+- `docs/How-To-User-Guides.md` for task recipes.
+- `docs/Development.md` for maintainer workflow and verification.
+- `docs/References.md` for exact paths, commands, and public names.
+- `docs/Explanations.md` for architecture and design context.
+
 #### Create virtual environment (``/.direnv``):
 
 ```bash

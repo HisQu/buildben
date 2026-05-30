@@ -6,7 +6,6 @@ import argparse
 import re
 
 # import shutil
-import subprocess
 import sys
 from pathlib import Path
 from textwrap import dedent
@@ -67,6 +66,8 @@ def _run(args: argparse.Namespace) -> None:
         PROOT / "tests",
         PROOT / "assets",
         PROOT / "examples",
+        PROOT / "docs",
+        PROOT / "docs" / "assets",
         PROOT / ".codex",
         # PR_ROOT / "experiments",
         PROOT / ".github" / "workflows",
@@ -94,6 +95,12 @@ def _run(args: argparse.Namespace) -> None:
         "_.env.template": PROOT / ".env.template",
         "_justfile": PROOT / "justfile",
         "_AGENTS.md": PROOT / "AGENTS.md",
+        "_docs-README.md": PROOT / "docs" / "README.md",
+        "_docs-How-To-User-Guides.md": PROOT / "docs" / "How-To-User-Guides.md",
+        "_docs-Development.md": PROOT / "docs" / "Development.md",
+        "_docs-References.md": PROOT / "docs" / "References.md",
+        "_docs-Explanations.md": PROOT / "docs" / "Explanations.md",
+        "_docs-assets-docs-reading-map.svg": PROOT / "docs" / "assets" / "docs-reading-map.svg",
         ### PR_ROOT/.codex
         "_.codex_config.toml": PROOT / ".codex" / ".codex_config.toml",
         ### PR_ROOT/.github:

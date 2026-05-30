@@ -206,6 +206,14 @@ pytest                                    # Run tests
 <!-- ============================================================== -->
 ## 📚  Examples / Documentation 
 
+Longer project docs live in [`docs/README.md`](docs/README.md). Start there
+when you need task recipes, maintainer workflow, exact references, or system
+explanations.
+
+- **[`docs/How-To-User-Guides.md`](docs/How-To-User-Guides.md)**: commands in order.
+- **[`docs/Development.md`](docs/Development.md)**: maintainer workflow and verification.
+- **[`docs/References.md`](docs/References.md)**: exact paths, commands, and public names.
+- **[`docs/Explanations.md`](docs/Explanations.md)**: architecture and design context.
 
 <!-- This is a presentation / documentation of **specific** options. 
 If available, link to files (e.g. .ipynb) in the examples folder! -->
