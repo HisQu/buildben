@@ -59,7 +59,10 @@ Common commands:
 | `just sync` | Sync the full maintainer environment from `uv.lock`. |
 | `python -m pip install -e "."` | Install runtime package dependencies without `uv`. |
 | `python -m pip install -e "." --group dev` | Install maintainer tools without `uv`. |
-| `python -m {my_project}.main --help` | Smoke-test the package module entrypoint. |
+| `{my_project} --help` | Show the console command tree. |
+| `{my_project} version` | Print the installed package version. |
+| `{my_project} diagnose` | Print local package and Python diagnostics. |
+| `python -m {my_project} --help` | Smoke-test the module entry point. |
 | `ruff format .` | Format Python files. |
 | `ruff check .` | Lint Python files. |
 | `pyright` | Type-check Python files. |
@@ -139,8 +142,10 @@ Document public surfaces here as the project grows:
 | Surface | Current Name | Stability |
 |---|---|---|
 | Package import | `{my_project}` | Public once README examples use it. |
-| Module entrypoint | `python -m {my_project}.main` | Starter smoke-test surface. |
-| Console scripts | None yet. | Add the exact script name when declared in `pyproject.toml`. |
+| Console script | `{my_project}` | Public command declared in `pyproject.toml`. |
+| Module entrypoint | `python -m {my_project}` | Public module execution path. |
+| CLI app owner | `{my_project}.cli.app` | Command tree implementation owner. |
+| Entrypoint wrapper | `{my_project}.main` | Thin wrapper for package metadata entry points. |
 | Config attributes | None yet. | Add exact names before documenting workflows that rely on them. |
 
 > [!NOTE]

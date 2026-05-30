@@ -87,7 +87,8 @@ rg --files
 ```
 
 Then read the source owner and nearby files. For example, a CLI change usually
-requires checking the package entrypoint, tests, README, and docs references.
+requires checking `src/{my_project}/cli/app.py`, the thin wrapper in
+`src/{my_project}/main.py`, tests, README, and docs references.
 
 > [!IMPORTANT]
 > Do not weaken production contracts to make a test easier. Add or reuse a
@@ -108,6 +109,8 @@ requires checking the package entrypoint, tests, README, and docs references.
 Follow these rules for normal edits:
 
 - Keep runtime behavior in [src/{my_project}](../src/{my_project}).
+- Keep CLI behavior in `src/{my_project}/cli/app.py`; keep
+  `src/{my_project}/main.py` wrapper-only.
 - Keep tests in [tests](../tests).
 - Reuse existing helpers before adding new helpers.
 - Keep `__init__.py` files limited to imports and module docstrings.

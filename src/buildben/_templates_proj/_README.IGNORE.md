@@ -139,7 +139,8 @@ uncommented and populated.
 
 #### ✅ Verify installation: 
 ```bash
-python3 -m {my_project}
+python -m {my_project} --help
+{my_project} version
 ```
 
 
@@ -151,14 +152,16 @@ python3 -m {my_project}
 
 <!-- Present a minimal example of the most important feature! -->
 
-### Do this:
+### Show the command tree:
 ```bash
-{my_project} function
+{my_project} --help
 ```
  
-### Do that:
+### Run the starter diagnostics:
 ```bash
-{my_project} function
+{my_project} version
+{my_project} diagnose
+{my_project} diagnose --json
 ```
 
 
@@ -222,8 +225,8 @@ If available, link to files (e.g. .ipynb) in the examples folder! -->
 <blockquote>
 
 ```bash
-# Generate a quick plot from sample_data.csv
-python -m {my_project} sample_data.csv --output plot.png
+# Print local package and Python diagnostics
+{my_project} diagnose
 ```
 
 </blockquote></details>
@@ -236,8 +239,8 @@ python -m {my_project} sample_data.csv --output plot.png
 
 
 ```bash
-# Generate a quick plot from sample_data.csv
-python -m {my_project} sample_data.csv --output plot.png
+# Emit diagnostics as machine-readable JSON
+{my_project} diagnose --json
 ```
 
 </blockquote></details>

@@ -196,6 +196,10 @@ The generated project includes a `docs/` scaffold with:
 - `docs/References.md` for exact paths, commands, and public names.
 - `docs/Explanations.md` for architecture and design context.
 
+It also includes a Typer CLI scaffold with a console script named after the
+project, `python -m <my_project>` support, and starter `version` and
+`diagnose` commands.
+
 #### Create virtual environment (``/.direnv``):
 
 ```bash

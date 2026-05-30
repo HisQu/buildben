@@ -11,6 +11,8 @@
   - maintainer workflow in `docs/Development.md`
   - exact paths, commands, and public names in `docs/References.md`
   - concepts and architecture in `docs/Explanations.md`
+- Put CLI behavior in `<my_project>.cli.app`; keep `<my_project>.main` as a
+  thin public entry point wrapper.
 
 ## Project rules
 - Do not duplicate helpers or re-implement existing utilities without checking first.

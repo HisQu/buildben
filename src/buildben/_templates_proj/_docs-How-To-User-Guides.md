@@ -71,14 +71,25 @@ just sync
 ## Run The First Command
 <!-- ======================================================== -->
 
-Run the package module directly:
+Show the command tree through the console script:
 
 ```bash
-python -m {my_project}.main --help
+{my_project} --help
 ```
 
-If the package later exposes a console script, document the command here and
-keep the module command as the fallback smoke test.
+The module entry point should show the same command tree:
+
+```bash
+python -m {my_project} --help
+```
+
+Run the starter commands:
+
+```bash
+{my_project} version
+{my_project} diagnose
+{my_project} diagnose --json
+```
 
 > [!NOTE]
 > Related: use [public interfaces](References.md#public-interfaces) for the
@@ -144,7 +155,8 @@ Use these commands when you need to understand the current shape:
 ```bash
 rg --files
 git status --short
-python -m {my_project}.main --help
+{my_project} diagnose
+python -m {my_project} --help
 ```
 
 When a command fails, copy the exact command, current directory, exit code, and

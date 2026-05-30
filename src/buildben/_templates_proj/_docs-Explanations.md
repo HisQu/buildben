@@ -59,6 +59,7 @@ Core boundaries:
 | Area | Responsibility |
 |---|---|
 | `src/{my_project}` | Runtime behavior and package-owned helpers. |
+| `src/{my_project}/cli` | Typer command tree and CLI presentation. |
 | `tests` | Behavior checks, fixtures, and regression tests. |
 | `examples` | Small user-facing examples. |
 | `docs` | Longer usage, reference, and architecture material. |

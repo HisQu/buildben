@@ -20,9 +20,9 @@ dependencies = [
     # Core runtime packages only: imports needed when somebody installs and
     # uses this package with `python -m pip install -e "."`.
     "python-dotenv",  # < Provides `dotenv`; used by utils/path_resolver.py
+    "typer",  # < Package-level CLI app and console script
     # "environs",     # < Higher-level .env parsing
     # "structlog",    # < Stdlib-backed structured logging
-    # "typer",        # < CLI from functions
     # "tyro",         # < CLI from dataclasses
     # "rich",         # < Rich terminal output
     # "tqdm",         # < Progress bars
@@ -137,8 +137,8 @@ where = ["src"]                       # < Scan only src/ for packages
 # === Terminal entry points
 # =====================================================================
 
-# [project.scripts]
-# <my_project> = "<my_project>.cli:main" # !! No template yet for cli.py
+[project.scripts]
+<my_project> = "<my_project>.main:main"
 
 
 # =====================================================================
