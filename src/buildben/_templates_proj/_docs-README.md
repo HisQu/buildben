@@ -220,7 +220,9 @@ Figure rules:
 3. Keep black text on a readable surface fill so GitHub dark mode remains
    legible.
 4. Use neutral strokes for outlines and edges.
-5. Embed SVG files in Markdown with a centered table:
+5. Use [figure visual tokens](References.md#figure-visual-tokens) for shared
+   colors, font names, and classifier icon fills.
+6. Embed SVG files in Markdown with a centered table:
 
 ```md
 | ![Alt text](assets/example.svg) |
@@ -229,8 +231,11 @@ Figure rules:
 ```
 
 > [!NOTE]
-> Related: use [Development: documentation authoring](Development.md#documentation-authoring)
-> before expanding the docs structure or adding new figure assets.
+> Related links:
+> - Use [Development: documentation authoring](Development.md#documentation-authoring)
+>   before expanding the docs structure or adding new figure assets.
+> - Use [References: figure visual tokens](References.md#figure-visual-tokens)
+>   for the shared docs figure color scheme.
 
 <!-- --- URLs --------------------------------------------------- -->
 [`uv`]: https://github.com/astral-sh/uv

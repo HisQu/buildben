@@ -10,6 +10,7 @@
    4. [Environment Variables](#environment-variables)
    5. [Configuration Files](#configuration-files)
    6. [Public Interfaces](#public-interfaces)
+   7. [Figure Visual Tokens](#figure-visual-tokens)
 
 <br>
 
@@ -151,3 +152,84 @@ Document public surfaces here as the project grows:
 > [!NOTE]
 > Related: use [How-To User Guides: run the first command](How-To-User-Guides.md#run-the-first-command)
 > for the first user-facing smoke test.
+
+<br>
+
+<!-- ======================================================== -->
+## Figure Visual Tokens
+<!-- ======================================================== -->
+
+Use these role-based tokens for docs diagrams and static figures. Keep the
+token names stable when a figure source script exists so generated assets and
+Markdown references stay easy to compare.
+
+Typography tokens:
+
+| Token | Value | Role |
+|---|---|---|
+| `FONT` | `sans-serif` | Default figure font. |
+| `MONO_FONT` | `monospace` | Monospace figure font for paths, commands, and code-like labels. |
+| `NODE_FONT_SIZE` | `DOC_FIGURE_LEGIBILITY.node_font_pt` | Node and card body text size. |
+| `EDGE_FONT_SIZE` | `DOC_FIGURE_LEGIBILITY.edge_font_pt` | Edge text size. |
+| `EDGE_LABEL_FONT_SIZE` | `9.5` | Compact edge label text size. |
+| `TITLE_FONT_SIZE` | `DOC_FIGURE_LEGIBILITY.title_font_pt` | Figure title text size. |
+| `FONT_SIZE` | `NODE_FONT_SIZE` | Alias for the default node body text size. |
+
+Text and stroke tokens:
+
+| Token | Hex | Preview | Role |
+|---|---|---|---|
+| `BLACK` | `#000000` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#000000;"></span> | Neutral black primitive. |
+| `NEUTRAL_STROKE` | `#666666` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#666666;"></span> | Neutral outline and edge primitive. |
+| `TEXT_COLOR` | `#000000` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#000000;"></span> | Figure text color; aliases `BLACK`. |
+| `INVERTED_TEXT_COLOR` | `#ffffff` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#ffffff;"></span> | Text color for dark filled shapes. |
+| `NODE_STROKE` | `#666666` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#666666;"></span> | Node and card outlines; aliases `NEUTRAL_STROKE`. |
+| `EDGE_STROKE` | `#666666` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#666666;"></span> | Edges and connectors; aliases `NEUTRAL_STROKE`. |
+
+Readable surface tokens:
+
+| Token | Hex | Preview | Role |
+|---|---|---|---|
+| `NODE_SURFACE_FILL` | `#f4f4f4dd` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#f4f4f4dd;"></span> | Readable node and card body fill. |
+| `CLASSIFIER_SURFACE_FILL` | `#f4f4f4dd` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#f4f4f4dd;"></span> | Classifier body fill; aliases `NODE_SURFACE_FILL`. |
+| `TEXT_BOX_SURFACE_FILL` | `#f4f4f4dd` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#f4f4f4dd;"></span> | Text-box body fill; aliases `NODE_SURFACE_FILL`. |
+
+Grouping surface tokens:
+
+| Token | Hex | Preview | Role |
+|---|---|---|---|
+| `NEUTRAL_GROUP_FILL` | `#44444419` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#44444419;"></span> | Translucent neutral grouping region. |
+| `LEGEND_GROUP_FILL` | `#f4f4f499` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#f4f4f499;"></span> | Translucent legend grouping region. |
+
+Semantic color tokens:
+
+| Token | Hex | Preview | Role |
+|---|---|---|---|
+| `OLIVE` | `#afb200ff` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#afb200ff;"></span> | Olive semantic color. |
+| `OLIVE_GROUP_FILL` | `#afb20019` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#afb20019;"></span> | Translucent olive grouping region. |
+| `BLUE` | `#00A2FF` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#00A2FF;"></span> | Blue semantic color. |
+| `BLUE_GROUP_FILL` | `#00A2FF19` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#00A2FF19;"></span> | Translucent blue grouping region. |
+| `GREEN` | `#32bc00ff` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#32bc00ff;"></span> | Green semantic color. |
+| `GREEN_GROUP_FILL` | `#32bc0019` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#32bc0019;"></span> | Translucent green grouping region. |
+| `ORANGE` | `#f4a261ff` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#f4a261ff;"></span> | Orange semantic color. |
+| `ORANGE_GROUP_FILL` | `#f4a26119` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#f4a26119;"></span> | Translucent orange grouping region. |
+| `PURPLE` | `#8b5cf6ff` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#8b5cf6ff;"></span> | Purple semantic color. |
+| `PURPLE_GROUP_FILL` | `#8b5cf619` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#8b5cf619;"></span> | Translucent purple grouping region. |
+| `TEAL` | `#00a6a6ff` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#00a6a6ff;"></span> | Teal semantic color. |
+| `TEAL_GROUP_FILL` | `#00a6a619` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#00a6a619;"></span> | Translucent teal grouping region. |
+| `RED` | `#EE220C` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#EE220C;"></span> | Red semantic color. |
+| `RED_GROUP_FILL` | `#EE220C19` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#EE220C19;"></span> | Translucent red grouping region. |
+| `STANDARDS_GROUP_FILL` | `#f27f72dc` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#f27f72dc;"></span> | Standards grouping region. |
+
+Classifier icon colors:
+
+| Kind | Icon | Hex | Preview | Role |
+|---|---|---|---|---|
+| `actor` | `A` | `#A9DCDF` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#A9DCDF;"></span> | Actor classifier icon fill. |
+| `class` | `C` | `#ADD1B2` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#ADD1B2;"></span> | Class classifier icon fill. |
+| `interface` | `I` | `#B4A7E5` | <span style="display:inline-block;width:1.25em;height:1.25em;border:1px solid #666666;background-color:#B4A7E5;"></span> | Interface classifier icon fill. |
+
+> [!NOTE]
+> Related links:
+> - Use [static figure rules](README.md#static-figure-rules) before adding docs figures.
+> - Use [documentation authoring](Development.md#documentation-authoring) before changing docs structure or figure assets.

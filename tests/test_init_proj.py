@@ -241,8 +241,27 @@ def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> N
     assert "docs/README.md" in readme_text
 
     references_text = (proot / "docs" / "References.md").read_text(encoding="utf-8")
+    docs_readme_text = (proot / "docs" / "README.md").read_text(encoding="utf-8")
+    development_text = (proot / "docs" / "Development.md").read_text(encoding="utf-8")
     how_to_text = (proot / "docs" / "How-To-User-Guides.md").read_text(encoding="utf-8")
     assert "bube_test_tmp --help" in references_text
     assert "bube_test_tmp version" in references_text
     assert "bube_test_tmp diagnose" in references_text
     assert "python -m bube_test_tmp --help" in how_to_text
+
+    assert "Figure Visual Tokens" in references_text
+    for expected_token in (
+        "NODE_SURFACE_FILL",
+        "OLIVE_GROUP_FILL",
+        "STANDARDS_GROUP_FILL",
+        "`actor`",
+    ):
+        assert expected_token in references_text
+
+    for expected_hex in ("#f4f4f4dd", "#afb20019", "#A9DCDF"):
+        assert expected_hex in references_text
+
+    assert '<span style="display:inline-block;' in references_text
+    assert "background-color:#f4f4f4dd" in references_text
+    assert "References.md#figure-visual-tokens" in docs_readme_text
+    assert "References.md#figure-visual-tokens" in development_text

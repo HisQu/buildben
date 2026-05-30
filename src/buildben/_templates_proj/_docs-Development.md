@@ -141,13 +141,16 @@ When editing docs:
 6. Use separator comments before major sections.
 7. Add direct links to source files when a reader may need to edit them.
 8. Add `[!NOTE]` related-link callouts from concept sections to task recipes.
-9. Update figure assets when prose changes a diagrammed concept.
+9. Use [figure visual tokens](References.md#figure-visual-tokens) when editing
+   or adding docs figures.
+10. Update figure assets when prose changes a diagrammed concept.
 
 > [!NOTE]
 > Related links:
 > - Use [Markdown formatting rules](README.md#markdown-formatting-rules) for docs layout.
 > - Use [link and backlink rules](README.md#link-and-backlink-rules) for related-link callouts.
 > - Use [static figure rules](README.md#static-figure-rules) for docs assets.
+> - Use [figure visual tokens](References.md#figure-visual-tokens) for docs figure colors.
 
 <br>
 
