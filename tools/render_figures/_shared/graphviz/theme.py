@@ -22,7 +22,7 @@ FONT_SIZE = "20"
 # ===============================================================
 
 GRAY_FILL = "#cccccc77"
-RECT_FILL = "#99999977"
+RECT_FILL = "#cccccc77"
 BLACK = "#000000"
 NODE_BORDER = "#444444"
 
