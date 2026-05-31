@@ -210,19 +210,20 @@ marker is not rendered as a custom title.
 <!-- ======================================================== -->
 
 Static docs figures live in [assets](assets/). This scaffold starts with one
-editable SVG figure. Add more figures only when a diagram makes the prose
-easier to understand.
+small static SVG. Put repeatable figure builders in Graphigs and keep only
+generated SVG/PNG assets here.
 
 Figure rules:
 
-1. Edit the `*.svg` source directly for small generic figures.
-2. Keep the canvas transparent.
-3. Keep black text on a readable surface fill so GitHub dark mode remains
+1. Change the Graphigs figure builder for generated figures.
+2. Edit small one-off SVG assets directly only when no builder exists.
+3. Keep the canvas transparent.
+4. Keep black text on a readable surface fill so GitHub dark mode remains
    legible.
-4. Use neutral strokes for outlines and edges.
-5. Use [figure visual tokens](References.md#figure-visual-tokens) for shared
-   colors, font names, and classifier icon fills.
-6. Embed SVG files in Markdown with a centered table:
+5. Use neutral strokes for outlines and edges.
+6. Use [figure visual tokens](References.md#figure-visual-tokens) for the
+   Graphigs-owned figure theme source of truth.
+7. Embed SVG files in Markdown with a centered table:
 
 ```md
 | ![Alt text](assets/example.svg) |
@@ -235,7 +236,7 @@ Figure rules:
 > - Use [Development: documentation authoring](Development.md#documentation-authoring)
 >   before expanding the docs structure or adding new figure assets.
 > - Use [References: figure visual tokens](References.md#figure-visual-tokens)
->   for the shared docs figure color scheme.
+>   for the Graphigs-owned figure theme source of truth.
 
 <!-- --- URLs --------------------------------------------------- -->
 [`uv`]: https://github.com/astral-sh/uv

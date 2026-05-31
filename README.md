@@ -312,7 +312,10 @@ code --install-extension vstirbu.vscode-mermaid-preview
 ``Mermaid`` runs natively in GitHub & Markdown-tools.
 
 
-### [`Graphviz`](https://graphviz.org/) - For Big Figures
+### [`graphigs`](https://github.com/markur4/graphigs) - For Big Figures
+
+`graphigs` owns the source for the repository figures. The generated SVG and
+PNG assets stay under `assets/figures`.
 
 #### Install the system layout engine:
 
@@ -325,7 +328,7 @@ sudo apt-get install graphviz              # For Ubuntu
 #### Render the repository figures:
 
 ```bash
-uv run python tools/render_figures/all_figs.py
+(cd ../graphigs && .venv/bin/python -m graphigs render-repo buildben --repo-root ../buildben)
 ```
 <br>
 
