@@ -57,8 +57,7 @@
 
 #### Main dependencies:
 <!-- List your main dependencies here and explain why they're important. -->
-- **`pandas`**: Lorem Ipsum dolor
-- **`matplotlib` (optional)**: Dolor sit amet
+- **`apprc`**: Runtime config, generated `config` CLI, Textual editor, and logging.
 
 <hr>
 </div>
@@ -139,7 +138,8 @@ uncommented and populated.
 
 #### ✅ Verify installation: 
 ```bash
-python3 -m {my_project}
+python -m {my_project}.main --help
+{my_project} config doctor
 ```
 
 
@@ -153,12 +153,15 @@ python3 -m {my_project}
 
 ### Do this:
 ```bash
-{my_project} function
+{my_project} config init /absolute/path/to/storage --name default --default
+{my_project} config doctor
+{my_project} config show --json
 ```
  
 ### Do that:
 ```bash
-{my_project} function
+{my_project} config set app.message "Hello local storage"
+{my_project} config edit
 ```
 
 

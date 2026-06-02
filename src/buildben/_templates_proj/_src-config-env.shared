@@ -1,0 +1,2 @@
+# Packaged defaults loaded by AppRC before local and shell overrides.
+<MY_PROJECT>_MESSAGE="Hello from <my_project>"

@@ -4,13 +4,18 @@
 - Warn me if the paths below appear outdated.
 - Reuse existing helpers and utilities before adding new helper functions.
 - Check these modules first:
+  - `<my_project>.config`
   - `<my_project>.utils`
+  - `apprc.config`
+  - `apprc.logging`
 - If a helper is broadly reusable, place it in the appropriate shared module.
 
 ## Project rules
 - Do not duplicate helpers or re-implement existing utilities without checking first.
-- Import `<my_project>`-owned utility helpers through the facade: `import haiu.utils as ut`.
-- Use explicit `ut.` prefixes at call sites, for example `LOG = ut.get_logger(__name__)`.
+- App configuration belongs in `<my_project>.config.owners` and should use AppRC field/owner specs.
+- Import logging helpers from `apprc.logging`, for example `from apprc.logging import get_logger`.
+- Import `<my_project>`-owned utility helpers through the facade: `import <my_project>.utils as ut`.
+- Use explicit `ut.` prefixes for local utilities.
 - For facade `__init__.py` files, prefer clean batch re-export imports plus file-level `# ruff: noqa: F401`; do not use redundant `symbol as symbol` aliases solely to satisfy Ruff.
 - Update `README.md` if a change affects usage or setup.
 - Add minimal `__main__` demo code only when it improves discoverability or manual testing.
