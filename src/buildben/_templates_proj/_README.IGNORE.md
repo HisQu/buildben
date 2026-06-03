@@ -112,9 +112,9 @@
 ## 📦 Installation
 
 ### Prerequisites:
-- `Python >=3.12,<3.13`
+- Python >=3.12,<3.13
 - `git`
-- `uv` (optional)
+- [`uv`] (optional)
 
 
 ### Install with `pip`:
@@ -138,7 +138,8 @@ uncommented and populated.
 
 #### ✅ Verify installation: 
 ```bash
-python -m {my_project}.main --help
+python -m {my_project} --help
+{my_project} version
 {my_project} config doctor
 ```
 
@@ -151,14 +152,21 @@ python -m {my_project}.main --help
 
 <!-- Present a minimal example of the most important feature! -->
 
-### Do this:
+### Show the command tree:
+```bash
+{my_project} --help
+{my_project} diagnose
+{my_project} diagnose --json
+```
+
+### Initialize local configuration:
 ```bash
 {my_project} config init /absolute/path/to/storage --name default --default
 {my_project} config doctor
 {my_project} config show --json
 ```
  
-### Do that:
+### Edit local configuration:
 ```bash
 {my_project} config set app.message "Hello local storage"
 {my_project} config edit
@@ -209,6 +217,14 @@ pytest                                    # Run tests
 <!-- ============================================================== -->
 ## 📚  Examples / Documentation 
 
+Longer project docs live in [`docs/README.md`](docs/README.md). Start there
+when you need task recipes, maintainer workflow, exact references, or system
+explanations.
+
+- **[`docs/How-To-User-Guides.md`](docs/How-To-User-Guides.md)**: commands in order.
+- **[`docs/Development.md`](docs/Development.md)**: maintainer workflow and verification.
+- **[`docs/References.md`](docs/References.md)**: exact paths, commands, and public names.
+- **[`docs/Explanations.md`](docs/Explanations.md)**: architecture and design context.
 
 <!-- This is a presentation / documentation of **specific** options. 
 If available, link to files (e.g. .ipynb) in the examples folder! -->
@@ -217,8 +233,9 @@ If available, link to files (e.g. .ipynb) in the examples folder! -->
 <blockquote>
 
 ```bash
-# Generate a quick plot from sample_data.csv
-python -m {my_project} sample_data.csv --output plot.png
+# Register a default storage and inspect the resolved config
+{my_project} config init ./local-storage --name default --default
+{my_project} config show --json
 ```
 
 </blockquote></details>
@@ -231,8 +248,8 @@ python -m {my_project} sample_data.csv --output plot.png
 
 
 ```bash
-# Generate a quick plot from sample_data.csv
-python -m {my_project} sample_data.csv --output plot.png
+# Print local package and Python diagnostics
+{my_project} diagnose
 ```
 
 </blockquote></details>

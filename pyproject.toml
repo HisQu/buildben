@@ -61,6 +61,7 @@ dev = [
     # --- Testing ----------------------
     "pytest>=9.0.2",
     "pytest-xdist",     # < Multi-core testing
+    "typer",            # < Scaffold CLI smoke tests
     # "pytest-cov",       # < Code-Coverage
     # --- Code-Quality ---------
     "pyright>=1.1",  # < Type checker

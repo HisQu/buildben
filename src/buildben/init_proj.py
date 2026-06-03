@@ -66,11 +66,14 @@ def _run(args: argparse.Namespace) -> None:
         PROOT / "tests",
         PROOT / "assets",
         PROOT / "examples",
+        PROOT / "docs",
+        PROOT / "docs" / "assets",
         PROOT / ".codex",
         # PR_ROOT / "experiments",
         PROOT / ".github" / "workflows",
         PROOT / ".github" / "workflows_inactive",
         PROOT / "src" / args.name,
+        PROOT / "src" / args.name / "cli",
         PROOT / "src" / args.name / "config",
         PROOT / "src" / args.name / "utils",
         PROOT / "src" / args.name / "data",
@@ -93,6 +96,12 @@ def _run(args: argparse.Namespace) -> None:
         "_.envrc.private": PROOT / ".envrc.private",
         "_justfile": PROOT / "justfile",
         "_AGENTS.md": PROOT / "AGENTS.md",
+        "_docs-README.md": PROOT / "docs" / "README.md",
+        "_docs-How-To-User-Guides.md": PROOT / "docs" / "How-To-User-Guides.md",
+        "_docs-Development.md": PROOT / "docs" / "Development.md",
+        "_docs-References.md": PROOT / "docs" / "References.md",
+        "_docs-Explanations.md": PROOT / "docs" / "Explanations.md",
+        "_docs-assets-docs-reading-map.svg": PROOT / "docs" / "assets" / "docs-reading-map.svg",
         ### PR_ROOT/.codex
         "_.codex_config.toml": PROOT / ".codex" / ".codex_config.toml",
         ### PR_ROOT/.github:
@@ -100,6 +109,8 @@ def _run(args: argparse.Namespace) -> None:
         "_github-CI_ubuntu_uv.yml": PROOT / ".github" / "workflows_inactive" / "CI_ubuntu_uv.yml",
         ### PR_ROOT/src:
         "_src-main.py": PROOT / "src" / args.name / "main.py",
+        "_src-__main__.py": PROOT / "src" / args.name / "__main__.py",
+        "_src-cli-app.py": PROOT / "src" / args.name / "cli" / "app.py",
         "_src-config-app.py": PROOT / "src" / args.name / "config" / "app.py",
         "_src-config-init.py": PROOT / "src" / args.name / "config" / "__init__.py",
         "_src-config-owners.py": PROOT / "src" / args.name / "config" / "owners.py",
@@ -120,6 +131,7 @@ def _run(args: argparse.Namespace) -> None:
     # === __init__.py files
     # =================================================================
     utils.create_init_dot_py(PROOT / "src" / args.name)
+    utils.create_init_dot_py(PROOT / "src" / args.name / "cli", imports=["app"])
     # > This is copied
     utils.create_init_dot_py(
         PROOT / "src" / args.name / "utils",

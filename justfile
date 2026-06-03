@@ -164,6 +164,12 @@ py-switch version="3.13":
 # Testing
 # ---------------------------------------------------------------
 
+# Render README and presentation figures through the centralized graphigs repo.
+docs-figures:
+    just _check-uv
+    (cd ../graphigs && .venv/bin/python -m graphigs render-repo buildben --repo-root ../buildben)
+alias figures := docs-figures
+
 # Run GitHub Actions triggered by push locally using act
 gitactions:
     act push \
