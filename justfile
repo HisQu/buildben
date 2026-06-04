@@ -164,10 +164,12 @@ py-switch version="3.13":
 # Testing
 # ---------------------------------------------------------------
 
-# Render README and presentation figures through the centralized graphigs repo.
+# Render README and presentation figures from colocated source scripts.
 docs-figures:
     just _check-uv
-    (cd ../graphigs && .venv/bin/python -m graphigs render-repo buildben --repo-root ../buildben)
+    uv run --locked python assets/figures/diagram_graphviz.py
+    uv run --locked python assets/figures/diagram_simple_graphviz.py
+    uv run --locked python assets/figures/graphical_abstract_init_proj_graphviz.py
 alias figures := docs-figures
 
 # Run GitHub Actions triggered by push locally using act

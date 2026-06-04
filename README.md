@@ -314,8 +314,9 @@ code --install-extension vstirbu.vscode-mermaid-preview
 
 ### [`graphigs`](https://github.com/markur4/graphigs) - For Big Figures
 
-`graphigs` owns the source for the repository figures. The generated SVG and
-PNG assets stay under `assets/figures`.
+Buildben owns the source for repository figures in `assets/figures`, beside the
+generated SVG and PNG files. The scripts import `graphigs` for shared Graphviz
+helpers, size checks, and SVG/PNG export normalization.
 
 #### Install the system layout engine:
 
@@ -328,7 +329,9 @@ sudo apt-get install graphviz              # For Ubuntu
 #### Render the repository figures:
 
 ```bash
-(cd ../graphigs && .venv/bin/python -m graphigs render-repo buildben --repo-root ../buildben)
+just figures
+# or run one colocated renderer:
+uv run --locked python assets/figures/diagram_graphviz.py
 ```
 <br>
 
