@@ -172,6 +172,13 @@ def test_scaffolded_project_uses_dependency_group_template(
     assert "uv sync --frozen --all-extras --all-groups" in justfile_text
     assert "uv sync --check --all-extras --all-groups" in justfile_text
     assert "uv lock" in justfile_text
+    assert "_check-clean-worktree" in justfile_text
+    assert "_check-pypi-api-key" in justfile_text
+    assert "uv build --no-sources" in justfile_text
+    assert "twine check dist/*" in justfile_text
+    assert 'uv publish --token "$PYPI_API_KEY"' in justfile_text
+    assert "uv version --bump" in justfile_text
+    assert 'verify-pypi requirement="bube_test_tmp"' in justfile_text
 
     readme_text = (proot / "README.IGNORE.md").read_text(encoding="utf-8")
     assert 'python -m pip install -e "."' in readme_text

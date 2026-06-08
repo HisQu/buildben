@@ -38,6 +38,29 @@ _check-uv:
         exit 127; \
     }
 
+[private]
+_check-clean-worktree action="publishing":
+    @git diff --quiet || { \
+        echo "Unstaged changes exist. Commit or stash before {{action}}." >&2; \
+        exit 1; \
+    }
+    @git diff --cached --quiet || { \
+        echo "Staged changes exist. Commit before {{action}}." >&2; \
+        exit 1; \
+    }
+    @test -z "$(git ls-files --others --exclude-standard)" || { \
+        echo "Untracked files exist. Commit, ignore, or remove them before {{action}}:" >&2; \
+        git ls-files --others --exclude-standard >&2; \
+        exit 1; \
+    }
+
+[private]
+_check-pypi-api-key:
+    @test -n "${PYPI_API_KEY-}" || { \
+        echo "PYPI_API_KEY is required. Usage: PYPI_API_KEY=\"pypi-...\" just publish-pypi" >&2; \
+        exit 1; \
+    }
+
 
 # ---------------------------------------------------------------
 # Clean / environment helpers
@@ -171,6 +194,55 @@ docs-figures:
     uv run --locked python assets/figures/diagram_simple_graphviz.py
     uv run --locked python assets/figures/graphical_abstract_init_proj_graphviz.py
 alias figures := docs-figures
+
+# ---------------------------------------------------------------
+# Build / publishing
+# ---------------------------------------------------------------
+
+# Build release artifacts with the configured pyproject backend.
+build:
+    just _check-uv
+    uv build --no-sources
+
+# Validate package metadata and README rendering before publishing.
+publish-check:
+    just build
+    uv run --with twine --no-project -- twine check dist/*
+
+# Usage: PYPI_API_KEY="pypi-..." just publish-pypi
+# Rebuild, validate, and upload release artifacts to PyPI.
+publish-pypi *ARGS:
+    just _check-uv
+    just _check-pypi-api-key
+    just _check-clean-worktree
+    rm -rf dist/
+    just publish-check
+    uv publish --token "$PYPI_API_KEY" {{ARGS}}
+
+# Bump the project version, commit the version files, and create an annotated v-tag.
+bump-version bump="patch":
+    just _check-uv
+    just _check-clean-worktree "bumping the version"
+    @next_version="$(uv version --bump "{{bump}}" --dry-run --short)"; \
+    tag="v${next_version}"; \
+    if git rev-parse --verify --quiet "refs/tags/${tag}" >/dev/null; then \
+        echo "Tag ${tag} already exists. Choose another bump." >&2; \
+        exit 1; \
+    fi; \
+    uv version --bump "{{bump}}" --no-sync; \
+    uv export -o pylock.toml --all-extras --all-groups --quiet; \
+    git add pyproject.toml uv.lock pylock.toml; \
+    git commit -m "Bump version to ${next_version}"; \
+    git tag -a "${tag}" -m "Release ${tag}"
+alias bump := bump-version
+
+# Verify the published PyPI package in a fresh plain-pip virtualenv.
+verify-pypi requirement="buildben":
+    rm -rf /tmp/buildben-pypi-check
+    python -m venv /tmp/buildben-pypi-check
+    /tmp/buildben-pypi-check/bin/python -m pip install --upgrade pip
+    /tmp/buildben-pypi-check/bin/python -m pip install --no-cache-dir "{{requirement}}"
+    /tmp/buildben-pypi-check/bin/python -c 'import buildben; print(buildben.__file__)'
 
 # Run GitHub Actions triggered by push locally using act
 gitactions:
