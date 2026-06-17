@@ -27,6 +27,7 @@ dependencies = [
     # "tqdm",         # < Progress bars
     # "numpy",        # < Numeric arrays
     # "openpyxl",     # < Excel files
+    # "py-yaml12>=0.1.0",    # < YAML 1.2 parser/emitter
 ]
 
 # == This Allows refactoring across repo boundaries
