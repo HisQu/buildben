@@ -86,7 +86,7 @@ its field inventory in `src/{my_project}/config/owners.py`; AppRC owns the
 repeatable workflows around that inventory:
 
 - packaged defaults in `src/{my_project}/config/.env.shared`
-- user storage registry in `~/.config/{my_project}/{my_project}.toml`
+- optional multi-storage registry selected by `{MY_PROJECT}_APPRC_TOML`
 - storage-local overrides in `<storage-root>/.env.local`
 - shell and explicit dotenv overrides for one process
 - generated `config` CLI commands and the Textual editor

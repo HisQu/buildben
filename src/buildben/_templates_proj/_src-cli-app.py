@@ -10,10 +10,8 @@ from typing import Annotated, Any
 
 import typer
 from apprc.cli import (
-    COMMON_ROOT_VALUE_OPTIONS,
-    args_after_command,
     bootstrap_cli_env,
-    config_request_skips_bootstrap,
+    config_request_skips_runtime_bootstrap,
     dump_json,
 )
 from apprc.config.environment import EnvBootstrapResult
@@ -38,32 +36,21 @@ app = typer.Typer(
 class CLIState:
     """Root command state shared with AppRC's generated config commands.
 
-    :param env_file: Optional dotenv file passed through ``--env-file``.
-    :param no_dotenv: Whether AppRC skipped packaged and local dotenv layers.
+    :param env_files: Optional dotenv files passed through ``--env-file``.
+    :param skip_dotenv_layers: Whether AppRC skipped dotenv layer merging.
     :param log_level: Logging level token used for this process.
-    :param env_file_overrides_shell: Whether explicit dotenv values beat the shell.
+    :param env_file_overrides_os_environ: Whether explicit dotenv values beat
+        the shell inside this process.
     :param env_bootstrap: AppRC bootstrap summary after startup.
-    :param storage: Optional named storage selected from the AppRC registry.
+    :param storage: Optional storage selector.
     """
 
-    env_file: Path | None
-    no_dotenv: bool
-    log_level: str
-    env_file_overrides_shell: bool = False
+    env_files: tuple[Path, ...]
+    skip_dotenv_layers: bool
+    log_level: str | None
+    env_file_overrides_os_environ: bool = False
     env_bootstrap: EnvBootstrapResult | None = None
     storage: str | None = None
-
-
-def _config_child_args() -> list[str] | None:
-    """Return arguments passed after the top-level ``config`` command.
-
-    :return: Child tokens, or ``None`` when the active command is not
-        ``config``.
-    """
-    return args_after_command(
-        "config",
-        root_value_options=COMMON_ROOT_VALUE_OPTIONS,
-    )
 
 
 def _request_skips_bootstrap(ctx: typer.Context) -> bool:
@@ -79,10 +66,7 @@ def _request_skips_bootstrap(ctx: typer.Context) -> bool:
     if command_name != "config":
         return False
 
-    config_args = _config_child_args()
-    if config_args is None:
-        return False
-    return config_request_skips_bootstrap(config_args)
+    return config_request_skips_runtime_bootstrap("config")
 
 
 def _package_version() -> str:
@@ -102,13 +86,16 @@ def _diagnose_payload() -> dict[str, Any]:
 
     :return: JSON-friendly process, package, and import metadata.
     """
+    apprc_toml_path = APP_CONFIG.spec.optional_apprc_toml_path()
     return {
+        "apprc_toml_env_key": APP_CONFIG.spec.apprc_toml_env_key,
+        "apprc_toml_path": str(apprc_toml_path) if apprc_toml_path else None,
         "cwd": str(Path.cwd()),
         "package": PACKAGE_NAME,
         "package_file": str(Path(<my_project>.__file__).resolve()),
         "python_executable": sys.executable,
         "python_version": sys.version,
-        "registry_path": str(APP_CONFIG.registry_path()),
+        "storage_env_key": APP_CONFIG.spec.storage_env_key,
         "version": _package_version(),
     }
 
@@ -121,11 +108,20 @@ def _config_show_payload(state: CLIState) -> dict[str, Any]:
     """
     env_bootstrap = state.env_bootstrap
     return {
-        "env_file": str(state.env_file) if state.env_file is not None else None,
+        "apprc_toml_env_key": APP_CONFIG.spec.apprc_toml_env_key,
+        "apprc_toml_path": (
+            None
+            if env_bootstrap is None or env_bootstrap.apprc_toml_path is None
+            else str(env_bootstrap.apprc_toml_path)
+        ),
+        "env_files": (
+            [str(path) for path in state.env_files]
+            if env_bootstrap is None
+            else [str(path) for path in env_bootstrap.env_files]
+        ),
         "log_level": state.log_level,
-        "no_dotenv": state.no_dotenv,
         "package": PACKAGE_NAME,
-        "registry_path": str(APP_CONFIG.registry_path()),
+        "skip_dotenv_layers": state.skip_dotenv_layers,
         "shared_env": (
             None
             if env_bootstrap is None or env_bootstrap.shared_env is None
@@ -137,10 +133,19 @@ def _config_show_payload(state: CLIState) -> dict[str, Any]:
             else str(env_bootstrap.local_env)
         ),
         "storage": state.storage,
+        "storage_count": 0 if env_bootstrap is None else env_bootstrap.storage_count,
+        "storage_env_key": APP_CONFIG.spec.storage_env_key,
+        "storage_name": None if env_bootstrap is None else env_bootstrap.storage_name,
         "storage_root": (
             None
             if env_bootstrap is None or env_bootstrap.storage_root is None
             else str(env_bootstrap.storage_root)
+        ),
+        "storage_selector_source": (
+            None if env_bootstrap is None else env_bootstrap.storage_selector_source
+        ),
+        "storage_selector_value": (
+            None if env_bootstrap is None else env_bootstrap.storage_selector_value
         ),
         "version": _package_version(),
     }
@@ -159,54 +164,65 @@ def _echo_diagnose_payload(payload: dict[str, Any]) -> None:
 @app.callback()
 def app_callback(
     ctx: typer.Context,
-    env_file: Annotated[
-        Path | None,
-        typer.Option("--env-file", help="Load an additional dotenv file."),
+    env_files: Annotated[
+        list[Path] | None,
+        typer.Option(
+            "--env-file",
+            help=(
+                "Invocation-local dotenv file loaded after shared/local env. "
+                "May be repeated."
+            ),
+        ),
     ] = None,
-    env_file_overrides_shell: Annotated[
+    env_file_overrides_os_environ: Annotated[
         bool,
         typer.Option(
-            "--env-file-overrides-shell",
-            help="Let --env-file beat already exported shell variables.",
+            "--env-file-overrides-os-environ",
+            "-o",
+            help="Let --env-file values override existing process env values.",
         ),
     ] = False,
-    no_dotenv: Annotated[
+    skip_dotenv_layers: Annotated[
         bool,
-        typer.Option("--no-dotenv", help="Skip packaged and local dotenv files."),
+        typer.Option(
+            "--skip-dotenv-layers",
+            "-s",
+            help="Select storage but do not merge dotenv values into env.",
+        ),
     ] = False,
     storage: Annotated[
         str | None,
-        typer.Option("--storage", help="Named storage from the AppRC registry."),
+        typer.Option("--storage", help="Storage path or registered selector."),
     ] = None,
     log_level: Annotated[
-        str,
+        str | None,
         typer.Option("--log-level", help="Logging level name or number."),
     ] = "INFO",
 ) -> None:
     """Prepare logging and config state before command handlers run."""
+    state = CLIState(
+        env_files=tuple(env_files or ()),
+        skip_dotenv_layers=skip_dotenv_layers,
+        log_level=log_level,
+        env_file_overrides_os_environ=env_file_overrides_os_environ,
+        storage=storage,
+    )
+    ctx.obj = state
     if (
         ctx.resilient_parsing
         or "--help" in sys.argv[1:]
         or _request_skips_bootstrap(ctx)
     ):
         return
-    env_bootstrap = bootstrap_cli_env(
+    state.env_bootstrap = bootstrap_cli_env(
         APP_CONFIG,
-        env_file=env_file,
-        env_file_overrides_shell=env_file_overrides_shell,
-        no_dotenv=no_dotenv,
-        storage_name=storage,
+        env_files=state.env_files,
+        env_file_overrides_os_environ=env_file_overrides_os_environ,
+        load_dotenv_layers=not skip_dotenv_layers,
+        storage=storage,
         log_level=log_level,
         setup_logging=setup_logging,
         logger=LOG,
-    )
-    ctx.obj = CLIState(
-        env_file=env_file,
-        no_dotenv=no_dotenv,
-        log_level=log_level,
-        env_file_overrides_shell=env_file_overrides_shell,
-        env_bootstrap=env_bootstrap,
-        storage=storage,
     )
 
 

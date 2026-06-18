@@ -140,6 +140,8 @@ uncommented and populated.
 ```bash
 python -m {my_project} --help
 {my_project} version
+{my_project} config setup --yes --storage-root ./local-storage
+export {MY_PROJECT}_STORAGE="$(pwd)/local-storage"
 {my_project} config doctor
 ```
 
@@ -161,7 +163,8 @@ python -m {my_project} --help
 
 ### Initialize local configuration:
 ```bash
-{my_project} config init /absolute/path/to/storage --name default --default
+{my_project} config setup --yes --storage-root /absolute/path/to/storage
+export {MY_PROJECT}_STORAGE="/absolute/path/to/storage"
 {my_project} config doctor
 {my_project} config show --json
 ```
@@ -233,8 +236,9 @@ If available, link to files (e.g. .ipynb) in the examples folder! -->
 <blockquote>
 
 ```bash
-# Register a default storage and inspect the resolved config
-{my_project} config init ./local-storage --name default --default
+# Create a local storage root and inspect the resolved config
+{my_project} config setup --yes --storage-root ./local-storage
+export {MY_PROJECT}_STORAGE="$(pwd)/local-storage"
 {my_project} config show --json
 ```
 

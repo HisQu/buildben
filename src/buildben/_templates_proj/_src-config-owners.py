@@ -11,16 +11,15 @@ from __future__ import annotations
 from pathlib import Path
 
 # == 3rd Party ===============================
-from apprc.config import CONFIG_MISSING, ConfigOwner, config_field
+from apprc.config import CONFIG_MISSING, ConfigField, ConfigOwner
 
 APP_CONFIG_OWNER = ConfigOwner(
     key="app",
     title="App",
     env_prefix="<MY_PROJECT>_",
     rc_path=("app",),
-    runtime_cls=None,
     fields=(
-        config_field(
+        ConfigField(
             "storage_root",
             "STORAGE",
             Path,
@@ -34,7 +33,7 @@ APP_CONFIG_OWNER = ConfigOwner(
             editable=False,
             required=True,
         ),
-        config_field(
+        ConfigField(
             "message",
             "MESSAGE",
             str,

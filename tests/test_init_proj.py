@@ -113,10 +113,11 @@ def test_scaffolded_project_runs_pytest(bube_test_project: Path) -> None:
             f"    subprocess.run([sys.executable, '-m', '{proj_name}', 'diagnose', '--json'], cwd=str(project_root), env=env, check=True)\n"
             f"    before = subprocess.run([sys.executable, '-m', '{proj_name}', 'config', 'doctor'], cwd=str(project_root), env=env, text=True, capture_output=True, check=False)\n"
             "    assert before.returncode == 1\n"
-            f"    subprocess.run([sys.executable, '-m', '{proj_name}', 'config', 'init', str(project_root / 'storage'), '--name', 'default', '--default'], cwd=str(project_root), env=env, check=True)\n"
+            f"    subprocess.run([sys.executable, '-m', '{proj_name}', 'config', 'setup', '--yes', '--storage-root', str(project_root / 'storage')], cwd=str(project_root), env=env, check=True)\n"
+            f"    env['{proj_name.upper()}_STORAGE'] = str(project_root / 'storage')\n"
             f"    subprocess.run([sys.executable, '-m', '{proj_name}', 'config', 'doctor'], cwd=str(project_root), env=env, check=True)\n"
-            f"    subprocess.run([sys.executable, '-m', '{proj_name}', 'config', 'list', '--json'], cwd=str(project_root), env=env, check=True)\n"
             f"    subprocess.run([sys.executable, '-m', '{proj_name}', 'config', 'show', '--json'], cwd=str(project_root), env=env, check=True)\n"
+            f"    subprocess.run([sys.executable, '-m', '{proj_name}', 'config', 'set', 'app.message', 'Hello local storage'], cwd=str(project_root), env=env, check=True)\n"
         ),
         encoding="utf-8",
     )
@@ -143,7 +144,7 @@ def test_scaffolded_project_uses_dependency_group_template(
 
     project = pyproject["project"]
     assert project["dependencies"] == [
-        "apprc @ git+https://github.com/HisQu/apprc.git",
+        "apprc>=0.12,<0.13",
         "typer",
     ]
     assert "python-dotenv" not in project["dependencies"]
@@ -187,7 +188,7 @@ def test_scaffolded_project_uses_dependency_group_template(
     assert 'python -m pip install -e ".[rag]" --group dev' in readme_text
     assert "bube_test_tmp version" in readme_text
     assert "bube_test_tmp diagnose" in readme_text
-    assert "bube_test_tmp config init" in readme_text
+    assert "bube_test_tmp config setup --yes --storage-root" in readme_text
     assert "bube_test_tmp config doctor" in readme_text
 
 
@@ -218,6 +219,9 @@ def test_scaffolded_project_includes_typer_cli_scaffold(
     assert '@app.command("diagnose")' in cli_text
     assert "APP_CONFIG.typer_app" in cli_text
     assert "bootstrap_cli_env" in cli_text
+    assert "config_request_skips_runtime_bootstrap" in cli_text
+    assert "--env-file-overrides-os-environ" in cli_text
+    assert "--skip-dotenv-layers" in cli_text
     assert "setup_logging" in cli_text
     assert "from bube_test_tmp.cli.app import main" in main_text
     assert pyproject["project"]["scripts"][proj_name] == f"{proj_name}.main:main"
@@ -257,7 +261,10 @@ def test_scaffolded_project_has_apprc_config_package(
     agents_text = (proot / "AGENTS.md").read_text(encoding="utf-8")
 
     assert "AppConfigKit" in config_app_text
-    assert 'storage_root_env_key="BUBE_TEST_TMP_STORAGE"' in config_app_text
+    assert 'storage_env_key="BUBE_TEST_TMP_STORAGE"' in config_app_text
+    assert 'apprc_toml_filename="bube_test_tmp.apprc.toml"' in config_app_text
+    assert "ConfigField" in owners_text
+    assert "config_field" not in owners_text
     assert 'env_prefix="BUBE_TEST_TMP_"' in owners_text
     assert 'BUBE_TEST_TMP_MESSAGE="Hello from bube_test_tmp"' in shared_env_text
     assert "bube_test_tmp.config" in agents_text
@@ -315,11 +322,12 @@ def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> N
     assert "bube_test_tmp --help" in references_text
     assert "bube_test_tmp version" in references_text
     assert "bube_test_tmp diagnose" in references_text
-    assert "bube_test_tmp config init" in references_text
+    assert "bube_test_tmp config setup --yes --storage-root" in references_text
     assert "python -m bube_test_tmp --help" in how_to_text
     assert "bube_test_tmp config doctor" in how_to_text
 
     assert "src/bube_test_tmp/config/.env.shared" in references_text
+    assert "BUBE_TEST_TMP_APPRC_TOML" in references_text
     assert "BUBE_TEST_TMP_STORAGE" in references_text
     assert "bube_test_tmp.config.owners" in references_text
     assert "AppRC" in explanations_text

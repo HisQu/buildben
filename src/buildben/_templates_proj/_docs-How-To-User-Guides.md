@@ -94,7 +94,8 @@ Run the starter commands:
 Initialize AppRC storage before commands that need local runtime state:
 
 ```bash
-{my_project} config init ./local-storage --name default --default
+{my_project} config setup --yes --storage-root ./local-storage
+export {MY_PROJECT}_STORAGE="$(pwd)/local-storage"
 {my_project} config doctor
 {my_project} config show --json
 ```

@@ -63,9 +63,10 @@ Common commands:
 | `{my_project} --help` | Show the console command tree. |
 | `{my_project} version` | Print the installed package version. |
 | `{my_project} diagnose` | Print local package and Python diagnostics. |
-| `{my_project} config init STORAGE_ROOT --name default --default` | Register an AppRC storage root. |
-| `{my_project} config doctor` | Check AppRC registry and local storage setup. |
-| `{my_project} config list` | List registered AppRC storages. |
+| `{my_project} config setup --yes --storage-root STORAGE_ROOT` | Create first-run single-storage AppRC setup. |
+| `{my_project} config doctor` | Check AppRC storage setup. |
+| `{my_project} config init STORAGE_ROOT --name NAME` | Register a multi-storage root after `{MY_PROJECT}_APPRC_TOML` is exported. |
+| `{my_project} config list` | List AppRC multi-storage registrations. |
 | `{my_project} config show --json` | Show resolved runtime config metadata. |
 | `{my_project} config edit` | Open the AppRC Textual config editor. |
 | `python -m {my_project} --help` | Smoke-test the module entry point. |
@@ -107,7 +108,8 @@ Common environment variables:
 
 | Name | Role |
 |---|---|
-| `{MY_PROJECT}_STORAGE` | Active storage root selected by AppRC registry/bootstrap. |
+| `{MY_PROJECT}_STORAGE` | Active storage selector, usually a storage-root path in single-storage mode. |
+| `{MY_PROJECT}_APPRC_TOML` | Optional AppRC TOML file for named multi-storage workflows. |
 | `{MY_PROJECT}_MESSAGE` | Starter example setting loaded from `config/.env.shared` or local storage. |
 | `VIRTUAL_ENV` | Active virtual environment path. |
 | `PYTHONPATH` | Import-path override for local smoke tests. Prefer editable installs for normal development. |
@@ -129,7 +131,7 @@ Important config files:
 |---|---|
 | [pyproject.toml](../pyproject.toml) | Python packaging, dependencies, and tool settings. |
 | [src/{my_project}/config/.env.shared](../src/{my_project}/config/.env.shared) | Packaged AppRC defaults loaded before local and shell overrides. |
-| `~/.config/{my_project}/{my_project}.toml` | User-level AppRC storage registry. |
+| `{MY_PROJECT}_APPRC_TOML -> <path>/{my_project}.apprc.toml` | Optional AppRC TOML file for named multi-storage roots. |
 | `<storage-root>/.env.local` | Storage-local AppRC overrides written by `{my_project} config set`. |
 | [.envrc](../.envrc) | `direnv` integration. |
 | [.gitignore](../.gitignore) | Local and generated files excluded from Git. |
