@@ -7,12 +7,12 @@ from collections.abc import Sequence
 from pathlib import Path
 
 # == 3rd Party ===============================
-from apprc import AppConfigKit
-from apprc.config.environment import EnvBootstrapResult
 from apprc.logging import get_logger
+from apprc.runtime_config.bootstrap.result import EnvBootstrapResult
+from apprc.runtime_config.kit import AppConfigKit
 
 # == Internal ================================
-from <my_project>.config.owners import ALL_CONFIG_OWNERS
+from <my_project>.config.owners import APP_CONFIG_ENVS
 
 LOG = get_logger(__name__)
 
@@ -20,8 +20,9 @@ APP_CONFIG = AppConfigKit(
     app_name="<my_project>",
     display_name="<my_project>",
     config_package="<my_project>.config",
-    owners=ALL_CONFIG_OWNERS,
+    envs=APP_CONFIG_ENVS,
     storage_env_key="<MY_PROJECT>_STORAGE",
+    command_name="<my_project>",
     apprc_toml_filename="<my_project>.apprc.toml",
     shared_env_filename=".env.shared",
     local_env_filename=".env.local",

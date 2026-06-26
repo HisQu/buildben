@@ -6,7 +6,7 @@
 - Check these modules first:
   - `<my_project>.config`
   - `<my_project>.utils`
-  - `apprc.config`
+  - `apprc.runtime_config`
   - `apprc.logging`
 - If a helper is broadly reusable, place it in the appropriate shared module.
 - Put long-form docs in `docs/`:
@@ -19,7 +19,7 @@
 
 ## Project rules
 - Do not duplicate helpers or re-implement existing utilities without checking first.
-- App configuration belongs in `<my_project>.config.owners` and should use AppRC field/owner specs.
+- App configuration belongs in `<my_project>.config.owners` and should use AppRC `EnvConfig` classes with `env_field(...)` declarations.
 - CLI behavior belongs in `<my_project>.cli.app`; keep `<my_project>.main` as a thin public entry point wrapper.
 - Import logging helpers from `apprc.logging`, for example `from apprc.logging import get_logger`.
 - Import `<my_project>`-owned utility helpers through the facade: `import <my_project>.utils as ut`.

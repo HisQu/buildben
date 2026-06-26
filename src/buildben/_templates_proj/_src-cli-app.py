@@ -9,13 +9,11 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
-from apprc.cli import (
-    bootstrap_cli_env,
-    config_request_skips_runtime_bootstrap,
-    dump_json,
-)
-from apprc.config.environment import EnvBootstrapResult
+from apprc.cli.bootstrap import bootstrap_cli_env
+from apprc.cli.config.state import config_request_skips_runtime_bootstrap
+from apprc.cli.typer_utils import dump_json
 from apprc.logging import get_logger, setup_logging
+from apprc.runtime_config.bootstrap.result import EnvBootstrapResult
 
 import <my_project>
 from <my_project>.config import APP_CONFIG
@@ -133,19 +131,27 @@ def _config_show_payload(state: CLIState) -> dict[str, Any]:
             else str(env_bootstrap.local_env)
         ),
         "storage": state.storage,
-        "storage_count": 0 if env_bootstrap is None else env_bootstrap.storage_count,
+        "storage_count": 0
+        if env_bootstrap is None
+        else env_bootstrap.storage_count,
         "storage_env_key": APP_CONFIG.spec.storage_env_key,
-        "storage_name": None if env_bootstrap is None else env_bootstrap.storage_name,
+        "storage_name": None
+        if env_bootstrap is None
+        else env_bootstrap.storage_name,
         "storage_root": (
             None
             if env_bootstrap is None or env_bootstrap.storage_root is None
             else str(env_bootstrap.storage_root)
         ),
         "storage_selector_source": (
-            None if env_bootstrap is None else env_bootstrap.storage_selector_source
+            None
+            if env_bootstrap is None
+            else env_bootstrap.storage_selector_source
         ),
         "storage_selector_value": (
-            None if env_bootstrap is None else env_bootstrap.storage_selector_value
+            None
+            if env_bootstrap is None
+            else env_bootstrap.storage_selector_value
         ),
         "version": _package_version(),
     }

@@ -144,7 +144,7 @@ def test_scaffolded_project_uses_dependency_group_template(
 
     project = pyproject["project"]
     assert project["dependencies"] == [
-        "apprc>=0.12,<0.13",
+        "apprc>=0.15.1,<0.16",
         "typer",
     ]
     assert "python-dotenv" not in project["dependencies"]
@@ -261,13 +261,23 @@ def test_scaffolded_project_has_apprc_config_package(
     agents_text = (proot / "AGENTS.md").read_text(encoding="utf-8")
 
     assert "AppConfigKit" in config_app_text
+    assert "APP_CONFIG_ENVS" in config_app_text
+    assert "envs=APP_CONFIG_ENVS" in config_app_text
     assert 'storage_env_key="BUBE_TEST_TMP_STORAGE"' in config_app_text
+    assert 'command_name="bube_test_tmp"' in config_app_text
     assert 'apprc_toml_filename="bube_test_tmp.apprc.toml"' in config_app_text
-    assert "ConfigField" in owners_text
+    assert "EnvConfig" in owners_text
+    assert "env_field" in owners_text
+    assert "env_owner" in owners_text
+    assert "config_owner_for" in owners_text
+    assert "AppRuntimeConfig" in owners_text
+    assert "ConfigField" not in owners_text
     assert "config_field" not in owners_text
+    assert "apprc.config" not in owners_text
     assert 'env_prefix="BUBE_TEST_TMP_"' in owners_text
     assert 'BUBE_TEST_TMP_MESSAGE="Hello from bube_test_tmp"' in shared_env_text
     assert "bube_test_tmp.config" in agents_text
+    assert "apprc.runtime_config" in agents_text
     assert "apprc.logging" in agents_text
 
 

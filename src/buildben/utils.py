@@ -10,7 +10,7 @@ from textwrap import dedent
 import ast
 from collections.abc import Iterable
 
-from typing import Iterable, Sequence
+from typing import Sequence
 
 
 # %%
@@ -235,7 +235,10 @@ def create_init_dot_py(
         init_path.touch(exist_ok=True)
         return
 
-    parts: list[str] = [f"from . import {', '.join(modules)}\n"]
+    parts: list[str] = [
+        "# ruff: noqa: F401\n",
+        f"from . import {', '.join(modules)}\n",
+    ]
 
     if flatten_functions:
         seen: dict[str, str] = {}

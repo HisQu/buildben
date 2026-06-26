@@ -82,8 +82,9 @@ one-off diagnostics in the nearest existing tooling, test, or experiment area.
 <!-- ======================================================== -->
 
 `{my_project}` uses AppRC for application configuration. The application owns
-its field inventory in `src/{my_project}/config/owners.py`; AppRC owns the
-repeatable workflows around that inventory:
+its typed `EnvConfig` declarations in `src/{my_project}/config/owners.py`;
+AppRC derives the normalized owner inventory and owns the repeatable workflows
+around it:
 
 - packaged defaults in `src/{my_project}/config/.env.shared`
 - optional multi-storage registry selected by `{MY_PROJECT}_APPRC_TOML`
@@ -91,7 +92,7 @@ repeatable workflows around that inventory:
 - shell and explicit dotenv overrides for one process
 - generated `config` CLI commands and the Textual editor
 
-Keep new config fields in the AppRC owner specs before reading them from
+Keep new config fields in the AppRC `EnvConfig` class before reading them from
 runtime code. That keeps defaults, docs metadata, CLI editing, and validation
 pointing at the same contract.
 
