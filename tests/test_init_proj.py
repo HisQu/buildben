@@ -226,6 +226,32 @@ def test_scaffolded_project_uses_dependency_group_template(
     assert "bube_test_tmp config doctor" in readme_text
 
 
+def test_scaffolded_project_includes_project_changelog(
+    bube_test_project: Path,
+) -> None:
+    """Assert generated projects include a project-filled changelog."""
+    changelog_path = bube_test_project / "CHANGELOG.md"
+
+    assert changelog_path.is_file()
+
+    changelog_text = changelog_path.read_text(encoding="utf-8")
+    assert "bube_test_tmp" in changelog_text
+    assert "0.1.0" in changelog_text
+    assert "0.1.0 - " in changelog_text
+    assert "<my_project>" not in changelog_text
+    assert "<project_name>" not in changelog_text
+    assert "<initial_version>" not in changelog_text
+    assert "<scaffold_date>" not in changelog_text
+    assert "<bb_date>" not in changelog_text
+    assert "<bb_today>" not in changelog_text
+    assert "{my_project}" not in changelog_text
+    assert "{project_name}" not in changelog_text
+    assert "{initial_version}" not in changelog_text
+    assert "{scaffold_date}" not in changelog_text
+    assert "{bb_date}" not in changelog_text
+    assert "{bb_today}" not in changelog_text
+
+
 def test_scaffolded_project_includes_typer_cli_scaffold(
     bube_test_project: Path,
 ) -> None:
@@ -367,6 +393,7 @@ def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> N
     assert "bube_test_tmp version" in references_text
     assert "bube_test_tmp diagnose" in references_text
     assert "bube_test_tmp config setup --yes --storage-root" in references_text
+    assert "CHANGELOG.md" in references_text
     assert "python -m bube_test_tmp --help" in how_to_text
     assert "bube_test_tmp config doctor" in how_to_text
 
@@ -417,6 +444,7 @@ def test_buildben_wheel_includes_all_template_assets(tmp_path: Path) -> None:
     assert "buildben/_templates_experim/_REPORT.md" in names
     assert "buildben/_templates_experim/_paths.env" in names
     assert "buildben/_templates_experim/_run.py.tmpl" in names
+    assert "buildben/_templates_proj/_.CHANGELOG.md" in names
     assert "buildben/_templates_proj/_src-cli-app.py.tmpl" in names
 
 

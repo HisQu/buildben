@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import re
 
 # import shutil
@@ -103,6 +104,7 @@ def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path
         "_.envrc.private": project_root / ".envrc.private",
         "_justfile": project_root / "justfile",
         "_AGENTS.md": project_root / "AGENTS.md",
+        "_.CHANGELOG.md": project_root / "CHANGELOG.md",
         "_docs-README.md": project_root / "docs" / "README.md",
         "_docs-How-To-User-Guides.md": project_root / "docs" / "How-To-User-Guides.md",
         "_docs-Development.md": project_root / "docs" / "Development.md",
@@ -158,13 +160,28 @@ def _project_placeholders(name: str, github_user: str) -> dict[str, str]:
     :param github_user: GitHub username shown in generated metadata.
     :return: Placeholder replacement mapping.
     """
+    scaffold_date = dt.date.today().isoformat()
     return {
         "<my_project>": name,
         "{my_project}": name,
+        "<project_name>": name,
+        "{project_name}": name,
         "<MY_PROJECT>": name.upper(),
         "{MY_PROJECT}": name.upper(),
+        "<PROJECT_NAME>": name.upper(),
+        "{PROJECT_NAME}": name.upper(),
         "<github_username>": github_user,
         "{github_username}": github_user,
+        "<github_user>": github_user,
+        "{github_user}": github_user,
+        "<bb_date>": scaffold_date,
+        "{bb_date}": scaffold_date,
+        "<bb_today>": scaffold_date,
+        "{bb_today}": scaffold_date,
+        "<scaffold_date>": scaffold_date,
+        "{scaffold_date}": scaffold_date,
+        "<initial_version>": "0.1.0",
+        "{initial_version}": "0.1.0",
     }
 
 

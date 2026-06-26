@@ -151,6 +151,8 @@ where = ["src"]                       # < Scan only src/ for packages
 typeCheckingMode = "basic"
 pythonVersion = "3.12"  # Enforce the minimum supported python version
 pythonPlatform = "All"
+venvPath = "."
+venv = ".venv"
 include = ["src"]
 exclude = [
     "tests", # < Tests may be dirty.

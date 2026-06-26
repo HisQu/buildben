@@ -114,6 +114,8 @@ addopts = "-n 6"  # < Use 6 cores
 testpaths = ["tests"]
 
 [tool.pyright]
+venvPath = "."
+venv = ".venv"
 include = ["src", "tests"]
 exclude = [
     "**/__pycache__",

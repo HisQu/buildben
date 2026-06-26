@@ -1,21 +1,15 @@
-# Changelog
+# Buildben Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to `buildben` will be documented in this file.
 
 This project follows Semantic Versioning.
 
-
 <br>
 
-### Table of Contents
+### Table Of Contents
 
-1. [Changelog](#changelog)
-2. [\[Unreleased\]](#unreleased)
-3. [\[0.3.0\] - 2026-06-26](#030---2026-06-26)
-4. [\[0.2.9\] - 2026-05-23](#029---2026-05-23)
-
-
-
+1. [Buildben Changelog](#buildben-changelog)
+2. [[Unreleased]](#unreleased)
 
 <br>
 
@@ -24,163 +18,49 @@ This project follows Semantic Versioning.
 <br>
 
 <!-- ======================================================== -->
-
 
 # [Unreleased]
 
 <br>
 
-### 💥 Breaking Change Summary
+### Breaking Change Summary
 
-
-<br>
-
-### ➕ Added
-
+- Generated project scaffolds now target AppRC 0.15.1 and use the typed `EnvConfig` API.
+- The unfinished `init-database` / `data` command is no longer exposed.
+- Python template files now use `.py.tmpl` names so static tooling can scan the repository without parsing placeholder imports.
 
 <br>
 
-### 💔 Changed
+### Added
 
-
-<br>
-
-### ⚠️ Deprecated
-
+- Add a project-filled changelog template to generated project scaffolds.
+- Add generated-project coverage for changelog creation, package builds, wheel template contents, experiment scaffolds, and uv-based environment snapshots.
 
 <br>
 
-### 🗑️ Removed
+### Changed
 
-
-<br>
-
-### 🔨 Fixed
-
-
-
-<br>
-
-### 🔨 Fixed
-
-
+- Update generated project configuration to AppRC 0.15.1, including typed runtime config declarations and concrete AppRC import paths.
+- Modernize `env-snapshot` to use `uv build` and `uv export` instead of `python -m build`, `pip-compile`, and unfinished Docker behavior.
+- Make experiment scaffolds minimal and runnable without NumPy, Pandas, or a legacy project `env` module.
+- Generate a root `README.md` in project scaffolds so package builds do not emit missing README warnings.
+- Refactor project scaffolding into focused helper functions.
 
 <br>
 
----
+### Deprecated
 
 <br>
 
-<!-- ======================================================== -->
+### Removed
 
-# [0.3.0] - 2026-06-26
-
-<br>
-
-### 💥 Breaking Change Summary
-<!-- Guide the user how to update their code based on the changes listed under  "Changed", "Removed" and maybe "Deprecated". -->
-
-
-
-### Use  `ipsum` instead of `lorem` inside `dolor.amet`:
-- Lorem ipsum
-- Dolor sit amet
-
-
+- Remove the broken `init-database` implementation from the public command tree.
+- Remove Docker snapshot advertising from current documentation until Docker snapshot support is implemented.
 
 <br>
 
-### ➕ Added
+### Fixed
 
-#### Lorem ipsum is now blabla:
-- Lorem ipsum
-- Dolor sit amet
-
-#### `Lorem` ipsum is now bla:
-- Lorepm ipsum: Add batch import support for project datasets.
-
-
-
-<br>
-
-### 💔 Changed
-
-- Lorem ipsum: Rename `load_config()` argument `path` to `config_path`.
-
-
-
-<br>
-
-
-
-### 🗑️ Removed
-
-
-
-
-<br>
-
-### 🔨 Fixed
-
-- Fix crash when an empty input file is passed to the parser.
-
-
-
-<br>
-
----
-
-<br>
-
-<!-- ======================================================== -->
-
-# [0.2.9] - 2026-05-23
-
-<br>
-
-### 💥 Breaking Change Summary
-<!-- Guide the user how to update their code based on the changes listed under  "Changed", "Removed" and maybe "Deprecated". -->
-
-
-
-#### Use  `ipsum` instead of `lorem` inside `dolor.amet`:
-- Lorem ipsum
-- Dolor sit amet
-
-
-
-<br>
-
-### ➕ Added
-
-#### Lorem ipsum is now blabla:
-- Lorem ipsum
-- Dolor sit amet
-
-#### `Lorem` ipsum is now bla:
-- Lorepm ipsum: Add batch import support for project datasets.
-
-
-
-<br>
-
-### 💔 Changed
-
-- Lorem ipsum: Rename `load_config()` argument `path` to `config_path`.
-
-
-
-<br>
-
-
-
-### 🗑️ Removed
-
-
-
-
-<br>
-
-### 🔨 Fixed
-
-- Fix crash when an empty input file is passed to the parser.
+- Fix package-data coverage so experiment templates, including `_REPORT.md` and `_paths.env`, ship in buildben wheels.
+- Fix repo-wide Ruff and Pyright workflows by moving placeholder Python templates to `.py.tmpl` files and scoping Pyright to package/tests.
+- Fix generated experiment placeholder substitution for dates and human-readable experiment names.
