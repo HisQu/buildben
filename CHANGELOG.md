@@ -10,6 +10,7 @@ This project follows Semantic Versioning.
 
 1. [Buildben Changelog](#buildben-changelog)
 2. [[Unreleased]](#unreleased)
+3. [[0.2.1] - 2026-06-26](#021---2026-06-26)
 
 <br>
 
@@ -20,6 +21,40 @@ This project follows Semantic Versioning.
 <!-- ======================================================== -->
 
 # [Unreleased]
+
+<br>
+
+### 💥 Breaking Change Summary
+
+<br>
+
+### ➕ Added
+
+<br>
+
+### 💔 Changed
+
+<br>
+
+### ⚠️ Deprecated
+
+<br>
+
+### 🗑️ Removed
+
+<br>
+
+### 🔨 Fixed
+
+<br>
+
+---
+
+<br>
+
+<!-- ======================================================== -->
+
+# [0.2.1] - 2026-06-26
 
 <br>
 
