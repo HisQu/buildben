@@ -23,7 +23,7 @@ This project follows Semantic Versioning.
 
 <br>
 
-### Breaking Change Summary
+### 💥 Breaking Change Summary
 
 - Generated project scaffolds now target AppRC 0.15.1 and use the typed `EnvConfig` API.
 - The unfinished `init-database` / `data` command is no longer exposed.
@@ -31,14 +31,14 @@ This project follows Semantic Versioning.
 
 <br>
 
-### Added
+### ➕ Added
 
 - Add a project-filled changelog template to generated project scaffolds.
 - Add generated-project coverage for changelog creation, package builds, wheel template contents, experiment scaffolds, and uv-based environment snapshots.
 
 <br>
 
-### Changed
+### 💔 Changed
 
 - Update generated project configuration to AppRC 0.15.1, including typed runtime config declarations and concrete AppRC import paths.
 - Modernize `env-snapshot` to use `uv build` and `uv export` instead of `python -m build`, `pip-compile`, and unfinished Docker behavior.
@@ -48,18 +48,18 @@ This project follows Semantic Versioning.
 
 <br>
 
-### Deprecated
+### ⚠️ Deprecated
 
 <br>
 
-### Removed
+### 🗑️ Removed
 
 - Remove the broken `init-database` implementation from the public command tree.
 - Remove Docker snapshot advertising from current documentation until Docker snapshot support is implemented.
 
 <br>
 
-### Fixed
+### 🔨 Fixed
 
 - Fix package-data coverage so experiment templates, including `_REPORT.md` and `_paths.env`, ship in buildben wheels.
 - Fix repo-wide Ruff and Pyright workflows by moving placeholder Python templates to `.py.tmpl` files and scoping Pyright to package/tests.
