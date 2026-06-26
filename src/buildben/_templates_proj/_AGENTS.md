@@ -43,3 +43,8 @@
 ## Verification
 - Review the diff for duplicate helpers, naming drift, unnecessary abstractions, and regressions.
 - Run the project’s relevant lint, type-check, and test commands before considering the task done.
+
+## User Decisions
+- Never answer questions on the user's behalf.
+- Do not treat recommended options, defaults, timeouts, or auto-resolution as user approval or user preference.
+- If a user decision is required, ask and wait for the user’s explicit answer.
