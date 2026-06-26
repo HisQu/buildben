@@ -35,7 +35,7 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 - ... = a Python development tool.
 - ... standardizes project & experiment setups with template scaffolds
 - ... integrates popular tools like `pipx`, `direnv`, `just`, etc.
-- ... dockerizes a snapshot of your project for 100 % reproducibibility of experiments
+- ... snapshots a project commit, lock file, and build artifacts for reproducible experiments
 
 
 #### Main dependencies:
@@ -43,7 +43,6 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 - **[`uv`](https://github.com/astral-sh/uv)**: Awesome fast dependency manager & virtual environment tool, etc.
 - **[`direnv`](https://direnv.net/)**: Auto-loads project-specific environment and provides  one-liners for environment management.
 - **[`just`](https://github.com/casey/just)**: For running tasks to manage build tools & the virtual environment.
-- **`Docker`:** Used to create snapshots of your project (optional). 
 
 <!-- Dev dependencies: 
 - **[`pipx`](https://pipx.pypa.io)**: The recommended home for `buildben`, making it accessible globally while keeping the OS-Python clean
@@ -250,7 +249,7 @@ directory inside the project root, including templates for Reports, outputs, etc
 
 ```bash
 # From inside your project:
-bube init-exp -n experiment1 # Long Alias for `bube exp`
+bube add-experim experiment1 # Alias: `bube exp experiment1`
 # > Creates the scaffold in `./experiments/2025-06-13_experiment1`
 ```
 
@@ -260,12 +259,12 @@ bube init-exp -n experiment1 # Long Alias for `bube exp`
 You can create a snapshot of your current project, sparing you the
 headache of PyPI releases and semantic versioning. This is useful for
 e.g. reproducing your experiment after the project has changed. It works by
-capturing the current commit hash, pip-compiling requirements and creates a
-Dockerfile + Docker-Image.
+capturing the current commit hash, exporting locked requirements with `uv`,
+and building local wheel/sdist artifacts.
 ```bash
 # From inside your project:
-bube env-snapshot --target-dir experiments/2025-06-13_experiment1
-# > Creates Dockerfile, experiment.env, etc. inside target-dir
+bube env-snapshot experiments/2025-06-13_experiment1
+# > Creates experiment.env, requirements.lock, wheel, and sdist artifacts
 ```
 
 

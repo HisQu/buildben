@@ -1,0 +1,26 @@
+"""Primary experiment step for <experiment_name>.
+
+:return: None.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+EXPERIMENT_ROOT = Path(__file__).resolve().parents[1]
+INPUT_DIR = EXPERIMENT_ROOT / "input"
+INTERMEDIATE_OUTPUT_DIR = EXPERIMENT_ROOT / "interm-output"
+
+
+def main() -> None:
+    """Run the starter experiment step.
+
+    :return: None.
+    """
+    INTERMEDIATE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"Experiment input: {INPUT_DIR}")
+    print(f"Intermediate output: {INTERMEDIATE_OUTPUT_DIR}")
+
+
+if __name__ == "__main__":
+    main()

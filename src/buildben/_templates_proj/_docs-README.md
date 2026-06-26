@@ -16,7 +16,7 @@
 <!-- ======================================================== -->
 
 This directory is the GitHub-rendered manual for `{my_project}`. The root
-[README](../README.IGNORE.md) stays short enough for installation and first
+[README](../README.md) stays short enough for installation and first
 use. These files hold longer task recipes, maintainer workflow, exact
 references, and conceptual explanations.
 
@@ -49,7 +49,7 @@ references, and conceptual explanations.
 
 The first reading path is:
 
-1. Use the root [README](../README.IGNORE.md) for the shortest setup route.
+1. Use the root [README](../README.md) for the shortest setup route.
 2. Use [How-To User Guides](How-To-User-Guides.md) for commands in order.
 3. Use [References](References.md) when you need exact names.
 4. Use [Explanations](Explanations.md) when you need the system model.
@@ -72,7 +72,7 @@ Use these terms the same way in every docs file:
 
 | Term | Meaning | Main Reference |
 |---|---|---|
-| `project root` | The repository directory that contains `pyproject.toml`, `README.IGNORE.md`, and `src`. | [References: project paths](References.md#project-paths) |
+| `project root` | The repository directory that contains `pyproject.toml`, `README.md`, and `src`. | [References: project paths](References.md#project-paths) |
 | `package source` | The importable Python package under `src/{my_project}`. | [References: project paths](References.md#project-paths) |
 | `maintainer environment` | The local development environment with dependency groups installed. | [Development: maintainer loop](Development.md#maintainer-loop) |
 | `runtime dependency` | A dependency needed by users of the installed package. | [Explanations: dependency model](Explanations.md#dependency-model) |

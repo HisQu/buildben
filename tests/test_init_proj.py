@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tomllib
 import xml.etree.ElementTree as ET
+import zipfile
 from collections.abc import Generator
 from pathlib import Path
 
@@ -36,6 +37,23 @@ def _run(cmd: list[str], *, cwd: Path, env: dict[str, str]) -> None:
             f"STDERR:\n{e.stderr}\n"
         )
         raise AssertionError(msg) from e
+
+
+def _project_env(project_root: Path) -> dict[str, str]:
+    """Return an environment that can import buildben and a generated package.
+
+    :param project_root: Generated project root.
+    :return: Subprocess environment with local ``src`` paths prepended.
+    """
+    env = os.environ.copy()
+    repo_src = Path(__file__).resolve().parents[1] / "src"
+    src_paths = [str(repo_src), str(project_root / "src")]
+    existing_pythonpath = env.get("PYTHONPATH")
+    if existing_pythonpath:
+        src_paths.append(existing_pythonpath)
+    env["PYTHONPATH"] = os.pathsep.join(src_paths)
+    env["XDG_CONFIG_HOME"] = str(project_root / ".test-config")
+    return env
 
 
 @pytest.fixture()
@@ -132,6 +150,21 @@ def test_scaffolded_project_runs_pytest(bube_test_project: Path) -> None:
     _run([sys.executable, "-m", "pytest", "-q"], cwd=proot, env=env)
 
 
+def test_buildben_help_hides_unimplemented_database_command() -> None:
+    """Assert unfinished data scaffolding is not exposed in the public CLI."""
+    result = subprocess.run(
+        [sys.executable, "-m", "buildben.cli", "--help"],
+        cwd=str(Path(__file__).resolve().parents[1]),
+        env=os.environ.copy(),
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+
+    assert "init-database" not in result.stdout
+    assert "data" not in result.stdout
+
+
 def test_scaffolded_project_uses_dependency_group_template(
     bube_test_project: Path,
 ) -> None:
@@ -143,6 +176,7 @@ def test_scaffolded_project_uses_dependency_group_template(
     pyproject = tomllib.loads(pyproject_text)
 
     project = pyproject["project"]
+    assert project["readme"] == "README.md"
     assert project["dependencies"] == [
         "apprc>=0.15.1,<0.16",
         "typer",
@@ -181,7 +215,7 @@ def test_scaffolded_project_uses_dependency_group_template(
     assert "uv version --bump" in justfile_text
     assert 'verify-pypi requirement="bube_test_tmp"' in justfile_text
 
-    readme_text = (proot / "README.IGNORE.md").read_text(encoding="utf-8")
+    readme_text = (proot / "README.md").read_text(encoding="utf-8")
     assert 'python -m pip install -e "."' in readme_text
     assert 'python -m pip install -e ".[rag]"' in readme_text
     assert 'python -m pip install -e "." --group dev' in readme_text
@@ -320,7 +354,7 @@ def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> N
     assert "Backlink:" not in all_docs
     assert "Backlinks:" not in all_docs
 
-    readme_text = (proot / "README.IGNORE.md").read_text(encoding="utf-8")
+    readme_text = (proot / "README.md").read_text(encoding="utf-8")
     assert "docs/README.md" in readme_text
 
     references_text = (proot / "docs" / "References.md").read_text(encoding="utf-8")
@@ -347,3 +381,119 @@ def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> N
     assert "References.md#figure-visual-tokens" in development_text
     assert "README.md#2-documentation-standards" not in all_docs
     assert "Development.md#4-documentation-standards" in how_to_text
+
+
+def test_scaffolded_project_builds_without_missing_readme_warning(
+    bube_test_project: Path,
+) -> None:
+    """Assert generated package metadata points at an existing README."""
+    result = subprocess.run(
+        ["uv", "build", "--no-sources"],
+        cwd=str(bube_test_project),
+        env=_project_env(bube_test_project),
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    combined_output = f"{result.stdout}\n{result.stderr}"
+
+    assert "README.md' cannot be found" not in combined_output
+    assert "standard file not found" not in combined_output
+
+
+def test_buildben_wheel_includes_all_template_assets(tmp_path: Path) -> None:
+    """Assert installed wheels contain every scaffold template kind."""
+    repo_root = Path(__file__).resolve().parents[1]
+    _run(
+        ["uv", "build", "--out-dir", str(tmp_path), "--no-sources"],
+        cwd=repo_root,
+        env=os.environ.copy(),
+    )
+
+    wheel_path = next(tmp_path.glob("*.whl"))
+    with zipfile.ZipFile(wheel_path) as wheel:
+        names = set(wheel.namelist())
+
+    assert "buildben/_templates_experim/_REPORT.md" in names
+    assert "buildben/_templates_experim/_paths.env" in names
+    assert "buildben/_templates_experim/_run.py.tmpl" in names
+    assert "buildben/_templates_proj/_src-cli-app.py.tmpl" in names
+
+
+def test_experiment_scaffold_is_minimal_and_runnable(
+    bube_test_project: Path,
+) -> None:
+    """Assert generated experiment files compile and have no stale placeholders."""
+    proot = bube_test_project
+    env = _project_env(proot)
+    _run(
+        [sys.executable, "-m", "buildben.cli", "add-experim", "smoke"],
+        cwd=proot,
+        env=env,
+    )
+
+    experiment_root = next((proot / "experiments").glob("*_smoke"))
+    python_files = [
+        experiment_root / "run.py",
+        experiment_root / "scripts" / "exp.py",
+        experiment_root / "scripts" / "eval.py",
+    ]
+    all_generated_text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [*python_files, experiment_root / "REPORT.md"]
+    )
+
+    assert "<" not in all_generated_text
+    assert "{experiment" not in all_generated_text
+    assert "from bube_test_tmp import env" not in all_generated_text
+    assert "import numpy" not in all_generated_text
+    assert "import pandas" not in all_generated_text
+
+    for python_file in python_files:
+        _run([sys.executable, "-m", "py_compile", str(python_file)], cwd=proot, env=env)
+        _run([sys.executable, str(python_file)], cwd=proot, env=env)
+
+
+def test_env_snapshot_requires_experiment_dir() -> None:
+    """Assert missing env-snapshot arguments fail without a traceback."""
+    result = subprocess.run(
+        [sys.executable, "-m", "buildben.cli", "env-snapshot"],
+        cwd=str(Path(__file__).resolve().parents[1]),
+        env=os.environ.copy(),
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode != 0
+    assert "experiment_dir" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_env_snapshot_writes_uv_snapshot_outputs(bube_test_project: Path) -> None:
+    """Assert env-snapshot writes reproducibility files using uv."""
+    proot = bube_test_project
+    env = _project_env(proot)
+
+    _run(["uv", "lock"], cwd=proot, env=env)
+    _run(["git", "init", "--initial-branch", "main"], cwd=proot, env=env)
+    _run(["git", "config", "user.email", "test@example.com"], cwd=proot, env=env)
+    _run(["git", "config", "user.name", "Buildben Test"], cwd=proot, env=env)
+    _run(["git", "add", "."], cwd=proot, env=env)
+    _run(["git", "commit", "-m", "Initial generated project"], cwd=proot, env=env)
+
+    _run(
+        [sys.executable, "-m", "buildben.cli", "env-snapshot", "experiments/smoke"],
+        cwd=proot,
+        env=env,
+    )
+
+    snapshot_root = proot / "experiments" / "smoke"
+    setup_dir = snapshot_root / "_setup"
+    env_text = (snapshot_root / "experiment.env").read_text(encoding="utf-8")
+
+    assert (setup_dir / "requirements.lock").is_file()
+    assert any(setup_dir.glob("*.whl"))
+    assert any(setup_dir.glob("*.tar.gz"))
+    assert "COMMIT_HASH=" in env_text
+    assert "LOCK_FILE=experiments/smoke/_setup/requirements.lock" in env_text

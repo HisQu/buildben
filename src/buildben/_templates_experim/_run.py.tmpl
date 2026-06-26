@@ -1,0 +1,24 @@
+"""Run the <experiment_name> experiment scaffold."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+EXPERIMENT_NAME = "<experiment_name>"
+EXPERIMENT_NAME_FULL = "<experiment_name_full>"
+PROJECT_NAME = "<my_project>"
+DATE_CREATED = "<bb_date>"
+EXPERIMENT_ROOT = Path(__file__).resolve().parent
+
+
+def main() -> None:
+    """Print the experiment scaffold location.
+
+    :return: None.
+    """
+    print(f"{PROJECT_NAME}:{EXPERIMENT_NAME_FULL}")
+    print(EXPERIMENT_ROOT)
+
+
+if __name__ == "__main__":
+    main()

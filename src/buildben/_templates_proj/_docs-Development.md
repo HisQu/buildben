@@ -343,7 +343,7 @@ For docs-only changes:
 
 ```bash
 git diff --check
-rg -n "TO[D]O|FIX[M]E|content[R]eference|oai[c]ite" README.IGNORE.md docs
+rg -n "TO[D]O|FIX[M]E|content[R]eference|oai[c]ite" README.md docs
 python -c "import pathlib, xml.etree.ElementTree as ET; [ET.parse(p) for p in pathlib.Path('docs/assets').glob('*.svg')]"
 ```
 

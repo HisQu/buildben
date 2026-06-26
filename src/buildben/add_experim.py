@@ -7,10 +7,11 @@ Usage from CLI aggregator:
 """
 
 from __future__ import annotations
+
+import argparse
+import datetime as dt
 import os
-import argparse, datetime as dt, shutil, subprocess, sys
 from pathlib import Path
-from textwrap import dedent
 
 from . import utils
 
@@ -36,11 +37,9 @@ def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
     p.add_argument(
         "name",
         nargs="?",
-        default="",
-        help="Experiment Name (e.g. validation, benchmark, etc.)",
+        default="experiment",
+        help="Experiment name (e.g. validation, benchmark, etc.)",
     )
-    p.add_argument("--no-venv", action="store_true", help="Skip venv creation")
-    p.add_argument("--no-freeze", action="store_true", help="Skip pip-compile lock")
     # > Entrypoint, retrieved as args.func in cli.py
     p.set_defaults(func=_run)
 
@@ -52,7 +51,7 @@ def _run(args: argparse.Namespace) -> None:
 
     # === Retrieve Variables ==========================================
     PR_ROOT: Path = utils.find_project_root()
-    PR_NAME = os.getenv("PROJECT_NAME")
+    PR_NAME = os.getenv("PROJECT_NAME") or PR_ROOT.name
 
     ### Experiment directory
     TODAY = dt.date.today().isoformat()
@@ -85,10 +84,10 @@ def _run(args: argparse.Namespace) -> None:
     # fmt: off
     transfers: dict[str, Path] = {
         "_REPORT.md": EXP_ROOT / "REPORT.md",
-        "_run.py": EXP_ROOT / "run.py",
+        "_run.py.tmpl": EXP_ROOT / "run.py",
         "_paths.env": EXP_ROOT / ".paths.env",
-        "_scripts_exp.py": EXP_ROOT / "scripts" / "exp.py",
-        "_scripts_eval.py": EXP_ROOT / "scripts" / "eval.py",
+        "_scripts_exp.py.tmpl": EXP_ROOT / "scripts" / "exp.py",
+        "_scripts_eval.py.tmpl": EXP_ROOT / "scripts" / "eval.py",
     }
     # fmt: on
 
@@ -102,8 +101,11 @@ def _run(args: argparse.Namespace) -> None:
     placeholders = {
         "<experiment_name>": args.name,
         "{experiment_name}": args.name,
+        "<experiment name>": args.name,
         "<experiment_name_full>": EXP_NAME_FULL,
         "{experiment_name_full}": EXP_NAME_FULL,
+        "<bb_date>": TODAY,
+        "{bb_date}": TODAY,
         "<bb_today>": TODAY,  # < bb_ makes it more unique to buildben
         "{bb_today}": TODAY,
         "<my_project>": PR_NAME,

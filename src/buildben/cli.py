@@ -2,7 +2,6 @@
 import sys
 import argparse
 from . import init_proj
-from . import init_database
 from . import add_experim
 from . import env_snapshot
 
@@ -26,7 +25,6 @@ def main() -> None:
 
     ### Edit subparser in place to include script-specific parsers
     init_proj._add_my_parser(subparsers)
-    init_database._add_my_parser(subparsers)
     add_experim._add_my_parser(subparsers)
     env_snapshot._add_my_parser(subparsers)
 

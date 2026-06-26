@@ -2,15 +2,13 @@
 
 # %%
 import os
+import shlex
 import sys
 import subprocess
 import shutil
 from pathlib import Path
-from textwrap import dedent
 import ast
-from collections.abc import Iterable
-
-from typing import Sequence
+from collections.abc import Iterable, Sequence
 
 
 # %%
@@ -19,31 +17,38 @@ from typing import Sequence
 # =====================================================================
 
 
-def run_command(command: str | list[str], cwd=None, quiet=True) -> str:
-    """Run a shell command and check for errors."""
+def run_command(
+    command: Sequence[str],
+    *,
+    cwd: Path | None = None,
+    quiet: bool = True,
+) -> str:
+    """Run a subprocess command and return stripped stdout.
 
-    shell = True if isinstance(command, str) else False
-
-    if isinstance(command, list):
-        shell = False
-    elif isinstance(command, str):
-        shell = True
-        command = dedent(command).strip()
-
+    :param command: Executable and arguments to run without shell expansion.
+    :param cwd: Optional working directory for the subprocess.
+    :param quiet: Whether to suppress stdout on successful completion.
+    :return: Captured stdout without leading or trailing whitespace.
+    :raises subprocess.CalledProcessError: If the command exits non-zero.
+    """
     result = subprocess.run(
         command,
-        shell=shell,  # < If command is not a list but a string
-        cwd=cwd,  # < Current working directory
-        # capture_output=True,  # < Capture output and error streams
-        stdout=subprocess.PIPE,  # < Capture output stream
-        stderr=subprocess.PIPE,  # < Capture error stream
-        text=True,  # < Output as text (not bytes)
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
     )
 
     if result.returncode != 0:
-        print(f"\n!!\n!! Error executing command: \n{command} \n")
-        print(result.stderr, "!!\n!!\n")
-        raise subprocess.CalledProcessError(result.returncode, command)
+        command_text = shlex.join(command)
+        print(f"\n!!\n!! Error executing command:\n{command_text}\n", file=sys.stderr)
+        print(result.stderr, "!!\n!!\n", file=sys.stderr)
+        raise subprocess.CalledProcessError(
+            result.returncode,
+            list(command),
+            output=result.stdout,
+            stderr=result.stderr,
+        )
 
     if not quiet:
         print(result.stdout, end="")
@@ -52,15 +57,6 @@ def run_command(command: str | list[str], cwd=None, quiet=True) -> str:
 
 
 if __name__ == "__main__":
-    print(run_command("ls"))
-    print(
-        run_command(
-            """ls \
-                -l \
-                -a \
-            """
-        )
-    )
     print(run_command(["ls", "-l", "-a"]))
 
 
@@ -71,19 +67,13 @@ if __name__ == "__main__":
 def git_init(PROOT: Path) -> None:
     """Initialize a git repository in the given project root directory."""
 
-    ### Rename "master" branch to "main"
-    run_command("git config --global init.defaultBranch main", cwd=PROOT)
-
-    ### Initialize git repo and commit
-    subprocess.run(["git", "init"], cwd=PROOT, check=True)
+    subprocess.run(["git", "init", "--initial-branch", "main"], cwd=PROOT, check=True)
     subprocess.run(["git", "add", "."], cwd=PROOT, check=True)
     subprocess.run(
         ["git", "commit", "-m", "Initial scaffold from buildben"],
         cwd=PROOT,
         check=True,
     )
-
-    subprocess.run(["git", "branch", "-m", "main"], cwd=PROOT, check=True)
 
 
 # %%

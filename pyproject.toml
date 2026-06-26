@@ -93,7 +93,7 @@ where = ["src"]                       # < Scan only src/ for packages
 "buildben" = [
     "**/*.sh",         # src/buildben/**/*.sh/
     "_templates_proj/**/*",  # src/buildben/templates/**/*
-    "_templates_experiment/**/*",  # src/buildben/templates/**/*
+    "_templates_experim/**/*",  # src/buildben/templates/**/*
     ]
 
 # =====================================================================
@@ -112,3 +112,12 @@ bube = "buildben.cli:main"
 [tool.pytest.ini_options]
 addopts = "-n 6"  # < Use 6 cores
 testpaths = ["tests"]
+
+[tool.pyright]
+include = ["src", "tests"]
+exclude = [
+    "**/__pycache__",
+    "build",
+    "dist",
+    "*.egg-info",
+]

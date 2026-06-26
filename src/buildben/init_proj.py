@@ -19,6 +19,7 @@ from . import utils
 CMD_NAME = "init-proj"  # < Name of the CLI-command
 CMD_ALIASES = ["proj"]  # < Alias shortcut of the CLI-command
 DOC = f"Scaffolds a new src-layout Python project. Aliases: {CMD_ALIASES}"
+IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -43,136 +44,172 @@ def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
     p.set_defaults(func=_run)  # !! call _run(args) when chosen
 
 
-# ================================================================== #
-# === implementation                                                 #
-# ================================================================== #
-def _run(args: argparse.Namespace) -> None:
+def _validate_project_name(name: str) -> None:
+    """Validate that a project name can be imported as a Python package.
 
-    ### Validate project name
-    IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-    if not IDENT_RE.match(args.name):
+    :param name: Requested project/package name.
+    :return: None.
+    """
+    if not IDENT_RE.match(name):
         sys.exit("💥  Project name must be a valid Python identifier")
 
-    ### Project root
-    # > .envrc and PROJ_ROOT do not exist yet, it's defined by user input:
-    PROOT: Path = Path(args.target_dir).expanduser().resolve() / args.name
-    utils.warn_dir_overwrite(PROOT)
 
-    # =================================================================
-    # === Directory tree
-    # =================================================================
+def _project_root(target_dir: str, name: str) -> Path:
+    """Resolve the destination directory for a new scaffold.
 
-    directories: list[Path] = [
-        PROOT / "tests",
-        PROOT / "assets",
-        PROOT / "examples",
-        PROOT / "docs",
-        PROOT / "docs" / "assets",
-        PROOT / ".codex",
-        # PR_ROOT / "experiments",
-        PROOT / ".github" / "workflows",
-        PROOT / ".github" / "workflows_inactive",
-        PROOT / "src" / args.name,
-        PROOT / "src" / args.name / "cli",
-        PROOT / "src" / args.name / "config",
-        PROOT / "src" / args.name / "utils",
-        PROOT / "src" / args.name / "data",
-        PROOT / "src" / args.name / "images",
+    :param target_dir: Parent directory supplied by the caller.
+    :param name: Project directory name.
+    :return: Absolute project root path.
+    """
+    return Path(target_dir).expanduser().resolve() / name
+
+
+def _project_directories(project_root: Path, name: str) -> list[Path]:
+    """Return directories required by the project scaffold.
+
+    :param project_root: Root directory of the generated project.
+    :param name: Import package name.
+    :return: Directories to create before copying templates.
+    """
+    return [
+        project_root / "tests",
+        project_root / "assets",
+        project_root / "examples",
+        project_root / "docs",
+        project_root / "docs" / "assets",
+        project_root / ".codex",
+        project_root / ".github" / "workflows",
+        project_root / ".github" / "workflows_inactive",
+        project_root / "src" / name,
+        project_root / "src" / name / "cli",
+        project_root / "src" / name / "config",
+        project_root / "src" / name / "utils",
+        project_root / "src" / name / "data",
+        project_root / "src" / name / "images",
     ]
-    for dir in directories:
-        dir.mkdir(parents=True, exist_ok=True)
 
-    # =================================================================
-    # === Copy template files
-    # =================================================================
 
-    # > {<_template_filename>: <destination_filepath>}
-    # fmt: off
-    transfers: dict[str, Path] = {
-        ### PR_ROOT:
-        "_gitignore": PROOT / ".gitignore",
-        "_pyproject.toml": PROOT / "pyproject.toml",
-        "_.envrc": PROOT / ".envrc",
-        "_.envrc.private": PROOT / ".envrc.private",
-        "_justfile": PROOT / "justfile",
-        "_AGENTS.md": PROOT / "AGENTS.md",
-        "_docs-README.md": PROOT / "docs" / "README.md",
-        "_docs-How-To-User-Guides.md": PROOT / "docs" / "How-To-User-Guides.md",
-        "_docs-Development.md": PROOT / "docs" / "Development.md",
-        "_docs-References.md": PROOT / "docs" / "References.md",
-        "_docs-Explanations.md": PROOT / "docs" / "Explanations.md",
-        "_docs-assets-docs-reading-map.svg": PROOT / "docs" / "assets" / "docs-reading-map.svg",
-        ### PR_ROOT/.codex
-        "_.codex_config.toml": PROOT / ".codex" / ".codex_config.toml",
-        ### PR_ROOT/.github:
-        "_github-codecov.yml": PROOT / ".github" / "workflows_inactive" / "codecov.yml",
-        "_github-CI_ubuntu_uv.yml": PROOT / ".github" / "workflows_inactive" / "CI_ubuntu_uv.yml",
-        ### PR_ROOT/src:
-        "_src-main.py": PROOT / "src" / args.name / "main.py",
-        "_src-__main__.py": PROOT / "src" / args.name / "__main__.py",
-        "_src-cli-app.py": PROOT / "src" / args.name / "cli" / "app.py",
-        "_src-config-app.py": PROOT / "src" / args.name / "config" / "app.py",
-        "_src-config-init.py": PROOT / "src" / args.name / "config" / "__init__.py",
-        "_src-config-owners.py": PROOT / "src" / args.name / "config" / "owners.py",
-        "_src-config-env.shared": PROOT / "src" / args.name / "config" / ".env.shared",
-        ### PR_ROOT/src/utils:
-        "_utils-stdlib.py": PROOT / "src" / args.name / "utils" / "stdlib.py",
-        ### .IGNORE - Files are git-ignored until renamed manually:
-        "_README.IGNORE.md": PROOT / "README.IGNORE.md",
-        "_assets-flowchart.IGNORE.mmd": PROOT / "assets" / "flowchart.IGNORE.mmd",
-        "_assets-classdiagram.IGNORE.mmd": PROOT / "assets" / "classdiagram.IGNORE.mmd",
+def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path]:
+    """Map project template filenames to generated output paths.
+
+    :param project_root: Root directory of the generated project.
+    :param name: Import package name.
+    :return: Template transfer mapping consumed by ``utils.copy_templates``.
+    """
+    return {
+        "_gitignore": project_root / ".gitignore",
+        "_pyproject.toml": project_root / "pyproject.toml",
+        "_.envrc": project_root / ".envrc",
+        "_.envrc.private": project_root / ".envrc.private",
+        "_justfile": project_root / "justfile",
+        "_AGENTS.md": project_root / "AGENTS.md",
+        "_docs-README.md": project_root / "docs" / "README.md",
+        "_docs-How-To-User-Guides.md": project_root / "docs" / "How-To-User-Guides.md",
+        "_docs-Development.md": project_root / "docs" / "Development.md",
+        "_docs-References.md": project_root / "docs" / "References.md",
+        "_docs-Explanations.md": project_root / "docs" / "Explanations.md",
+        "_docs-assets-docs-reading-map.svg": project_root
+        / "docs"
+        / "assets"
+        / "docs-reading-map.svg",
+        "_.codex_config.toml": project_root / ".codex" / ".codex_config.toml",
+        "_github-codecov.yml": project_root
+        / ".github"
+        / "workflows_inactive"
+        / "codecov.yml",
+        "_github-CI_ubuntu_uv.yml": project_root
+        / ".github"
+        / "workflows_inactive"
+        / "CI_ubuntu_uv.yml",
+        "_src-main.py.tmpl": project_root / "src" / name / "main.py",
+        "_src-__main__.py.tmpl": project_root / "src" / name / "__main__.py",
+        "_src-cli-app.py.tmpl": project_root / "src" / name / "cli" / "app.py",
+        "_src-config-app.py.tmpl": project_root / "src" / name / "config" / "app.py",
+        "_src-config-init.py.tmpl": project_root
+        / "src"
+        / name
+        / "config"
+        / "__init__.py",
+        "_src-config-owners.py.tmpl": project_root
+        / "src"
+        / name
+        / "config"
+        / "owners.py",
+        "_src-config-env.shared": project_root
+        / "src"
+        / name
+        / "config"
+        / ".env.shared",
+        "_utils-stdlib.py.tmpl": project_root / "src" / name / "utils" / "stdlib.py",
+        "_README.IGNORE.md": project_root / "README.md",
+        "_assets-flowchart.IGNORE.mmd": project_root
+        / "assets"
+        / "flowchart.IGNORE.mmd",
+        "_assets-classdiagram.IGNORE.mmd": project_root
+        / "assets"
+        / "classdiagram.IGNORE.mmd",
     }
-    # fmt: on
 
-    tmpl_dir = Path(__file__).resolve().parent / "_templates_proj"
-    utils.copy_templates(transfers=transfers, tmpl_dir=tmpl_dir)
 
-    # =================================================================
-    # === __init__.py files
-    # =================================================================
-    utils.create_init_dot_py(PROOT / "src" / args.name)
-    utils.create_init_dot_py(PROOT / "src" / args.name / "cli", imports=["app"])
-    # > This is copied
+def _project_placeholders(name: str, github_user: str) -> dict[str, str]:
+    """Return placeholder replacements for project templates.
+
+    :param name: Import package name.
+    :param github_user: GitHub username shown in generated metadata.
+    :return: Placeholder replacement mapping.
+    """
+    return {
+        "<my_project>": name,
+        "{my_project}": name,
+        "<MY_PROJECT>": name.upper(),
+        "{MY_PROJECT}": name.upper(),
+        "<github_username>": github_user,
+        "{github_username}": github_user,
+    }
+
+
+def _create_project_directories(project_root: Path, name: str) -> None:
+    """Create the directory tree for a generated project.
+
+    :param project_root: Root directory of the generated project.
+    :param name: Import package name.
+    :return: None.
+    """
+    for directory in _project_directories(project_root, name):
+        directory.mkdir(parents=True, exist_ok=True)
+
+
+def _create_init_files(project_root: Path, name: str) -> None:
+    """Create generated package ``__init__.py`` files.
+
+    :param project_root: Root directory of the generated project.
+    :param name: Import package name.
+    :return: None.
+    """
+    package_root = project_root / "src" / name
+    utils.create_init_dot_py(package_root)
+    utils.create_init_dot_py(package_root / "cli", imports=["app"])
     utils.create_init_dot_py(
-        PROOT / "src" / args.name / "utils",
+        package_root / "utils",
         imports=["stdlib"],
         flatten_functions=True,
-        # < x = u.stdlib.my_function()
-        # < import <my_project>.utils as u
     )
 
-    # =================================================================
-    # === Placeholder substitution
-    # =================================================================
-    placeholders = {
-        "<my_project>": args.name,
-        "{my_project}": args.name,
-        "<MY_PROJECT>": args.name.upper(),
-        "{MY_PROJECT}": args.name.upper(),
-        "<github_username>": args.github_user,
-        "{github_username}": args.github_user,
-    }
 
-    utils.substitute_placeholders(
-        filepaths=list(transfers.values()), placeholders=placeholders
-    )
+def _print_success(project_root: Path, name: str) -> None:
+    """Print the final scaffold success message.
 
-    # =================================================================
-    # === Optional git init
-    # =================================================================
-    if args.git_init:
-        utils.git_init(PROOT)
-
-    # =================================================================
-    # === Final message
-    # =================================================================
+    :param project_root: Root directory of the generated project.
+    :param name: Import package name.
+    :return: None.
+    """
     print(
         dedent(
             f"""
-            ✅  {args.name} scaffold complete!
+            ✅  {name} scaffold complete!
             
             👉 Next Steps:
-                cd "{PROOT}"
+                cd "{project_root}"
                 direnv allow       # Trust .envrc
                 just               # List available recipes
             
@@ -180,3 +217,27 @@ def _run(args: argparse.Namespace) -> None:
             """
         )
     )
+
+
+# ================================================================== #
+# === implementation                                                 #
+# ================================================================== #
+def _run(args: argparse.Namespace) -> None:
+    _validate_project_name(args.name)
+    project_root = _project_root(args.target_dir, args.name)
+    utils.warn_dir_overwrite(project_root)
+    _create_project_directories(project_root, args.name)
+
+    transfers = _project_template_transfers(project_root, args.name)
+    tmpl_dir = Path(__file__).resolve().parent / "_templates_proj"
+    utils.copy_templates(transfers=transfers, tmpl_dir=tmpl_dir)
+    _create_init_files(project_root, args.name)
+    utils.substitute_placeholders(
+        filepaths=list(transfers.values()),
+        placeholders=_project_placeholders(args.name, args.github_user),
+    )
+
+    if args.git_init:
+        utils.git_init(project_root)
+
+    _print_success(project_root, args.name)

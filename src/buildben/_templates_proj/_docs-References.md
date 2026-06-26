@@ -32,7 +32,7 @@ Core paths:
 
 | Path | Role |
 |---|---|
-| [README.IGNORE.md](../README.IGNORE.md) | Short setup entry point. Rename to `README.md` when the project is ready to publish. |
+| [README.md](../README.md) | Short setup entry point. |
 | [AGENTS.md](../AGENTS.md) | Local coding and documentation guidance for agents. |
 | [pyproject.toml](../pyproject.toml) | Package metadata, dependencies, and tool configuration. |
 | [justfile](../justfile) | Development commands. |

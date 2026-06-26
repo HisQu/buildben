@@ -1,277 +1,230 @@
 #!/usr/bin/env python3
 
-import os
+from __future__ import annotations
+
 import argparse
-from pathlib import Path
-import sys
-from textwrap import dedent
+import os
 import subprocess
+from pathlib import Path
 
 from . import utils
 
-CMD_NAME = "env-snapshot"  # < Name of the CLI-command
-CMD_ALIASES = ["snp"]  # < Alias shortcut of the CLI-command
-DOC = f"Snapshot a Python project into requirements.lock, experiment.env, and Dockerfile. Aliases: {CMD_ALIASES}"
+CMD_NAME = "env-snapshot"
+CMD_ALIASES = ["snp"]
+DOC = (
+    "Snapshot a Python project into an experiment requirements.lock, "
+    "experiment.env, wheel, and sdist. "
+    f"Aliases: {CMD_ALIASES}"
+)
 
 
 def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
+    """Attach the env-snapshot sub-parser to the CLI aggregator.
+
+    :param subparsers: Parent argparse subparser registry.
+    :return: None.
+    """
     p: argparse.ArgumentParser = subparsers.add_parser(
         name=CMD_NAME,
         aliases=CMD_ALIASES,
         help=DOC,
         description=DOC,
     )
-    # p.add_argument(
-    #     "-e",
-    #     "--exp-dir",
-    #     dest="experiment_dir",
-    #     help="Experiment directory to write lock & env files",
-    # )
-
     p.add_argument(
         "experiment_dir",
-        nargs="?",  # < zero-or-one positional value
-        # help=argparse.SUPPRESS,  # < Hide duplicate from help text
-        help="Experiment directory to write lock & env files",
+        help="Experiment directory to write lock and environment files into.",
     )
-
-    p.add_argument(
-        "-d",
-        "--dockerize",
-        action="store_true",
-        default=False,
-        help="Write Dockerfile, .dockerignore and build Docker image",
-    )
-
-    p.add_argument(
-        "--py-base",
-        "-b",
-        default="python:3.12-slim",
-        help="Base for docker-image (default 'python:3.12-slim')",
-    )
-
-    # > Entrypoint, retrieved as args.func in cli.py
     p.set_defaults(func=_run)
 
 
+def _project_name(project_root: Path) -> str:
+    """Return the display name for the current project.
+
+    :param project_root: Discovered project root.
+    :return: Environment-provided project name or directory fallback.
+    """
+    return os.getenv("PROJECT_NAME") or project_root.name
+
+
+def _resolve_experiment_dir(project_root: Path, raw_path: str) -> Path:
+    """Resolve an experiment directory and require it to stay inside the repo.
+
+    :param project_root: Discovered project root.
+    :param raw_path: CLI argument supplied as ``experiment_dir``.
+    :return: Absolute experiment directory path.
+    :raises SystemExit: If the path resolves outside the project root.
+    """
+    candidate = Path(raw_path).expanduser()
+    if not candidate.is_absolute():
+        candidate = project_root / candidate
+    experiment_dir = candidate.resolve()
+    try:
+        experiment_dir.relative_to(project_root)
+    except ValueError as exc:
+        raise SystemExit(
+            "env-snapshot: experiment_dir must resolve inside the project root."
+        ) from exc
+    return experiment_dir
+
+
+def _run_checked(command: list[str], *, cwd: Path, failure_hint: str) -> str:
+    """Run a required command and convert failures into CLI-friendly exits.
+
+    :param command: Executable and arguments to run.
+    :param cwd: Working directory for the command.
+    :param failure_hint: Message shown if the command fails.
+    :return: Captured stdout.
+    :raises SystemExit: If the command exits non-zero.
+    """
+    try:
+        return utils.run_command(command, cwd=cwd)
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or "").strip()
+        detail = f"\n{stderr}" if stderr else ""
+        raise SystemExit(f"{failure_hint}{detail}") from exc
+
+
+def _current_commit(project_root: Path) -> tuple[str, str]:
+    """Return the current short commit hash and ISO commit date.
+
+    :param project_root: Git-backed project root.
+    :return: Short commit hash and commit date text.
+    """
+    commit_hash = _run_checked(
+        ["git", "rev-parse", "--short", "HEAD"],
+        cwd=project_root,
+        failure_hint="env-snapshot requires a git repository with at least one commit.",
+    )
+    commit_date = _run_checked(
+        ["git", "show", "-s", "--format=%cd", "--date=iso", commit_hash],
+        cwd=project_root,
+        failure_hint="env-snapshot could not inspect the current git commit.",
+    )
+    return commit_hash, commit_date
+
+
+def _tag_commit(project_root: Path, project_name: str, commit_hash: str) -> None:
+    """Create an annotated snapshot tag if it does not already exist.
+
+    :param project_root: Git-backed project root.
+    :param project_name: Display name for the project.
+    :param commit_hash: Short git commit hash being snapshotted.
+    :return: None.
+    """
+    tag = f"env-snapshot-{commit_hash}"
+    message = f"Snapshot of {project_name} at {commit_hash}"
+    subprocess.run(
+        ["git", "tag", "-a", tag, "-m", message],
+        cwd=project_root,
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+
+
+def _write_experiment_env(
+    env_path: Path,
+    *,
+    commit_hash: str,
+    lock_path: Path,
+    project_root: Path,
+) -> None:
+    """Write reproducibility metadata for the experiment snapshot.
+
+    :param env_path: Destination ``experiment.env`` path.
+    :param commit_hash: Short git commit hash being snapshotted.
+    :param lock_path: Requirements lock file path.
+    :param project_root: Project root used to compute relative paths.
+    :return: None.
+    """
+    lock_relative = lock_path.relative_to(project_root)
+    env_path.write_text(
+        f"COMMIT_HASH={commit_hash}\nLOCK_FILE={lock_relative}\n",
+        encoding="utf-8",
+    )
+
+
+def _ensure_uv_lock(project_root: Path) -> None:
+    """Require a uv lock file before exporting frozen requirements.
+
+    :param project_root: Project root expected to contain ``uv.lock``.
+    :return: None.
+    :raises SystemExit: If ``uv.lock`` is missing.
+    """
+    if not (project_root / "uv.lock").is_file():
+        raise SystemExit(
+            "env-snapshot requires uv.lock. Run `uv lock` in the project root first."
+        )
+
+
 def _run(args: argparse.Namespace) -> None:
+    """Create a reproducibility snapshot for one experiment directory.
 
-    # === Retrieve Variables ==========================================
-    PR_ROOT: Path = utils.find_project_root()
-    PR_NAME = os.getenv("PROJECT_NAME")
+    :param args: Parsed CLI arguments.
+    :return: None.
+    """
+    project_root = utils.find_project_root()
+    project_name = _project_name(project_root)
+    experiment_dir = _resolve_experiment_dir(project_root, args.experiment_dir)
+    setup_dir = experiment_dir / "_setup"
+    lock_path = setup_dir / "requirements.lock"
+    env_path = experiment_dir / "experiment.env"
 
-    dockerize = args.dockerize
+    experiment_dir.mkdir(parents=True, exist_ok=True)
+    setup_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_uv_lock(project_root)
 
-    ### Absolute Path
-    EXP_DIR: Path = Path(args.experiment_dir).resolve()
-    EXP_DIR_REL: Path = EXP_DIR.relative_to(PR_ROOT)
-    SETUP_DIR: Path = EXP_DIR / "_setup"
-    EXP_DIR.mkdir(parents=True, exist_ok=True)
-    SETUP_DIR.mkdir(parents=True, exist_ok=True)
+    experiment_relative = experiment_dir.relative_to(project_root)
+    print(f"📂  Project '{project_name}' in '{project_root}'")
+    print(f"🔍  Targeting experiment directory: '{experiment_relative}'")
 
-    ### Outputs
-    LOCK_FP: Path = SETUP_DIR / "requirements.lock"
-    LOCK_REL: Path = LOCK_FP.relative_to(PR_ROOT)
-    ENV_FP: Path = EXP_DIR / "experiment.env"
-    DOCKERIGNORE_FP: Path = SETUP_DIR / "Dockerfile.dockerignore"
-    DOCKERFILE_FP: Path = SETUP_DIR / "Dockerfile"
+    commit_hash, commit_date = _current_commit(project_root)
+    print(f"🔖  Using commit: {commit_hash} ({commit_date})")
+    _tag_commit(project_root, project_name, commit_hash)
 
-    ### Change Directory
-    # os.chdir(PR_ROOT)
-
-    ### Print info
-    print(f"📂  Project '{PR_NAME}' in '{PR_ROOT}'")
-    print(f"🔍  Targetting experiment directory: '{EXP_DIR_REL}'")
-
-    # === Capture Commit Hash =========================================
-
-    commit_hash: str = utils.run_command("git rev-parse --short HEAD")
-    timepoint: str = utils.run_command(
-        f"git show -s --format=%cd --date=iso {commit_hash}", cwd=PR_ROOT
+    print(f"📦  Building source distribution and wheel into {setup_dir}")
+    _run_checked(
+        ["uv", "build", "--out-dir", str(setup_dir), "--no-sources"],
+        cwd=project_root,
+        failure_hint="env-snapshot could not build release artifacts with uv.",
     )
-    print(f"🔖  Using Commit: {commit_hash} ({timepoint})")
 
-    # === Write experiment.env ========================================
-    print(f"🔖  Writing {ENV_FP.name} (for DVC, MLflow, etc.) ...")
-    ENV_FP.write_text(f"COMMIT_HASH={commit_hash}\nLOCK_FILE={LOCK_FP.name}\n")
-
-    # === Git tag current commit ======================================
-    tag_msg = f"Snapshot of {PR_NAME} at {commit_hash}"
-    print(f"🔖  Tagging commit {commit_hash} in git: '{tag_msg}'")
-    cmd = [
-        "git",
-        "tag",
-        "-a",
-        f"env-snapshot-{commit_hash}",
-        "-m",
-        tag_msg,
-    ]
-    subprocess.run(cmd, cwd=PR_ROOT, check=False)  # Don't fail if already exists
-
-    # =================================================================
-    # === Make a wheel and sdist
-    # =================================================================
-    print(f"📦  Building source distribution and wheel ...")
-    cmd = [
-        "python",
-        "-m",
-        "build",
-        "--sdist",
-        "--wheel",
-        "--outdir",
-        str(SETUP_DIR),
-    ]
-    subprocess.run(cmd, cwd=PR_ROOT, check=True)
-
-    # =================================================================
-    # === Freeze the live venv
-    # =================================================================
-    print(f"📌 ... pip-compiling environment ...")
-    # utils.run_command(
-    cmd = [
-        "pip-compile",
-        # "--generate-hashes", # !! Doesn't work with pip 25 and pip-compile 7.4.1
-        "--allow-unsafe",
-        "--extra",
-        "dev",
-        "--output-file",
-        str(LOCK_FP),
-        str(PR_ROOT / "pyproject.toml"),
-    ]
-    # print("\n".join(cmd))  # < Print command for debugging
-    subprocess.run(cmd)  # !! Uncomment
-
-    print(f"📌  Environment frozen to {LOCK_REL}")
-
-    # =================================================================
-    # === Write .dockerignore
-    # =================================================================
-    print(dockerize)
-    if dockerize:
-        raise NotImplementedError(
-            "Dockerization is not yet implemented in env_snapshot.py"
-        )
-    # !! Main issue = need to set up git+ssh to access private repos
-
-    # > Prevent copying EVERY experiment into the Docker image!
-    dockerignore = dedent(
-        f""" \
-        # > Ignore everything under experiments, but keep the target directory!
-        experiments/** 
-        !{EXP_DIR_REL}/**
-        
-        .direnv/
-        .venv/
-        venv/
-        env/
-        
-        .git/
-        .gitignore
-        
-        __pycache__/
-        *.py[cod]
-        *$py.class
-        *.egg-info/
-        .eggs/
-        
-        tests/
-        .pytest_cache/
-        .coverage
-        htmlcov/
-        
-        .vscode/
-        .idea/
-        .DS_Store
-        Thumbs.db
-        
-        *.log
-        logs/
-        *.sqlite3
-        
-        .env
-        .env.*
-        .secrets.env
-        """
+    print(f"📌  Exporting locked requirements to {lock_path}")
+    _run_checked(
+        [
+            "uv",
+            "export",
+            "--format",
+            "requirements.txt",
+            "--all-extras",
+            "--all-groups",
+            "--no-emit-project",
+            "--output-file",
+            str(lock_path),
+            "--locked",
+        ],
+        cwd=project_root,
+        failure_hint=(
+            "env-snapshot could not export requirements from uv.lock. "
+            "Run `uv lock` if pyproject.toml changed."
+        ),
     )
-    if dockerize:
-        DOCKERIGNORE_FP.write_text(dockerignore)
 
-    # =================================================================
-    # === Write Dockerfile
-    # =================================================================
-
-    image_tag = f"{PR_NAME}:{commit_hash}"
-    dockerfile = dedent(
-        f""" \
-        # syntax=docker/dockerfile:1
-        ### Builds Image {image_tag}
-        
-        # === 1️⃣ Builder: has git =====================================
-        FROM {args.py_base} AS builder
-        WORKDIR /app # < Root of the Repo inside the container
-        
-        ### Install git 
-        RUN apt-get update \\
-            && apt-get install -y --no-install-recommends git \\
-            && rm -rf /var/lib/apt/lists/*
-        
-        ### Install dependencies
-        COPY {LOCK_REL} requirements.lock
-        RUN pip install \\
-            # --require-hashes \\
-            --no-cache-dir \\
-            -r requirements.lock
-
-        ### Force-checkout the exact commit & Install
-        # > Copy the complete repo to WORKDIR
-        COPY . .
-        RUN git -C . checkout {commit_hash} && pip install -e .
-        
-        # === 2️⃣ runtime: tiny, no git ================================
-        FROM python:3.12-slim
-        WORKDIR /app
-        
-        # > Bring in installed package
-        COPY --from=builder /usr/local /usr/local  
-        # > (optional) Copy source for debugging to WORKDIR
-        COPY . .
-        
-        # > Make env vars available TODO: this creates a .direnv. !!! Find a better solution
-        # CMD ["source", ".envrc"]
-        
-        # > Executables
-        # CMD ["python", "-m", "your_pkg.cli"]
-        """
+    print(f"🔖  Writing {env_path.name}")
+    _write_experiment_env(
+        env_path,
+        commit_hash=commit_hash,
+        lock_path=lock_path,
+        project_root=project_root,
     )
-    if dockerize:
-        DOCKERFILE_FP.write_text(dockerfile)
-        print(f"🐳  Wrote Dockerfile & .dockerignore")
 
-    # =================================================================
-    # === Build Docker Image
-    # =================================================================
-    if dockerize:
-        print(f"🐳 ...  Building Docker image {image_tag} ...")
-        utils.assert_docker_available()  # < Check docker
-        utils.run_command(
-            f"""docker build \\
-            --tag {image_tag} \\
-            --file {DOCKERFILE_FP} \\
-            {PR_ROOT}
-            """
-        )
-
-        size = utils.run_command(f"docker image ls | grep {commit_hash}").split()[-1]
-
-        print(f"🐳  Done building [Imagesize = {size}]")
-
-    # =================================================================
-    # === Next steps
-    # =================================================================
     print("Next steps:")
-    if dockerize:
-        print(f"🚀  Run interactively:\tdocker run -it {image_tag}")
-        print(f"👉  Push to ??:\tdocker push {image_tag}")
-        print(f"🚮  Remove image:\tdocker image rm {image_tag}   (layers stay deduped)")
+    print(f"  uv pip install -r {lock_path.relative_to(project_root)}")
 
-    # %%
+
+if __name__ == "__main__":
+    _parser = argparse.ArgumentParser()
+    _add_my_parser(_parser.add_subparsers(dest="cmd", required=True))
+    parsed_args = _parser.parse_args()
+    parsed_args.func(parsed_args)

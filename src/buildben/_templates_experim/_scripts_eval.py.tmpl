@@ -1,0 +1,21 @@
+"""Evaluation step for <experiment_name>."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+EXPERIMENT_ROOT = Path(__file__).resolve().parents[1]
+OUTPUT_DIR = EXPERIMENT_ROOT / "output"
+
+
+def main() -> None:
+    """Run the starter evaluation step.
+
+    :return: None.
+    """
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"Evaluation output: {OUTPUT_DIR}")
+
+
+if __name__ == "__main__":
+    main()
