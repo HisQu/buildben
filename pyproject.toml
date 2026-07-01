@@ -10,7 +10,7 @@ build-backend = "setuptools.build_meta"
 # =====================================================================
 [project]
 name        = "buildben"          # < will be replaced by scaffold script
-version     = "0.2.1"
+version     = "0.3.0"
 description = "Developer CLI helpers (init-project, etc.)"
 authors     = [{ name = "markur4", email = "you@example.com" }]
 readme      = "README.md"
