@@ -4,15 +4,15 @@ All notable changes to `{my_project}` will be documented in this file.
 
 > [!IMPORTANT]
 > ## Rules
-> - When bumping version, move the sub-sections from `[Unreleased]` to
+> 1) When bumping version, move the sub-sections from `[Unreleased]` to
 >   the new version -section. Remove empty sub-sections under released
 >   versions. Provide a new `[Unreleased]` section at the top of the
 >   changelog with all sections empty (don't remove those).
-> - Do not remove emojis and use `<br>` and `---`.
-> - Changelog entries must describe the final net difference from the previous
+> 2) Do not remove emojis and use `<br>` and `---`.
+> 3) Changelog entries must describe the final net difference from the previous
 >   released version. Do not list intermediate pre-release names, helper shapes,
 >   fixes, or refactors that were overwritten before release.
-> - Use `🔨 Fixed` only for defects in previously released behavior. For new
+> 4) Use `🔨 Fixed` only for defects in previously released behavior. For new
 >   features, describe the final shipped behavior under `➕ Added`, even if the
 >   implementation went through pre-release fixes.
 
@@ -24,7 +24,7 @@ All notable changes to `{my_project}` will be documented in this file.
 
 <br>
 
-## Table Of Content
+## Table Of Contents
 
 1. [Changelog](#changelog)
    1. [Table Of Content](#table-of-content)
