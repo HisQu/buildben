@@ -10,7 +10,8 @@ This project follows Semantic Versioning.
 
 1. [Buildben Changelog](#buildben-changelog)
 2. [[Unreleased]](#unreleased)
-3. [[0.2.1] - 2026-06-26](#021---2026-06-26)
+3. [[0.3.0] - 2026-07-01](#030---2026-07-01)
+4. [[0.2.1] - 2026-06-26](#021---2026-06-26)
 
 <br>
 
@@ -30,8 +31,6 @@ This project follows Semantic Versioning.
 
 ### ➕ Added
 
-- Add `TODO.md` to generated project scaffolds as a tracked follow-up list.
-
 <br>
 
 ### 💔 Changed
@@ -48,7 +47,30 @@ This project follows Semantic Versioning.
 
 ### 🔨 Fixed
 
-- Fix project scaffolding to copy the renamed `_CHANGELOG.md` template source.
+<br>
+
+---
+
+<br>
+
+<!-- ======================================================== -->
+
+# [0.3.0] - 2026-07-01
+
+<br>
+
+### ➕ Added
+
+- Add `TODO.md` to generated project scaffolds as a tracked follow-up list.
+- Add a root `TODO.md` parking lot for buildben maintenance follow-ups.
+- Add generated-project changelog and TODO maintenance rules so scaffolded repos preserve headers, table-of-contents blocks, and release-note structure.
+
+<br>
+
+### 💔 Changed
+
+- Rename the project changelog template source from `_.CHANGELOG.md` to `_CHANGELOG.md` while continuing to generate `CHANGELOG.md`.
+- Reference `TODO.md` in generated project docs and agent guidance.
 
 <br>
 

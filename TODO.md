@@ -72,10 +72,12 @@ Treat this as the parking lot for actionable problems discovered while working b
 
 1. [Todo list](#todo-list)
    1. [Table Of Contents](#table-of-contents)
-2. [YYYY-MM-DD](#yyyy-mm-dd)
+2. [2026-07-01](#2026-07-01)
+   1. [P2 / E2 \[Tooling\] -  *Pyright scans archived template code*](#p2--e2-tooling----pyright-scans-archived-template-code)
+3. [YYYY-MM-DD](#yyyy-mm-dd)
    1. [P3 / E1 \[Code smell\] -  *Lorem ipsum dolor*](#p3--e1-code-smell----lorem-ipsum-dolor)
    2. [P1 / E3 \[Bug risk\] -  *dolor sit amet*](#p1--e3-bug-risk----dolor-sit-amet)
-3. [YYYY-MM-DD](#yyyy-mm-dd-1)
+4. [YYYY-MM-DD](#yyyy-mm-dd-1)
    1. [P3 \[Code smell\] -  *Amet consectetur adipiscing elit*](#p3-code-smell----amet-consectetur-adipiscing-elit)
    2. [P1 \[Bug risk\] -  *Elit sed do eiusmod*](#p1-bug-risk----elit-sed-do-eiusmod)
 
@@ -86,6 +88,17 @@ Treat this as the parking lot for actionable problems discovered while working b
 <br>
 
 
+
+# 2026-07-01
+
+## P2 / E2 [Tooling] -  *Pyright scans archived template code*
+- **Area:** `pyproject.toml`, `src/buildben/_templates_proj/.old/_src-env_boot.py`
+- **Observed while:** verifying the changelog refresh for `0.3.0`
+- **Evidence:** `.venv/bin/pyright` reports missing `dotenv` and `environs` imports plus type errors in `src/buildben/_templates_proj/.old/_src-env_boot.py`, even though that file lives in an archived `.old` template directory.
+- **Why not fixed now:** the current request is limited to refreshing the release changelog, and excluding or deleting archived templates needs a focused tooling decision.
+- **Suggested next step:** decide whether `.old` template folders should be removed, renamed outside Pyright's include paths, or added to `[tool.pyright].exclude`.
+
+<br>
 
 <!-- Example, remove this during first pass -->
 
