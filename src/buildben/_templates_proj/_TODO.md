@@ -12,19 +12,18 @@ Treat this as the parking lot for actionable problems discovered while working b
 > [!IMPORTANT]
 > 
 > ## Rules
->
+> 1) Do not remove or change this header and TOC without very good reason. 
 > 1) Newest at the top.
 > 1) Append a new entry only when the observation is real, actionable, not already listed, and out of scope for the current change. Do not modify `TODO.md` when there is nothing useful to add.
 > 1) If an issue is new and related to another issue, reference it in the `Suggested next step`. Do not create a new entry for the same problem. Place the reference in both entries (bi-directional).
-> 1) If no versioning exists (e.g. at 0.0.1), ignore that.
 > 1) If an issue was resolved, remove it and make an entry in the CHANGELOG.md.
 > 1) **Types:**
 >       - **Bug risk**: Potential defect with concrete evidence, not yet confirmed.
->       - **Code smell**: Implementation, maintainability or clarity issue that is not currently a defect.
+>       - **Code smell**: Implementation, architectural, maintainability or clarity issue that is not currently a defect.
 >       - **Docs drift**: Documentation is stale, incomplete, or inconsistent.
 >       - **Tooling**: Issue with build, test, lint, type-check, and general slowdown of developer workflow.
 >       - **Security**: Evidence-backed security risk. Use Question for uncertainty.
->      - **Question**: Design, behavior, or ownership uncertainty needing investigation.
+>       - **Question**: Design, behavior, or ownership uncertainty needing investigation.
 > 
 > 1) **Priorities:**
 >       - **P1**: Should be handled ASAP.
@@ -39,10 +38,10 @@ Treat this as the parking lot for actionable problems discovered while working b
 > 
 > <br>
 > 
-> # [<version>]  YYYY-MM-DD 
+> # YYYY-MM-DD 
 >
 > ## <Priority> / <Effort> [<Type>] - *Short problem title*
-> - **Area:** [<version>] `path/or/symbol`
+> - **Area:**  `path/or/symbol`
 > - **Observed while:** short context
 > - **Evidence:** concrete observation
 > - **Why not fixed now:** scope, risk, uncertainty, or user decision needed
@@ -54,7 +53,7 @@ Treat this as the parking lot for actionable problems discovered while working b
 > 
 > <br>
 > 
-> # [<version>]  YYYY-MM-DD
+> # YYYY-MM-DD
 >
 > ## <Priority> / <Effort> [<Type>] - *Short problem title*
 > - **Area:** `path/or/symbol`
@@ -73,10 +72,10 @@ Treat this as the parking lot for actionable problems discovered while working b
 
 1. [Todo list](#todo-list)
    1. [Table Of Contents](#table-of-contents)
-2. [\[version\] YYYY-MM-DD](#version-yyyy-mm-dd)
+2. [YYYY-MM-DD](#yyyy-mm-dd)
    1. [P3 / E1 \[Code smell\] -  *Lorem ipsum dolor*](#p3--e1-code-smell----lorem-ipsum-dolor)
    2. [P1 / E3 \[Bug risk\] -  *dolor sit amet*](#p1--e3-bug-risk----dolor-sit-amet)
-3. [\[version\] YYYY-MM-DD](#version-yyyy-mm-dd-1)
+3. [YYYY-MM-DD](#yyyy-mm-dd-1)
    1. [P3 \[Code smell\] -  *Amet consectetur adipiscing elit*](#p3-code-smell----amet-consectetur-adipiscing-elit)
    2. [P1 \[Bug risk\] -  *Elit sed do eiusmod*](#p1-bug-risk----elit-sed-do-eiusmod)
 
@@ -90,7 +89,7 @@ Treat this as the parking lot for actionable problems discovered while working b
 
 <!-- Example, remove this during first pass -->
 
-# [version] YYYY-MM-DD
+# YYYY-MM-DD
 
 ## P3 / E1 [Code smell] -  *Lorem ipsum dolor*
 - **Area:** `sit/amet`
@@ -106,7 +105,7 @@ Treat this as the parking lot for actionable problems discovered while working b
 
 <br>
 
-# [version] YYYY-MM-DD
+# YYYY-MM-DD
 
 ## P3 [Code smell] -  *Amet consectetur adipiscing elit*
 - **Area:** `elit/sed/do/eiusmod`
