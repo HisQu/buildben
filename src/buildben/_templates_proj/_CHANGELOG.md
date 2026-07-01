@@ -4,17 +4,19 @@ All notable changes to `{my_project}` will be documented in this file.
 
 > [!IMPORTANT]
 > ## Rules
+> 1) Do not remove or change this header and TOC without very good reason. 
 > 1) When bumping version, move the sub-sections from `[Unreleased]` to
->   the new version -section. Remove empty sub-sections under released
->   versions. Provide a new `[Unreleased]` section at the top of the
->   changelog with all sections empty (don't remove those).
-> 2) Do not remove emojis and use `<br>` and `---`.
-> 3) Changelog entries must describe the final net difference from the previous
->   released version. Do not list intermediate pre-release names, helper shapes,
->   fixes, or refactors that were overwritten before release.
-> 4) Use `🔨 Fixed` only for defects in previously released behavior. For new
->   features, describe the final shipped behavior under `➕ Added`, even if the
->   implementation went through pre-release fixes.
+>    the new version -section. Remove empty sub-sections under released
+>    versions. Provide a new `[Unreleased]` section at the top of the
+>    changelog with all sections empty (don't remove those).
+> 1) Do not remove emojis and use `<br>` and `---`.
+> 1) Changelog entries must describe the final net difference from the
+>    previous released version. Do not list intermediate pre-release
+>    names, helper shapes, fixes, or refactors that were overwritten
+>    before release.
+> 1) Use `🔨 Fixed` only for defects in previously released behavior.
+>    For new features, describe the final shipped behavior under `➕
+>    Added`, even if the implementation went through pre-release fixes.
 
 
 
@@ -27,7 +29,7 @@ All notable changes to `{my_project}` will be documented in this file.
 ## Table Of Contents
 
 1. [Changelog](#changelog)
-   1. [Table Of Content](#table-of-content)
+   1. [Table Of Contents](#table-of-contents)
 2. [\[Unreleased\]](#unreleased)
 3. [{initial\_version} - {scaffold\_date}](#initial_version---scaffold_date)
 

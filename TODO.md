@@ -12,7 +12,7 @@ Treat this as the parking lot for actionable problems discovered while working b
 > [!IMPORTANT]
 > 
 > ## Rules
-> 1) Do not remove this header under any circumstances. Change only below the first `---`.
+> 1) Do not remove or change this header and TOC without very good reason. 
 > 1) Newest at the top.
 > 1) Append a new entry only when the observation is real, actionable, not already listed, and out of scope for the current change. Do not modify `TODO.md` when there is nothing useful to add.
 > 1) If an issue is new and related to another issue, reference it in the `Suggested next step`. Do not create a new entry for the same problem. Place the reference in both entries (bi-directional).
