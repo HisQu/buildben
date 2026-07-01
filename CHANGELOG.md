@@ -30,6 +30,8 @@ This project follows Semantic Versioning.
 
 ### ➕ Added
 
+- Add `TODO.md` to generated project scaffolds as a tracked follow-up list.
+
 <br>
 
 ### 💔 Changed
@@ -45,6 +47,8 @@ This project follows Semantic Versioning.
 <br>
 
 ### 🔨 Fixed
+
+- Fix project scaffolding to copy the renamed `_CHANGELOG.md` template source.
 
 <br>
 

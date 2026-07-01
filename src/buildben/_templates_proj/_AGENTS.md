@@ -16,6 +16,7 @@
   - concepts and architecture in `docs/Explanations.md`
 - Put CLI behavior in `<my_project>.cli.app`; keep `<my_project>.main` as a
   thin public entry point wrapper.
+- Check the TODO.md and assess if your task is related to any issues and should be resolved as part of your pass.
 
 ## Project rules
 - Do not duplicate helpers or re-implement existing utilities without checking first.
@@ -32,13 +33,15 @@
 
 ## Documentation rules
 - Start major docs files with a compact table of contents.
-- Use repeated numbered `#` headings for major document parts.
+- Use repeated `#` headings for major document parts.
 - Use separator comments before major sections.
 - Use GitHub callouts consistently.
 - Use `[!NOTE]` callouts for related links and return links.
 - Start one-line related-link callouts with `Related:`.
 - Start multi-link related-link callouts with `Related links:`.
 - Do not use standalone backlink labels in prose.
+- Update the CHANGELOG.md after each pass
+- Update the TODO.md 
 
 ## Verification
 - Review the diff for duplicate helpers, naming drift, unnecessary abstractions, and regressions.

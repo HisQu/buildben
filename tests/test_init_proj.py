@@ -252,6 +252,20 @@ def test_scaffolded_project_includes_project_changelog(
     assert "{bb_today}" not in changelog_text
 
 
+def test_scaffolded_project_includes_project_todo(
+    bube_test_project: Path,
+) -> None:
+    """Assert generated projects include the root TODO parking lot."""
+    todo_path = bube_test_project / "TODO.md"
+
+    assert todo_path.is_file()
+
+    todo_text = todo_path.read_text(encoding="utf-8")
+    assert "# Todo list" in todo_text
+    assert "parking lot for actionable problems" in todo_text
+    assert "CHANGELOG.md" in todo_text
+
+
 def test_scaffolded_project_includes_typer_cli_scaffold(
     bube_test_project: Path,
 ) -> None:
@@ -394,6 +408,7 @@ def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> N
     assert "bube_test_tmp diagnose" in references_text
     assert "bube_test_tmp config setup --yes --storage-root" in references_text
     assert "CHANGELOG.md" in references_text
+    assert "TODO.md" in references_text
     assert "python -m bube_test_tmp --help" in how_to_text
     assert "bube_test_tmp config doctor" in how_to_text
 
@@ -444,7 +459,8 @@ def test_buildben_wheel_includes_all_template_assets(tmp_path: Path) -> None:
     assert "buildben/_templates_experim/_REPORT.md" in names
     assert "buildben/_templates_experim/_paths.env" in names
     assert "buildben/_templates_experim/_run.py.tmpl" in names
-    assert "buildben/_templates_proj/_.CHANGELOG.md" in names
+    assert "buildben/_templates_proj/_CHANGELOG.md" in names
+    assert "buildben/_templates_proj/_TODO.md" in names
     assert "buildben/_templates_proj/_src-cli-app.py.tmpl" in names
 
 

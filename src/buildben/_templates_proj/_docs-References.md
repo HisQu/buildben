@@ -34,6 +34,7 @@ Core paths:
 |---|---|
 | [README.md](../README.md) | Short setup entry point. |
 | [CHANGELOG.md](../CHANGELOG.md) | Release history and unreleased change notes. |
+| [TODO.md](../TODO.md) | Tracked parking lot for actionable follow-up work. |
 | [AGENTS.md](../AGENTS.md) | Local coding and documentation guidance for agents. |
 | [pyproject.toml](../pyproject.toml) | Package metadata, dependencies, and tool configuration. |
 | [justfile](../justfile) | Development commands. |
