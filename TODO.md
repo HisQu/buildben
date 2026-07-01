@@ -12,7 +12,7 @@ Treat this as the parking lot for actionable problems discovered while working b
 > [!IMPORTANT]
 > 
 > ## Rules
->
+> 1) Do not remove this header under any circumstances. Change only below the first `---`.
 > 1) Newest at the top.
 > 1) Append a new entry only when the observation is real, actionable, not already listed, and out of scope for the current change. Do not modify `TODO.md` when there is nothing useful to add.
 > 1) If an issue is new and related to another issue, reference it in the `Suggested next step`. Do not create a new entry for the same problem. Place the reference in both entries (bi-directional).
@@ -20,11 +20,11 @@ Treat this as the parking lot for actionable problems discovered while working b
 > 1) If an issue was resolved, remove it and make an entry in the CHANGELOG.md.
 > 1) **Types:**
 >       - **Bug risk**: Potential defect with concrete evidence, not yet confirmed.
->       - **Code smell**: Implementation, maintainability or clarity issue that is not currently a defect.
+>       - **Code smell**: Implementation, architectural, maintainability or clarity issue that is not currently a defect.
 >       - **Docs drift**: Documentation is stale, incomplete, or inconsistent.
 >       - **Tooling**: Issue with build, test, lint, type-check, and general slowdown of developer workflow.
 >       - **Security**: Evidence-backed security risk. Use Question for uncertainty.
->      - **Question**: Design, behavior, or ownership uncertainty needing investigation.
+>       - **Question**: Design, behavior, or ownership uncertainty needing investigation.
 > 
 > 1) **Priorities:**
 >       - **P1**: Should be handled ASAP.
