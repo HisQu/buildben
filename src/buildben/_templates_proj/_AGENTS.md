@@ -6,8 +6,8 @@
 - Check these modules first:
   - `<my_project>.config`
   - `<my_project>.utils`
-  - `apprc.runtime_config`
-  - `apprc.logging`
+  - `apprc`
+  - `apprc.cli`
 - If a helper is broadly reusable, place it in the appropriate shared module.
 - Put long-form docs in `docs/`:
   - procedures in `docs/How-To-User-Guides.md`
@@ -20,9 +20,9 @@
 
 ## Project rules
 - Do not duplicate helpers or re-implement existing utilities without checking first.
-- App configuration belongs in `<my_project>.config.owners` and should use AppRC `EnvConfig` classes with `env_field(...)` declarations.
+- App configuration belongs in `<my_project>.config.owners` and should use AppRC `rc.Config` classes with `rc.field(...)` declarations.
 - CLI behavior belongs in `<my_project>.cli.app`; keep `<my_project>.main` as a thin public entry point wrapper.
-- Import logging helpers from `apprc.logging`, for example `from apprc.logging import get_logger`.
+- Use stdlib `logging` for app-owned logs; AppRC integration should start from `import apprc as rc`.
 - Import `<my_project>`-owned utility helpers through the facade: `import <my_project>.utils as ut`.
 - Use explicit `ut.` prefixes for local utilities.
 - For facade `__init__.py` files, prefer clean batch re-export imports plus file-level `# ruff: noqa: F401`; do not use redundant `symbol as symbol` aliases solely to satisfy Ruff.

@@ -2,25 +2,21 @@
 
 from __future__ import annotations
 
+import logging
 import sys
-from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
 from typing import Annotated, Any
 
+import apprc as rc
 import typer
-from apprc.cli.bootstrap import bootstrap_cli_env
-from apprc.cli.config.state import config_request_skips_runtime_bootstrap
-from apprc.cli.typer_utils import dump_json
-from apprc.logging import get_logger, setup_logging
-from apprc.runtime_config.bootstrap.result import EnvBootstrapResult
 
 import <my_project>
-from <my_project>.config import APP_CONFIG
+from <my_project>.config import APP_RC
 
 PACKAGE_NAME = "<my_project>"
 VERSION_FALLBACK = "0.1.0"
-LOG = get_logger(__name__)
+LOG = logging.getLogger(__name__)
 
 app = typer.Typer(
     add_completion=True,
@@ -28,43 +24,6 @@ app = typer.Typer(
     no_args_is_help=True,
     pretty_exceptions_show_locals=False,
 )
-
-
-@dataclass(slots=True)
-class CLIState:
-    """Root command state shared with AppRC's generated config commands.
-
-    :param env_files: Optional dotenv files passed through ``--env-file``.
-    :param skip_dotenv_layers: Whether AppRC skipped dotenv layer merging.
-    :param log_level: Logging level token used for this process.
-    :param env_file_overrides_os_environ: Whether explicit dotenv values beat
-        the shell inside this process.
-    :param env_bootstrap: AppRC bootstrap summary after startup.
-    :param storage: Optional storage selector.
-    """
-
-    env_files: tuple[Path, ...]
-    skip_dotenv_layers: bool
-    log_level: str | None
-    env_file_overrides_os_environ: bool = False
-    env_bootstrap: EnvBootstrapResult | None = None
-    storage: str | None = None
-
-
-def _request_skips_bootstrap(ctx: typer.Context) -> bool:
-    """Return whether this invocation can run without AppRC env bootstrap.
-
-    :param ctx: Active Typer callback context.
-    :return: Whether the command needs only package metadata or registry-only
-        AppRC operations.
-    """
-    command_name = ctx.invoked_subcommand
-    if command_name in {"version", "diagnose"}:
-        return True
-    if command_name != "config":
-        return False
-
-    return config_request_skips_runtime_bootstrap("config")
 
 
 def _package_version() -> str:
@@ -84,60 +43,63 @@ def _diagnose_payload() -> dict[str, Any]:
 
     :return: JSON-friendly process, package, and import metadata.
     """
-    apprc_toml_path = APP_CONFIG.spec.optional_apprc_toml_path()
+    spec = APP_RC.spec
+    index_path = spec.index_path()
     return {
-        "apprc_toml_env_key": APP_CONFIG.spec.apprc_toml_env_key,
-        "apprc_toml_path": str(apprc_toml_path) if apprc_toml_path else None,
+        "config_home": str(spec.config_home()),
         "cwd": str(Path.cwd()),
+        "index_env_key": spec.index_env_key,
+        "index_path": str(index_path),
         "package": PACKAGE_NAME,
         "package_file": str(Path(<my_project>.__file__).resolve()),
         "python_executable": sys.executable,
         "python_version": sys.version,
-        "storage_env_key": APP_CONFIG.spec.storage_env_key,
+        "storage_env_filename": spec.storage_env_filename,
+        "storage_env_key": spec.storage_env_key,
         "version": _package_version(),
     }
 
 
-def _config_show_payload(state: CLIState) -> dict[str, Any]:
+def _config_show_payload(state: rc.cli.DefaultConfigCliState) -> dict[str, Any]:
     """Build a small resolved-runtime payload for ``config show``.
 
-    :param state: Root CLI state created by :func:`app_callback`.
+    :param state: Root CLI state created by AppRC's Typer integration.
     :return: JSON-friendly package and AppRC bootstrap metadata.
     """
     env_bootstrap = state.env_bootstrap
+    spec = APP_RC.spec
     return {
-        "apprc_toml_env_key": APP_CONFIG.spec.apprc_toml_env_key,
-        "apprc_toml_path": (
+        "app_wide_env": (
             None
-            if env_bootstrap is None or env_bootstrap.apprc_toml_path is None
-            else str(env_bootstrap.apprc_toml_path)
+            if env_bootstrap is None or env_bootstrap.app_wide_env is None
+            else str(env_bootstrap.app_wide_env)
         ),
         "env_files": (
-            [str(path) for path in state.env_files]
+            []
             if env_bootstrap is None
             else [str(path) for path in env_bootstrap.env_files]
         ),
-        "log_level": state.log_level,
+        "index_env_key": spec.index_env_key,
+        "index_path": (
+            None
+            if env_bootstrap is None or env_bootstrap.index_path is None
+            else str(env_bootstrap.index_path)
+        ),
         "package": PACKAGE_NAME,
-        "skip_dotenv_layers": state.skip_dotenv_layers,
         "shared_env": (
             None
             if env_bootstrap is None or env_bootstrap.shared_env is None
             else str(env_bootstrap.shared_env)
         ),
-        "local_env": (
-            None
-            if env_bootstrap is None or env_bootstrap.local_env is None
-            else str(env_bootstrap.local_env)
-        ),
         "storage": state.storage,
-        "storage_count": 0
-        if env_bootstrap is None
-        else env_bootstrap.storage_count,
-        "storage_env_key": APP_CONFIG.spec.storage_env_key,
-        "storage_name": None
-        if env_bootstrap is None
-        else env_bootstrap.storage_name,
+        "storage_count": 0 if env_bootstrap is None else env_bootstrap.storage_count,
+        "storage_env": (
+            None
+            if env_bootstrap is None or env_bootstrap.storage_env is None
+            else str(env_bootstrap.storage_env)
+        ),
+        "storage_env_key": spec.storage_env_key,
+        "storage_name": None if env_bootstrap is None else env_bootstrap.storage_name,
         "storage_root": (
             None
             if env_bootstrap is None or env_bootstrap.storage_root is None
@@ -157,6 +119,17 @@ def _config_show_payload(state: CLIState) -> dict[str, Any]:
     }
 
 
+def _setup_app_logging(level: str | int = "INFO", **_: object) -> None:
+    """Configure stdlib logging for one CLI invocation.
+
+    :param level: Logging level name or number supplied by AppRC.
+    :param _: Extra logger-specific keyword arguments ignored by this scaffold.
+    :return: None.
+    """
+
+    logging.basicConfig(level=level)
+
+
 def _echo_diagnose_payload(payload: dict[str, Any]) -> None:
     """Print a human-readable diagnostic payload.
 
@@ -167,69 +140,19 @@ def _echo_diagnose_payload(payload: dict[str, Any]) -> None:
         typer.echo(f"{key}: {payload[key]}")
 
 
-@app.callback()
-def app_callback(
-    ctx: typer.Context,
-    env_files: Annotated[
-        list[Path] | None,
-        typer.Option(
-            "--env-file",
-            help=(
-                "Invocation-local dotenv file loaded after shared/local env. "
-                "May be repeated."
-            ),
-        ),
-    ] = None,
-    env_file_overrides_os_environ: Annotated[
-        bool,
-        typer.Option(
-            "--env-file-overrides-os-environ",
-            "-o",
-            help="Let --env-file values override existing process env values.",
-        ),
-    ] = False,
-    skip_dotenv_layers: Annotated[
-        bool,
-        typer.Option(
-            "--skip-dotenv-layers",
-            "-s",
-            help="Select storage but do not merge dotenv values into env.",
-        ),
-    ] = False,
-    storage: Annotated[
-        str | None,
-        typer.Option("--storage", help="Storage path or registered selector."),
-    ] = None,
-    log_level: Annotated[
-        str | None,
-        typer.Option("--log-level", help="Logging level name or number."),
-    ] = "INFO",
-) -> None:
-    """Prepare logging and config state before command handlers run."""
-    state = CLIState(
-        env_files=tuple(env_files or ()),
-        skip_dotenv_layers=skip_dotenv_layers,
-        log_level=log_level,
-        env_file_overrides_os_environ=env_file_overrides_os_environ,
-        storage=storage,
-    )
-    ctx.obj = state
-    if (
-        ctx.resilient_parsing
-        or "--help" in sys.argv[1:]
-        or _request_skips_bootstrap(ctx)
-    ):
-        return
-    state.env_bootstrap = bootstrap_cli_env(
-        APP_CONFIG,
-        env_files=state.env_files,
-        env_file_overrides_os_environ=env_file_overrides_os_environ,
-        load_dotenv_layers=not skip_dotenv_layers,
-        storage=storage,
-        log_level=log_level,
-        setup_logging=setup_logging,
-        logger=LOG,
-    )
+APP_RC.mount_cli(
+    app,
+    runtime_policy=rc.cli.CliRuntimePolicy(
+        runtime_independent_commands={
+            "version": rc.cli.RuntimeIndependentCommand(skip_empty=True),
+            "diagnose": rc.cli.RuntimeIndependentCommand(skip_empty=True),
+        },
+        extra_cli_flag_options={"--json"},
+    ),
+    runtime_payload=_config_show_payload,
+    setup_logging=_setup_app_logging,
+    logger=LOG,
+)
 
 
 @app.command("version")
@@ -248,18 +171,9 @@ def diagnose_cmd(
     """Print local package and Python diagnostics."""
     payload = _diagnose_payload()
     if json_output:
-        dump_json(payload)
+        rc.cli.dump_json(payload)
         return
     _echo_diagnose_payload(payload)
-
-
-app.add_typer(
-    APP_CONFIG.typer_app(
-        state_type=CLIState,
-        runtime_payload=_config_show_payload,
-    ),
-    name="config",
-)
 
 
 def main() -> None:

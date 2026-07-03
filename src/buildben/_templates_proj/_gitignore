@@ -27,6 +27,8 @@ db/
 .env.secret
 .env.prod
 .env.local
+.env.apprc-app
+.env.apprc-storage
 .env.1password
 # .envrc
 

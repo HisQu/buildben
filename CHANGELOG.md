@@ -27,6 +27,14 @@ This project follows Semantic Versioning.
 
 ### 💥 Breaking Change Summary
 
+- Breaking: Generated project scaffolds now target AppRC 0.19.0 and expose
+  `<my_project>.config.APP_RC` instead of the old `APP_CONFIG` kit alias.
+  Affected: Users copying or extending generated scaffold internals that import
+  `APP_CONFIG`, `AppConfigKit`, `EnvConfig`, `env_field`, or AppRC internal
+  runtime modules.
+  Migration: Use `import apprc as rc`, `APP_RC`, `rc.Config`, `rc.field(...)`,
+  and `APP_RC.mount_cli(...)`.
+
 <br>
 
 ### ➕ Added
@@ -34,6 +42,9 @@ This project follows Semantic Versioning.
 <br>
 
 ### 💔 Changed
+
+- Update generated project configuration and CLI templates to AppRC 0.19.0's
+  standard public facade.
 
 <br>
 

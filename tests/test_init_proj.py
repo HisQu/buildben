@@ -135,7 +135,7 @@ def test_scaffolded_project_runs_pytest(bube_test_project: Path) -> None:
             f"    env['{proj_name.upper()}_STORAGE'] = str(project_root / 'storage')\n"
             f"    subprocess.run([sys.executable, '-m', '{proj_name}', 'config', 'doctor'], cwd=str(project_root), env=env, check=True)\n"
             f"    subprocess.run([sys.executable, '-m', '{proj_name}', 'config', 'show', '--json'], cwd=str(project_root), env=env, check=True)\n"
-            f"    subprocess.run([sys.executable, '-m', '{proj_name}', 'config', 'set', 'app.message', 'Hello local storage'], cwd=str(project_root), env=env, check=True)\n"
+            f"    subprocess.run([sys.executable, '-m', '{proj_name}', 'config', 'set', 'app.message', 'Hello local storage', '--scope', 'storage'], cwd=str(project_root), env=env, check=True)\n"
         ),
         encoding="utf-8",
     )
@@ -178,7 +178,7 @@ def test_scaffolded_project_uses_dependency_group_template(
     project = pyproject["project"]
     assert project["readme"] == "README.md"
     assert project["dependencies"] == [
-        "apprc>=0.15.1,<0.16",
+        "apprc>=0.19.0,<0.20",
         "typer",
     ]
     assert "python-dotenv" not in project["dependencies"]
@@ -224,6 +224,10 @@ def test_scaffolded_project_uses_dependency_group_template(
     assert "bube_test_tmp diagnose" in readme_text
     assert "bube_test_tmp config setup --yes --storage-root" in readme_text
     assert "bube_test_tmp config doctor" in readme_text
+    assert (
+        'bube_test_tmp config set app.message "Hello local storage" --scope storage'
+        in readme_text
+    )
 
 
 def test_scaffolded_project_includes_project_changelog(
@@ -291,12 +295,16 @@ def test_scaffolded_project_includes_typer_cli_scaffold(
     assert "typer.Typer" in cli_text
     assert '@app.command("version")' in cli_text
     assert '@app.command("diagnose")' in cli_text
-    assert "APP_CONFIG.typer_app" in cli_text
-    assert "bootstrap_cli_env" in cli_text
-    assert "config_request_skips_runtime_bootstrap" in cli_text
-    assert "--env-file-overrides-os-environ" in cli_text
-    assert "--skip-dotenv-layers" in cli_text
-    assert "setup_logging" in cli_text
+    assert "APP_RC.mount_cli" in cli_text
+    assert "rc.cli.CliRuntimePolicy" in cli_text
+    assert "rc.cli.RuntimeIndependentCommand" in cli_text
+    assert "rc.cli.dump_json" in cli_text
+    assert "APP_CONFIG.typer_app" not in cli_text
+    assert "bootstrap_cli_env" not in cli_text
+    assert "config_request_skips_runtime_bootstrap" not in cli_text
+    assert "apprc.runtime_config" not in cli_text
+    assert "apprc.logging" not in cli_text
+    assert "logging.basicConfig" in cli_text
     assert "from bube_test_tmp.cli.app import main" in main_text
     assert pyproject["project"]["scripts"][proj_name] == f"{proj_name}.main:main"
 
@@ -334,25 +342,30 @@ def test_scaffolded_project_has_apprc_config_package(
     )
     agents_text = (proot / "AGENTS.md").read_text(encoding="utf-8")
 
-    assert "AppConfigKit" in config_app_text
-    assert "APP_CONFIG_ENVS" in config_app_text
-    assert "envs=APP_CONFIG_ENVS" in config_app_text
+    assert "APP_RC = rc.AppRC.storage_only(" in config_app_text
     assert 'storage_env_key="BUBE_TEST_TMP_STORAGE"' in config_app_text
     assert 'command_name="bube_test_tmp"' in config_app_text
-    assert 'apprc_toml_filename="bube_test_tmp.apprc.toml"' in config_app_text
-    assert "EnvConfig" in owners_text
-    assert "env_field" in owners_text
-    assert "env_owner" in owners_text
-    assert "config_owner_for" in owners_text
+    assert 'index_filename="bube_test_tmp.apprc.toml"' in config_app_text
+    assert 'storage_env_filename=".env.apprc-storage"' in config_app_text
+    assert "@APP_RC.config(" in owners_text
+    assert "class AppRuntimeConfig(rc.Config):" in owners_text
+    assert "rc.field(" in owners_text
+    assert "APP_CONFIG" not in config_app_text
+    assert "AppConfigKit" not in config_app_text
+    assert "EnvConfig" not in owners_text
+    assert "env_field" not in owners_text
+    assert "env_owner" not in owners_text
+    assert "config_owner_for" not in owners_text
     assert "AppRuntimeConfig" in owners_text
     assert "ConfigField" not in owners_text
     assert "config_field" not in owners_text
     assert "apprc.config" not in owners_text
-    assert 'env_prefix="BUBE_TEST_TMP_"' in owners_text
+    assert 'prefix="BUBE_TEST_TMP_"' in owners_text
     assert 'BUBE_TEST_TMP_MESSAGE="Hello from bube_test_tmp"' in shared_env_text
     assert "bube_test_tmp.config" in agents_text
-    assert "apprc.runtime_config" in agents_text
-    assert "apprc.logging" in agents_text
+    assert "apprc.cli" in agents_text
+    assert "apprc.runtime_config" not in agents_text
+    assert "apprc.logging" not in agents_text
 
 
 def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> None:
@@ -415,6 +428,8 @@ def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> N
     assert "src/bube_test_tmp/config/.env.shared" in references_text
     assert "BUBE_TEST_TMP_APPRC_TOML" in references_text
     assert "BUBE_TEST_TMP_STORAGE" in references_text
+    assert ".env.apprc-storage" in references_text
+    assert "bube_test_tmp config storage add" in references_text
     assert "bube_test_tmp.config.owners" in references_text
     assert "AppRC" in explanations_text
 

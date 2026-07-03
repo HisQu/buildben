@@ -19,7 +19,7 @@ requires-python = ">=3.12"
 dependencies = [
     # Core runtime packages only: imports needed when somebody installs and
     # uses this package with `python -m pip install -e "."`.
-    "apprc>=0.15.1,<0.16",  # < Config, logging, config CLI/TUI
+    "apprc>=0.19.0,<0.20",  # < Config and generated config CLI/TUI
     "typer",  # < Package-level CLI app and console script
     # "environs",     # < Higher-level .env parsing
     # "structlog",    # < Stdlib-backed structured logging

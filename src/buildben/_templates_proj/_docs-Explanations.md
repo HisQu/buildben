@@ -82,17 +82,17 @@ one-off diagnostics in the nearest existing tooling, test, or experiment area.
 <!-- ======================================================== -->
 
 `{my_project}` uses AppRC for application configuration. The application owns
-its typed `EnvConfig` declarations in `src/{my_project}/config/owners.py`;
-AppRC derives the normalized owner inventory and owns the repeatable workflows
-around it:
+its typed `rc.Config` declarations in `src/{my_project}/config/owners.py`;
+AppRC derives the normalized owner inventory from `APP_RC` and owns the
+repeatable workflows around it:
 
 - packaged defaults in `src/{my_project}/config/.env.shared`
-- optional multi-storage registry selected by `{MY_PROJECT}_APPRC_TOML`
-- storage-local overrides in `<storage-root>/.env.local`
+- optional multi-storage index selected by `{MY_PROJECT}_APPRC_TOML`
+- storage-local overrides in `<storage-root>/.env.apprc-storage`
 - shell and explicit dotenv overrides for one process
 - generated `config` CLI commands and the Textual editor
 
-Keep new config fields in the AppRC `EnvConfig` class before reading them from
+Keep new config fields in the AppRC `rc.Config` class before reading them from
 runtime code. That keeps defaults, docs metadata, CLI editing, and validation
 pointing at the same contract.
 

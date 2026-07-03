@@ -67,8 +67,9 @@ Common commands:
 | `{my_project} diagnose` | Print local package and Python diagnostics. |
 | `{my_project} config setup --yes --storage-root STORAGE_ROOT` | Create first-run single-storage AppRC setup. |
 | `{my_project} config doctor` | Check AppRC storage setup. |
-| `{my_project} config init STORAGE_ROOT --name NAME` | Register a multi-storage root after `{MY_PROJECT}_APPRC_TOML` is exported. |
-| `{my_project} config list` | List AppRC multi-storage registrations. |
+| `{my_project} config storage add NAME STORAGE_ROOT --yes` | Register a named storage root in the AppRC index. |
+| `{my_project} config storage list` | List AppRC named-storage registrations. |
+| `{my_project} config storage remove NAME` | Remove an AppRC named-storage registration. |
 | `{my_project} config show --json` | Show resolved runtime config metadata. |
 | `{my_project} config edit` | Open the AppRC Textual config editor. |
 | `python -m {my_project} --help` | Smoke-test the module entry point. |
@@ -111,7 +112,7 @@ Common environment variables:
 | Name | Role |
 |---|---|
 | `{MY_PROJECT}_STORAGE` | Active storage selector, usually a storage-root path in single-storage mode. |
-| `{MY_PROJECT}_APPRC_TOML` | Optional AppRC TOML file for named multi-storage workflows. |
+| `{MY_PROJECT}_APPRC_TOML` | Optional AppRC TOML index file for named multi-storage workflows. |
 | `{MY_PROJECT}_MESSAGE` | Starter example setting loaded from `config/.env.shared` or local storage. |
 | `VIRTUAL_ENV` | Active virtual environment path. |
 | `PYTHONPATH` | Import-path override for local smoke tests. Prefer editable installs for normal development. |
@@ -133,8 +134,8 @@ Important config files:
 |---|---|
 | [pyproject.toml](../pyproject.toml) | Python packaging, dependencies, and tool settings. |
 | [src/{my_project}/config/.env.shared](../src/{my_project}/config/.env.shared) | Packaged AppRC defaults loaded before local and shell overrides. |
-| `{MY_PROJECT}_APPRC_TOML -> <path>/{my_project}.apprc.toml` | Optional AppRC TOML file for named multi-storage roots. |
-| `<storage-root>/.env.local` | Storage-local AppRC overrides written by `{my_project} config set`. |
+| `{MY_PROJECT}_APPRC_TOML -> <path>/{my_project}.apprc.toml` | Optional AppRC TOML index file for named multi-storage roots. |
+| `<storage-root>/.env.apprc-storage` | Storage-local AppRC overrides written by `{my_project} config set --scope storage`. |
 | [.envrc](../.envrc) | `direnv` integration. |
 | [.gitignore](../.gitignore) | Local and generated files excluded from Git. |
 | [.github/workflows_inactive](../.github/workflows_inactive) | Inactive starter CI workflows. |
@@ -159,8 +160,8 @@ Document public surfaces here as the project grows:
 | Module entrypoint | `python -m {my_project}` | Public module execution path. |
 | CLI app owner | `{my_project}.cli.app` | Command tree implementation owner. |
 | Entrypoint wrapper | `{my_project}.main` | Thin wrapper for package metadata entry points. |
-| Config env declarations | `{my_project}.config.owners` | App-owned AppRC `EnvConfig` field inventory. |
-| Config facade | `{my_project}.config.APP_CONFIG` | AppRC kit used by CLI bootstrap and config commands. |
+| Config env declarations | `{my_project}.config.owners` | App-owned AppRC `rc.Config` field inventory. |
+| Config facade | `{my_project}.config.APP_RC` | Public AppRC facade used by CLI bootstrap and config commands. |
 
 > [!NOTE]
 > Related: use [How-To User Guides: run the first command](How-To-User-Guides.md#run-the-first-command)

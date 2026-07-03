@@ -57,7 +57,7 @@
 
 #### Main dependencies:
 <!-- List your main dependencies here and explain why they're important. -->
-- **`apprc`**: Runtime config, generated `config` CLI, Textual editor, and logging.
+- **`apprc`**: Runtime config, generated `config` CLI, and Textual editor.
 
 <hr>
 </div>
@@ -171,7 +171,7 @@ export {MY_PROJECT}_STORAGE="/absolute/path/to/storage"
  
 ### Edit local configuration:
 ```bash
-{my_project} config set app.message "Hello local storage"
+{my_project} config set app.message "Hello local storage" --scope storage
 {my_project} config edit
 ```
 
