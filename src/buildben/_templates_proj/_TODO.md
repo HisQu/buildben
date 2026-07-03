@@ -43,8 +43,9 @@ Treat this as the parking lot for actionable problems discovered while working b
 > ## <Priority> / <Effort> [<Type>] - *Short problem title*
 > - **Area:**  `path/or/symbol`
 > - **Observed while:** short context
-> - **Evidence:** concrete observation
 > - **Why not fixed now:** scope, risk, uncertainty, or user decision needed
+> - **Evidence:** concrete observation
+> - **Context:** explanation to ensure the problem is understood in the big-picture of the repo.
 > - **Suggested next step:** smallest reasonable follow-up. If applicable, reference related todos [here](#todo-list).
 > 
 > ## <Priority> / <Effort> [<Type>] - *Short problem title*
