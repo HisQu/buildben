@@ -23,7 +23,7 @@ Treat this as the parking lot for actionable problems discovered while working b
 >       - **Docs drift**: Documentation is stale, incomplete, or inconsistent.
 >       - **Tooling**: Issue with build, test, lint, type-check, and general slowdown of developer workflow.
 >       - **Security**: Evidence-backed security risk. Use Question for uncertainty.
->       - **Question**: Design, behavior, or ownership uncertainty needing investigation.
+>       - **Question**: Design, behavior, or ownership uncertainty needing investigation & maybe decision.
 > 
 > 1) **Priorities:**
 >       - **P1**: Should be handled ASAP.
