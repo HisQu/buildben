@@ -22,9 +22,10 @@ This project follows Semantic Versioning.
 
 1. [Buildben Changelog](#buildben-changelog)
 2. [\[Unreleased\]](#unreleased)
-3. [\[0.4.0\] - 2026-07-03](#040---2026-07-03)
-4. [\[0.3.0\] - 2026-07-01](#030---2026-07-01)
-5. [\[0.2.1\] - 2026-06-26](#021---2026-06-26)
+3. [\[0.5.0\] - 2026-08-31](#050---2026-08-31)
+4. [\[0.4.0\] - 2026-07-03](#040---2026-07-03)
+5. [\[0.3.0\] - 2026-07-01](#030---2026-07-01)
+6. [\[0.2.1\] - 2026-06-26](#021---2026-06-26)
 
 <br>
 
@@ -39,6 +40,36 @@ This project follows Semantic Versioning.
 <br>
 
 ### 💥 Breaking Change Summary
+
+<br>
+
+### ➕ Added
+
+<br>
+
+### 💔 Changed
+
+<br>
+
+### ⚠️ Deprecated
+
+<br>
+
+### 🗑️ Removed
+
+<br>
+
+### 🔨 Fixed
+
+<br>
+
+---
+
+<br>
+
+<!-- ======================================================== -->
+
+# [0.5.0] - 2026-08-31
 
 <br>
 
@@ -62,14 +93,6 @@ This project follows Semantic Versioning.
   only when `PUBLISH_PYPI=true`.
 - Document the tag release procedure and optional PyPI configuration in the
   generated project development guide.
-
-<br>
-
-### ⚠️ Deprecated
-
-<br>
-
-### 🗑️ Removed
 
 <br>
 
