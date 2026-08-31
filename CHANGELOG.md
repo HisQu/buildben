@@ -4,14 +4,27 @@ All notable changes to `buildben` will be documented in this file.
 
 This project follows Semantic Versioning.
 
+> [!IMPORTANT]
+> ## Rules
+> 1. Keep this header and table of contents intact.
+> 2. Before a release, move every entry from `[Unreleased]` into the new
+>    version section and add that section to the table of contents.
+> 3. Leave one empty `[Unreleased]` section with every release category after
+>    preparing the version section. `just release` rejects a non-empty one.
+> 4. Keep emojis, `<br>`, and `---` layout markers.
+> 5. Describe the final difference from the previous release, not intermediate
+>    refactors or fixes that no longer exist in the release.
+> 6. Use `🔨 Fixed` only for defects in previously released behavior.
+
 <br>
 
 ### Table Of Contents
 
 1. [Buildben Changelog](#buildben-changelog)
-2. [[Unreleased]](#unreleased)
-3. [[0.3.0] - 2026-07-01](#030---2026-07-01)
-4. [[0.2.1] - 2026-06-26](#021---2026-06-26)
+2. [\[Unreleased\]](#unreleased)
+3. [\[0.4.0\] - 2026-07-03](#040---2026-07-03)
+4. [\[0.3.0\] - 2026-07-01](#030---2026-07-01)
+5. [\[0.2.1\] - 2026-06-26](#021---2026-06-26)
 
 <br>
 
@@ -27,24 +40,28 @@ This project follows Semantic Versioning.
 
 ### 💥 Breaking Change Summary
 
-- Breaking: Generated project scaffolds now target AppRC 0.19.0 and expose
-  `<my_project>.config.APP_RC` instead of the old `APP_CONFIG` kit alias.
-  Affected: Users copying or extending generated scaffold internals that import
-  `APP_CONFIG`, `AppConfigKit`, `EnvConfig`, `env_field`, or AppRC internal
-  runtime modules.
-  Migration: Use `import apprc as rc`, `APP_RC`, `rc.Config`, `rc.field(...)`,
-  and `APP_RC.mount_cli(...)`.
-
 <br>
 
 ### ➕ Added
+
+- Add GitHub CI and tag-triggered release workflows for Buildben and generated
+  projects. The release workflow checks the changelog, validates wheel and
+  sdist installs, then attaches both artifacts to a GitHub Release.
+- Add local `just release-check` and `just release` recipes plus release-note
+  and installed-distribution checks that use the changelog as the release-note
+  source.
+- Generate an initial package test so a new project's active CI test job has
+  collected coverage from its first commit.
 
 <br>
 
 ### 💔 Changed
 
-- Update generated project configuration and CLI templates to AppRC 0.19.0's
-  standard public facade.
+- Make GitHub Releases the required publishing path. PyPI publishing is an
+  opt-in trusted-publishing job that runs only after the GitHub Release and
+  only when `PUBLISH_PYPI=true`.
+- Document the tag release procedure and optional PyPI configuration in the
+  generated project development guide.
 
 <br>
 
@@ -57,6 +74,38 @@ This project follows Semantic Versioning.
 <br>
 
 ### 🔨 Fixed
+
+- Exclude archived template code from Pyright so it checks maintained source
+  and tests without requiring obsolete dependencies.
+
+<br>
+
+---
+
+<br>
+
+<!-- ======================================================== -->
+
+# [0.4.0] - 2026-07-03
+
+<br>
+
+### 💥 Breaking Change Summary
+
+- Breaking: Generated project scaffolds now target AppRC 0.19.0 and expose
+  `<my_project>.config.APP_RC` instead of the old `APP_CONFIG` kit alias.
+  Affected: Users copying or extending generated scaffold internals that import
+  `APP_CONFIG`, `AppConfigKit`, `EnvConfig`, `env_field`, or AppRC internal
+  runtime modules.
+  Migration: Use `import apprc as rc`, `APP_RC`, `rc.Config`, `rc.field(...)`,
+  and `APP_RC.mount_cli(...)`.
+
+<br>
+
+### 💔 Changed
+
+- Update generated project configuration and CLI templates to AppRC 0.19.0's
+  standard public facade.
 
 <br>
 

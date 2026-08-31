@@ -82,6 +82,7 @@ def _project_directories(project_root: Path, name: str) -> list[Path]:
         project_root / ".github" / "workflows",
         project_root / ".github" / "workflows_inactive",
         project_root / "src" / name,
+        project_root / "src" / f"{name}_dev" / "packaging",
         project_root / "src" / name / "cli",
         project_root / "src" / name / "config",
         project_root / "src" / name / "utils",
@@ -120,10 +121,8 @@ def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path
         / ".github"
         / "workflows_inactive"
         / "codecov.yml",
-        "_github-CI_ubuntu_uv.yml": project_root
-        / ".github"
-        / "workflows_inactive"
-        / "CI_ubuntu_uv.yml",
+        "_github-ci.yml": project_root / ".github" / "workflows" / "ci.yml",
+        "_github-release.yml": project_root / ".github" / "workflows" / "release.yml",
         "_src-main.py.tmpl": project_root / "src" / name / "main.py",
         "_src-__main__.py.tmpl": project_root / "src" / name / "__main__.py",
         "_src-cli-app.py.tmpl": project_root / "src" / name / "cli" / "app.py",
@@ -144,6 +143,19 @@ def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path
         / "config"
         / ".env.shared",
         "_utils-stdlib.py.tmpl": project_root / "src" / name / "utils" / "stdlib.py",
+        "_src-dev-packaging-release_notes.py.tmpl": project_root
+        / "src"
+        / f"{name}_dev"
+        / "packaging"
+        / "release_notes.py",
+        "_src-dev-packaging-install_smoke.py.tmpl": project_root
+        / "src"
+        / f"{name}_dev"
+        / "packaging"
+        / "install_smoke.py",
+        "_tests-test_package.py.tmpl": project_root
+        / "tests"
+        / f"test_{name}_package.py",
         "_README.IGNORE.md": project_root / "README.md",
         "_assets-flowchart.IGNORE.mmd": project_root
         / "assets"
@@ -206,6 +218,8 @@ def _create_init_files(project_root: Path, name: str) -> None:
     """
     package_root = project_root / "src" / name
     utils.create_init_dot_py(package_root)
+    utils.create_init_dot_py(project_root / "src" / f"{name}_dev")
+    utils.create_init_dot_py(project_root / "src" / f"{name}_dev" / "packaging")
     utils.create_init_dot_py(package_root / "cli", imports=["app"])
     utils.create_init_dot_py(
         package_root / "utils",

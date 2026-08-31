@@ -54,14 +54,6 @@ _check-clean-worktree action="publishing":
         exit 1; \
     }
 
-[private]
-_check-pypi-api-key:
-    @test -n "${PYPI_API_KEY-}" || { \
-        echo "PYPI_API_KEY is required. Usage: PYPI_API_KEY=\"pypi-...\" just publish-pypi" >&2; \
-        exit 1; \
-    }
-
-
 # ---------------------------------------------------------------
 # Clean / environment helpers
 # ---------------------------------------------------------------
@@ -160,53 +152,110 @@ py-switch version="3.13":
 # ---------------------------------------------------------------
 
 # ---------------------------------------------------------------
-# Build / publishing
+# Release preparation
 # ---------------------------------------------------------------
 
-# Build release artifacts with the configured pyproject backend.
-build:
+[private]
+_ci-check-python version environment:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export UV_PROJECT_ENVIRONMENT="{{environment}}"
+    export UV_LINK_MODE=copy
+    unset VIRTUAL_ENV
+    uv sync --python "{{version}}" --locked --all-groups --quiet --no-progress
+    uv lock --check --quiet
+    uv run --python "{{version}}" --locked --no-sync ruff format . --check
+    uv run --python "{{version}}" --locked --no-sync ruff check .
+    uv run --python "{{version}}" --locked --no-sync pyright --venvpath "$(dirname "$UV_PROJECT_ENVIRONMENT")"
+    uv run --python "{{version}}" --locked --no-sync pytest
+    uv run --python "{{version}}" --locked --no-sync python -m compileall -q src tests
+
+[private]
+_release-artifact-check notes_output:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version="$(uv version --short)"
+    tag="${GITHUB_REF_NAME:-v${version}}"
+    notes_output="{{notes_output}}"
+    artifact_root="$(mktemp -d)"
+    smoke_root="$artifact_root/smoke"
+    smoke_script="$(realpath src/{my_project}_dev/packaging/install_smoke.py)"
+    mkdir -p "$smoke_root" "$(dirname "$notes_output")"
+    trap 'rm -rf "$artifact_root"' EXIT
+    python src/{my_project}_dev/packaging/release_notes.py "$version" --tag "$tag" --project-version "$version" --output "$notes_output"
+    rm -rf dist
+    uv build --python 3.12 --no-sources
+    shopt -s nullglob
+    wheels=(dist/*.whl)
+    sdists=(dist/*.tar.gz)
+    if [[ "${#wheels[@]}" -ne 1 || "${#sdists[@]}" -ne 1 ]]; then echo "Expected exactly one wheel and one sdist in dist/." >&2; exit 1; fi
+    if [[ "$(basename "${wheels[0]}")" != {my_project}-${version}-*.whl ]]; then echo "Expected a wheel for ${version}." >&2; exit 1; fi
+    if [[ "$(basename "${sdists[0]}")" != "{my_project}-${version}.tar.gz" ]]; then echo "Expected sdist {my_project}-${version}.tar.gz." >&2; exit 1; fi
+    wheel="$(realpath "${wheels[0]}")"
+    sdist="$(realpath "${sdists[0]}")"
+    uv run --with twine --no-project -- twine check "$wheel" "$sdist"
+    (
+        cd "$smoke_root"
+        for artifact in "$wheel" "$sdist"; do
+            for python_version in 3.12 3.13; do
+                NO_COLOR=1 _TYPER_FORCE_DISABLE_TERMINAL=1 uv run --isolated --python "$python_version" --with "{my_project} @ file://$artifact" python "$smoke_script" --expected-version "$version"
+            done
+        done
+    )
+
+# Rehearse the release gate. It does not upload anything.
+release-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
     just _check-uv
-    uv build --no-sources
+    check_root="$(mktemp -d)"
+    trap 'rm -rf "$check_root"' EXIT
+    current_version="$(uv version --short)"
+    prepared_version="$(PYTHONPATH=src python -c 'from pathlib import Path; from {my_project}_dev.packaging.release_notes import latest_release_version; print(latest_release_version(Path("CHANGELOG.md").read_text(encoding="utf-8")))')"
+    if [[ "${PROJECT_RELEASE_IN_PROGRESS:-}" != 1 && "$prepared_version" != "$current_version" ]]; then
+        PYTHONPATH=src python -c 'import sys; from {my_project}_dev.packaging.release_notes import validate_next_version; validate_next_version(*sys.argv[1:])' "$current_version" "$prepared_version"
+        version_root="$check_root/version"
+        mkdir -p "$version_root"
+        cp pyproject.toml uv.lock pylock.toml "$version_root/"
+        restore_version_files=true
+        cleanup() { exit_code=$?; trap - EXIT; if [[ "$restore_version_files" == true ]]; then cp "$version_root/pyproject.toml" pyproject.toml; cp "$version_root/uv.lock" uv.lock; cp "$version_root/pylock.toml" pylock.toml; fi; rm -rf "$check_root"; exit "$exit_code"; }
+        trap cleanup EXIT
+        uv version "$prepared_version" --no-sync
+        uv export -o pylock.toml --all-extras --all-groups --quiet
+        PROJECT_RELEASE_IN_PROGRESS=1 just release-check
+        exit $?
+    fi
+    for python_version in 3.12 3.13; do just _ci-check-python "$python_version" "$check_root/python-${python_version}/.venv"; done
+    just _release-artifact-check "$check_root/release-notes.md"
+    echo "Local release rehearsal passed; nothing was published."
 
-# Validate package metadata and README rendering before publishing.
-publish-check:
-    just build
-    uv run --with twine --no-project -- twine check dist/*
-
-# Usage: PYPI_API_KEY="pypi-..." just publish-pypi
-# Rebuild, validate, and upload release artifacts to PyPI.
-publish-pypi *ARGS:
+# Prepare a checked version commit and annotated local release tag.
+release level="patch":
+    #!/usr/bin/env bash
+    set -euo pipefail
     just _check-uv
-    just _check-pypi-api-key
-    just _check-clean-worktree
-    rm -rf dist/
-    just publish-check
-    uv publish --token "$PYPI_API_KEY" {{ARGS}}
+    just _check-clean-worktree "preparing the release"
+    next_version="$(uv version --bump "{{level}}" --dry-run --short)"
+    tag="v${next_version}"
+    if git rev-parse --verify --quiet "refs/tags/${tag}" >/dev/null; then echo "Tag ${tag} already exists." >&2; exit 1; fi
+    release_root="$(mktemp -d)"
+    notes_file="$release_root/release-notes.md"
+    restore_version_files=false
+    cleanup() { exit_code=$?; trap - EXIT; if [[ "$restore_version_files" == true ]]; then cp "$release_root/pyproject.toml" pyproject.toml; cp "$release_root/uv.lock" uv.lock; cp "$release_root/pylock.toml" pylock.toml; fi; rm -rf "$release_root"; exit "$exit_code"; }
+    trap cleanup EXIT
+    python src/{my_project}_dev/packaging/release_notes.py "$next_version" --output "$notes_file"
+    cp pyproject.toml uv.lock pylock.toml "$release_root/"
+    restore_version_files=true
+    uv version --bump "{{level}}" --no-sync
+    uv export -o pylock.toml --all-extras --all-groups --quiet
+    PROJECT_RELEASE_IN_PROGRESS=1 just release-check
+    git commit --only pyproject.toml uv.lock pylock.toml -m "Bump version to ${next_version}"
+    restore_version_files=false
+    git tag -a "$tag" -m "Release ${tag}"
+    echo "Prepared ${tag}. Publish it with: git push origin main ${tag}"
 
-# Bump the project version, commit the version files, and create an annotated v-tag.
-bump-version bump="patch":
-    just _check-uv
-    just _check-clean-worktree "bumping the version"
-    @next_version="$(uv version --bump "{{bump}}" --dry-run --short)"; \
-    tag="v${next_version}"; \
-    if git rev-parse --verify --quiet "refs/tags/${tag}" >/dev/null; then \
-        echo "Tag ${tag} already exists. Choose another bump." >&2; \
-        exit 1; \
-    fi; \
-    uv version --bump "{{bump}}" --no-sync; \
-    uv export -o pylock.toml --all-extras --all-groups --quiet; \
-    git add pyproject.toml uv.lock pylock.toml; \
-    git commit -m "Bump version to ${next_version}"; \
-    git tag -a "${tag}" -m "Release ${tag}"
-alias bump := bump-version
-
-# Verify the published PyPI package in a fresh plain-pip virtualenv.
-verify-pypi requirement="{my_project}":
-    rm -rf /tmp/{my_project}-pypi-check
-    python -m venv /tmp/{my_project}-pypi-check
-    /tmp/{my_project}-pypi-check/bin/python -m pip install --upgrade pip
-    /tmp/{my_project}-pypi-check/bin/python -m pip install --no-cache-dir "{{requirement}}"
-    /tmp/{my_project}-pypi-check/bin/python -c 'import {my_project}; print({my_project}.__file__)'
+# GitHub Releases are always created from pushed tags. Set the repository
+# variable PUBLISH_PYPI=true only after configuring PyPI trusted publishing.
 
 # Run GitHub Actions triggered by push locally using act
 gitactions:

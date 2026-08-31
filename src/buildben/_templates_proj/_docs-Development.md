@@ -7,6 +7,7 @@
    1. [Maintainer Loop](#maintainer-loop)
    2. [Repository Routing](#repository-routing)
    3. [Before Editing](#before-editing)
+   4. [Releases](#releases)
 3. [Implementation Standards](#3-implementation-standards)
    1. [Source Editing Rules](#source-editing-rules)
    2. [Documentation Authoring](#documentation-authoring)
@@ -103,6 +104,51 @@ requires checking `src/{my_project}/cli/app.py`, the thin wrapper in
 > [!NOTE]
 > Related: use [verification](#verification) for the local verification
 > checklist.
+
+<br>
+
+<!-- ======================================================== -->
+## Releases
+<!-- ======================================================== -->
+
+`CHANGELOG.md` is the source for GitHub Release notes. Before a release, move
+every entry from `[Unreleased]` into a new `# [MAJOR.MINOR.PATCH] - YYYY-MM-DD`
+section, add its table-of-contents link, and leave a complete empty
+`[Unreleased]` section above it.
+
+Before the first push, create and commit the generated dependency files:
+
+```bash
+just lock
+git add uv.lock pylock.toml
+git commit -m "Lock project dependencies"
+```
+
+The CI and release workflows use `uv sync --locked`, so they intentionally
+fail when the committed lock no longer matches `pyproject.toml`.
+
+Run the local rehearsal first:
+
+```bash
+just release-check
+```
+
+Then prepare a version commit and annotated local tag:
+
+```bash
+just release patch
+git push origin main vMAJOR.MINOR.PATCH
+```
+
+Pushing the tag runs CI, validates wheel and sdist installs on Python 3.12 and
+3.13, and creates the GitHub Release with the changelog section as its notes.
+The workflow does not publish from a local machine.
+
+> [!NOTE]
+> PyPI is optional. After configuring PyPI trusted publishing for the `pypi`
+> GitHub environment, set the repository variable `PUBLISH_PYPI=true`. The
+> release workflow then publishes the already validated artifacts only after
+> the GitHub Release succeeds.
 
 <br>
 

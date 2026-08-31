@@ -1,0 +1,36 @@
+"""Verify a generated project's installed distribution."""
+
+from __future__ import annotations
+
+import argparse
+import importlib
+import importlib.metadata as metadata
+import shutil
+import subprocess
+
+PACKAGE_NAME = "{my_project}"
+
+
+def main() -> int:
+    """Validate the installed package and console script.
+
+    :return: Process exit code.
+    """
+    parser = argparse.ArgumentParser(description="Smoke-test an installed distribution.")
+    parser.add_argument("--expected-version")
+    args = parser.parse_args()
+    package = importlib.import_module(PACKAGE_NAME)
+    version = metadata.version(PACKAGE_NAME)
+    console_path = shutil.which(PACKAGE_NAME)
+    assert package.__file__
+    if args.expected_version is not None:
+        assert version == args.expected_version
+    assert console_path
+    result = subprocess.run([console_path, "--help"], capture_output=True, check=False, text=True)
+    assert result.returncode == 0
+    print(f"{PACKAGE_NAME} install smoke passed")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

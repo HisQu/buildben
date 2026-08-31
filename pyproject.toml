@@ -118,6 +118,7 @@ venvPath = "."
 venv = ".venv"
 include = ["src", "tests"]
 exclude = [
+    "src/buildben/_templates_proj/.old",
     "**/__pycache__",
     "build",
     "dist",

@@ -31,7 +31,7 @@ All notable changes to `{my_project}` will be documented in this file.
 1. [Changelog](#changelog)
    1. [Table Of Contents](#table-of-contents)
 2. [\[Unreleased\]](#unreleased)
-3. [{initial\_version} - {scaffold\_date}](#initial_version---scaffold_date)
+3. [\[{initial_version}\] - {scaffold_date}](#010---{scaffold_date})
 
 <br>
 
@@ -46,8 +46,6 @@ All notable changes to `{my_project}` will be documented in this file.
 <br>
 
 ### 💥 Breaking Change Summary
-
-No breaking changes yet.
 
 <br>
 
@@ -77,7 +75,7 @@ No breaking changes yet.
 
 <!-- ======================================================== -->
 
-# {initial_version} - {scaffold_date}
+# [{initial_version}] - {scaffold_date}
 
 <br>
 

@@ -1,0 +1,151 @@
+"""Build GitHub Release notes from the curated changelog."""
+
+from __future__ import annotations
+
+import argparse
+import re
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[3]
+VERSION_RE = re.compile(r"^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$")
+RELEASE_RE = re.compile(
+    r"^# \[(?P<version>\d+\.\d+\.\d+)\] - (?P<date>\d{4}-\d{2}-\d{2})$",
+    re.MULTILINE,
+)
+UNRELEASED_SECTIONS = (
+    "### 💥 Breaking Change Summary",
+    "### ➕ Added",
+    "### 💔 Changed",
+    "### ⚠️ Deprecated",
+    "### 🗑️ Removed",
+    "### 🔨 Fixed",
+)
+
+
+def validate_version(version: str) -> None:
+    """Reject identifiers that are not MAJOR.MINOR.PATCH versions.
+
+    :param version: Candidate version without a leading ``v``.
+    :return: None.
+    """
+    if VERSION_RE.fullmatch(version) is None:
+        raise ValueError(f"Invalid release version {version!r}; expected MAJOR.MINOR.PATCH.")
+
+
+def validate_tag_version(tag: str, project_version: str) -> None:
+    """Require a pushed tag to match the project metadata version.
+
+    :param tag: Git tag expected to use the ``vMAJOR.MINOR.PATCH`` form.
+    :param project_version: Version read from project metadata.
+    :return: None.
+    """
+    validate_version(project_version)
+    if tag != f"v{project_version}":
+        raise ValueError(f"Release tag {tag!r} does not match project version {project_version!r}.")
+
+
+def validate_next_version(current_version: str, next_version: str) -> None:
+    """Require a prepared changelog release to advance project metadata.
+
+    :param current_version: Version currently stored in project metadata.
+    :param next_version: Version prepared in the changelog for release.
+    :return: None.
+    """
+    validate_version(current_version)
+    validate_version(next_version)
+    if tuple(map(int, next_version.split("."))) <= tuple(map(int, current_version.split("."))):
+        raise ValueError(f"Prepared release {next_version!r} must be newer than {current_version!r}.")
+
+
+def latest_release_version(markdown: str) -> str:
+    """Return the highest released version in the changelog.
+
+    :param markdown: Complete changelog text.
+    :return: Highest released semantic version.
+    """
+    versions = [match.group("version") for match in RELEASE_RE.finditer(markdown)]
+    if not versions:
+        raise ValueError("Changelog has no versioned release heading.")
+    return max(versions, key=lambda value: tuple(map(int, value.split("."))))
+
+
+def _is_layout(line: str) -> bool:
+    """Return whether a line exists only for changelog page layout."""
+    return line in {"<br>", "---"} or (line.startswith("<!--") and line.endswith("-->"))
+
+
+def validate_unreleased_section(markdown: str) -> None:
+    """Require an empty and complete ``[Unreleased]`` section.
+
+    :param markdown: Complete changelog text.
+    :return: None.
+    """
+    heading = "# [Unreleased]"
+    if markdown.count(heading) != 1:
+        raise ValueError("Changelog must contain exactly one [Unreleased] heading.")
+    start = markdown.index(heading) + len(heading)
+    next_release = RELEASE_RE.search(markdown, start)
+    if next_release is None:
+        raise ValueError("Changelog has no released section after [Unreleased].")
+    section = markdown[start : next_release.start()]
+    for section_heading in UNRELEASED_SECTIONS:
+        if section.count(section_heading) != 1:
+            raise ValueError(f"Invalid [Unreleased] heading: {section_heading!r}.")
+    content = [line.strip() for line in section.splitlines() if line.strip() and not _is_layout(line.strip()) and not line.startswith("### ")]
+    if content:
+        raise ValueError("The [Unreleased] section still contains release entries; move them before tagging.")
+
+
+def build_release_notes(markdown: str, version: str) -> str:
+    """Extract one release section as a GitHub Release body.
+
+    :param markdown: Complete changelog text.
+    :param version: Released semantic version without a leading ``v``.
+    :return: GitHub Release body.
+    """
+    validate_version(version)
+    validate_unreleased_section(markdown)
+    matches = [match for match in RELEASE_RE.finditer(markdown) if match.group("version") == version]
+    if len(matches) != 1:
+        raise ValueError(f"Changelog must contain exactly one release heading for {version}; found {len(matches)}.")
+    match = matches[0]
+    toc_entry = f"[\\[{version}\\] - {match.group('date')}](#{version.replace('.', '')}---{match.group('date')})"
+    if markdown.count(toc_entry) != 1:
+        raise ValueError("Changelog table of contents must contain the release heading.")
+    next_heading = RELEASE_RE.search(markdown, match.end())
+    section = markdown[match.end() : next_heading.start() if next_heading else len(markdown)]
+    output: list[str] = []
+    for line in section.splitlines():
+        if _is_layout(line.strip()):
+            continue
+        output.append(line[1:] if line.startswith("### ") else line)
+    notes = "\n".join(output).strip()
+    if not any(line.lstrip().startswith("- ") for line in notes.splitlines()):
+        raise ValueError(f"Release {version} has no changelog entries.")
+    return f"{notes}\n"
+
+
+def main() -> int:
+    """Validate release state and write GitHub Release notes.
+
+    :return: Process exit code.
+    """
+    parser = argparse.ArgumentParser(description="Extract a GitHub Release body from CHANGELOG.md.")
+    parser.add_argument("version")
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--tag")
+    parser.add_argument("--project-version")
+    args = parser.parse_args()
+    if (args.tag is None) != (args.project_version is None):
+        raise ValueError("--tag and --project-version must be provided together.")
+    if args.tag is not None:
+        validate_tag_version(args.tag, args.project_version)
+        if args.version != args.project_version:
+            raise ValueError("Requested release version does not match project version.")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(build_release_notes((ROOT / "CHANGELOG.md").read_text(encoding="utf-8"), args.version), encoding="utf-8")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -90,8 +90,7 @@ def test_scaffolded_project_runs_pytest(bube_test_project: Path) -> None:
     proot = bube_test_project
     proj_name = "bube_test_tmp"
 
-    # == Add a minimal smoke test into the generated project ====================
-    # > Pytest exits with code 5 when it collects no tests, so we create one.
+    # == Add runtime coverage to the generated package test =====================
     test_file = proot / "tests" / "test_generated_smoke.py"
     test_file.write_text(
         (
@@ -208,12 +207,13 @@ def test_scaffolded_project_uses_dependency_group_template(
     assert "uv sync --check --all-extras --all-groups" in justfile_text
     assert "uv lock" in justfile_text
     assert "_check-clean-worktree" in justfile_text
-    assert "_check-pypi-api-key" in justfile_text
-    assert "uv build --no-sources" in justfile_text
-    assert "twine check dist/*" in justfile_text
-    assert 'uv publish --token "$PYPI_API_KEY"' in justfile_text
+    assert "release-check:" in justfile_text
+    assert "_release-artifact-check" in justfile_text
+    assert "uv build --python 3.12 --no-sources" in justfile_text
+    assert 'twine check "$wheel" "$sdist"' in justfile_text
     assert "uv version --bump" in justfile_text
-    assert 'verify-pypi requirement="bube_test_tmp"' in justfile_text
+    assert "PUBLISH_PYPI=true" in justfile_text
+    assert "uv publish --token" not in justfile_text
 
     readme_text = (proot / "README.md").read_text(encoding="utf-8")
     assert 'python -m pip install -e "."' in readme_text
@@ -241,7 +241,9 @@ def test_scaffolded_project_includes_project_changelog(
     changelog_text = changelog_path.read_text(encoding="utf-8")
     assert "bube_test_tmp" in changelog_text
     assert "0.1.0" in changelog_text
-    assert "0.1.0 - " in changelog_text
+    assert "# [0.1.0] - " in changelog_text
+    assert "[\\[0.1.0\\] - " in changelog_text
+    assert "(#010---" in changelog_text
     assert "<my_project>" not in changelog_text
     assert "<project_name>" not in changelog_text
     assert "<initial_version>" not in changelog_text
@@ -368,6 +370,39 @@ def test_scaffolded_project_has_apprc_config_package(
     assert "apprc.logging" not in agents_text
 
 
+def test_scaffolded_project_includes_release_workflow(
+    bube_test_project: Path,
+) -> None:
+    """Assert generated repositories receive the active release contract."""
+    ci = bube_test_project / ".github" / "workflows" / "ci.yml"
+    release = bube_test_project / ".github" / "workflows" / "release.yml"
+    release_notes = (
+        bube_test_project
+        / "src"
+        / "bube_test_tmp_dev"
+        / "packaging"
+        / "release_notes.py"
+    )
+    smoke = release_notes.with_name("install_smoke.py")
+    starter_test = bube_test_project / "tests" / "test_bube_test_tmp_package.py"
+
+    for path in (ci, release, release_notes, smoke, starter_test):
+        assert path.is_file(), path
+
+    assert "workflow_call" in ci.read_text(encoding="utf-8")
+    release_text = release.read_text(encoding="utf-8")
+    assert "github-release" in release_text
+    assert "PUBLISH_PYPI" in release_text
+    assert "trusted-publishing" in release_text
+
+    development_text = (bube_test_project / "docs" / "Development.md").read_text(
+        encoding="utf-8"
+    )
+    assert "just release-check" in development_text
+    assert "PUBLISH_PYPI=true" in development_text
+    assert "just lock" in development_text
+
+
 def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> None:
     """Assert generated projects include the reusable docs scaffold."""
     proot = bube_test_project
@@ -477,6 +512,8 @@ def test_buildben_wheel_includes_all_template_assets(tmp_path: Path) -> None:
     assert "buildben/_templates_proj/_CHANGELOG.md" in names
     assert "buildben/_templates_proj/_TODO.md" in names
     assert "buildben/_templates_proj/_src-cli-app.py.tmpl" in names
+    assert "buildben/_templates_proj/_github-release.yml" in names
+    assert "buildben/_templates_proj/_src-dev-packaging-release_notes.py.tmpl" in names
 
 
 def test_experiment_scaffold_is_minimal_and_runnable(
