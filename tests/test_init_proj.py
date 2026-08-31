@@ -209,11 +209,13 @@ def test_scaffolded_project_uses_dependency_group_template(
     assert "_check-clean-worktree" in justfile_text
     assert "release-check:" in justfile_text
     assert "_release-artifact-check" in justfile_text
-    assert "uv build --python 3.12 --no-sources" in justfile_text
+    assert "uv build --python 3.12 --no-sources --no-build-logs" in justfile_text
     assert 'twine check "$wheel" "$sdist"' in justfile_text
     assert "uv version --bump" in justfile_text
     assert "PUBLISH_PYPI=true" in justfile_text
     assert "uv publish --token" not in justfile_text
+    assert "RELEASE ${tag} PREPARED LOCALLY" in justfile_text
+    assert "--all-extras --all-groups" in justfile_text
 
     readme_text = (proot / "README.md").read_text(encoding="utf-8")
     assert 'python -m pip install -e "."' in readme_text
@@ -390,6 +392,9 @@ def test_scaffolded_project_includes_release_workflow(
         assert path.is_file(), path
 
     assert "workflow_call" in ci.read_text(encoding="utf-8")
+    assert "uv sync --locked --all-extras --all-groups" in ci.read_text(
+        encoding="utf-8"
+    )
     release_text = release.read_text(encoding="utf-8")
     assert "github-release" in release_text
     assert "PUBLISH_PYPI" in release_text
@@ -401,6 +406,36 @@ def test_scaffolded_project_includes_release_workflow(
     assert "just release-check" in development_text
     assert "PUBLISH_PYPI=true" in development_text
     assert "just lock" in development_text
+
+    release_notes_output = bube_test_project / "release-notes.md"
+    _run(
+        [
+            sys.executable,
+            str(release_notes),
+            "0.1.0",
+            "--output",
+            str(release_notes_output),
+        ],
+        cwd=bube_test_project,
+        env=_project_env(bube_test_project),
+    )
+    assert release_notes_output.read_text(encoding="utf-8").startswith("## ➕ Added")
+    smoke_text = smoke.read_text(encoding="utf-8")
+    assert "InstallSnapshot" in smoke_text
+    assert "validate_install_snapshot" in smoke_text
+
+
+def test_buildben_release_recipe_keeps_checks_visible_and_builds_quiet() -> None:
+    """Assert the local release recipe retains useful status and safety output."""
+    recipe = (Path(__file__).resolve().parents[1] / "justfile").read_text(
+        encoding="utf-8"
+    )
+
+    assert "uv build --python 3.12 --no-sources --no-build-logs" in recipe
+    assert "Python {{version}}: checks passed." in recipe
+    assert "Version commit succeeded, but tag creation failed." in recipe
+    assert "RELEASE ${tag} PREPARED LOCALLY" in recipe
+    assert "git push origin main ${tag}" in recipe
 
 
 def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> None:

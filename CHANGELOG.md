@@ -49,6 +49,10 @@ This project follows Semantic Versioning.
 
 ### 💔 Changed
 
+- Quiet release builds by hiding setuptools backend logs while keeping the
+  release checks visible. Align Buildben and generated-project release recipes
+  with Haiu's full dependency checks, recovery messages, and release status.
+
 <br>
 
 ### ⚠️ Deprecated

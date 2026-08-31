@@ -198,13 +198,16 @@ _ci-check-python version environment:
     export UV_PROJECT_ENVIRONMENT="{{environment}}"
     export UV_LINK_MODE=copy
     unset VIRTUAL_ENV
-    uv sync --python "{{version}}" --locked --all-groups --quiet --no-progress
+    echo "Python {{version}}: preparing isolated release environment..."
+    uv sync --python "{{version}}" --locked --all-extras --all-groups --quiet --no-progress
     uv lock --check --quiet
+    echo "Python {{version}}: environment ready; running checks."
     uv run --python "{{version}}" --locked --no-sync ruff format . --check
     uv run --python "{{version}}" --locked --no-sync ruff check .
     uv run --python "{{version}}" --locked --no-sync pyright --venvpath "$(dirname "$UV_PROJECT_ENVIRONMENT")"
     uv run --python "{{version}}" --locked --no-sync pytest
     uv run --python "{{version}}" --locked --no-sync python -m compileall -q src tests
+    echo "Python {{version}}: checks passed."
 
 [private]
 _release-artifact-check notes_output:
@@ -221,7 +224,7 @@ _release-artifact-check notes_output:
 
     python src/buildben_dev/packaging/release_notes.py "$version" --tag "$tag" --project-version "$version" --output "$notes_output"
     rm -rf dist
-    uv build --python 3.12 --no-sources
+    uv build --python 3.12 --no-sources --no-build-logs
     shopt -s nullglob
     wheels=(dist/*.whl)
     sdists=(dist/*.tar.gz)
@@ -273,13 +276,17 @@ release-check:
         }
         trap cleanup EXIT
         uv version "$prepared_version" --no-sync
-        uv export -o pylock.toml --all-groups --quiet
+        uv export -o pylock.toml --all-extras --all-groups --quiet
         BUILDBEN_RELEASE_IN_PROGRESS=1 just release-check
         exit $?
     fi
     for python_version in 3.12 3.13; do just _ci-check-python "$python_version" "$check_root/python-${python_version}/.venv"; done
     just _release-artifact-check "$check_root/release-notes.md"
-    echo "Local release rehearsal passed; nothing was published."
+    if [[ "${BUILDBEN_RELEASE_IN_PROGRESS:-}" == 1 ]]; then
+        echo "Local release rehearsal passed; nothing was published."
+    else
+        echo "Next step: run just release <patch|minor|major>."
+    fi
 
 # Prepare a checked version commit and annotated local release tag.
 release level="patch":
@@ -289,7 +296,12 @@ release level="patch":
     just _check-clean-worktree "preparing the release"
     next_version="$(uv version --bump "{{level}}" --dry-run --short)"
     tag="v${next_version}"
-    if git rev-parse --verify --quiet "refs/tags/${tag}" >/dev/null; then echo "Tag ${tag} already exists." >&2; exit 1; fi
+    if git rev-parse --verify --quiet "refs/tags/${tag}" >/dev/null; then
+        echo "Tag ${tag} already exists. Choose another release level." >&2
+        exit 1
+    fi
+
+    echo "Preparing ${tag} locally. Nothing will upload until you push main and ${tag}."
     release_root="$(mktemp -d)"
     notes_file="$release_root/release-notes.md"
     restore_version_files=false
@@ -305,12 +317,30 @@ release level="patch":
     cp pyproject.toml uv.lock pylock.toml "$release_root/"
     restore_version_files=true
     uv version --bump "{{level}}" --no-sync
-    uv export -o pylock.toml --all-groups --quiet
+    uv export -o pylock.toml --all-extras --all-groups --quiet
     BUILDBEN_RELEASE_IN_PROGRESS=1 just release-check
     git commit --only pyproject.toml uv.lock pylock.toml -m "Bump version to ${next_version}"
     restore_version_files=false
-    git tag -a "$tag" -m "Release ${tag}"
-    echo "Prepared ${tag}. Publish it with: git push origin main ${tag}"
+    if ! git tag -a "$tag" -m "Release ${tag}"; then
+        echo "Version commit succeeded, but tag creation failed. Retry with:" >&2
+        echo "git tag -a ${tag} -m 'Release ${tag}'" >&2
+        exit 1
+    fi
+
+    echo
+    echo "================================================================="
+    echo "✅  RELEASE ${tag} PREPARED LOCALLY"
+    echo "================================================================="
+    echo
+    echo "Nothing has been uploaded."
+    echo
+    echo "NEXT COMMAND, THIS STARTS THE RELEASE:"
+    echo
+    echo "  git push origin main ${tag}"
+    echo
+    echo "GitHub will run CI, validate wheel and sdist artifacts, and create"
+    echo "the GitHub Release. PyPI stays disabled unless PUBLISH_PYPI=true."
+    echo "================================================================="
 
 # GitHub Releases are always created from pushed tags. Set the repository
 # variable PUBLISH_PYPI=true only after configuring PyPI trusted publishing.
