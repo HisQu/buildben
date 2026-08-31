@@ -22,10 +22,11 @@ This project follows Semantic Versioning.
 
 1. [Buildben Changelog](#buildben-changelog)
 2. [\[Unreleased\]](#unreleased)
-3. [\[0.5.0\] - 2026-08-31](#050---2026-08-31)
-4. [\[0.4.0\] - 2026-07-03](#040---2026-07-03)
-5. [\[0.3.0\] - 2026-07-01](#030---2026-07-01)
-6. [\[0.2.1\] - 2026-06-26](#021---2026-06-26)
+3. [\[0.6.0\] - 2026-08-31](#060---2026-08-31)
+4. [\[0.5.0\] - 2026-08-31](#050---2026-08-31)
+5. [\[0.4.0\] - 2026-07-03](#040---2026-07-03)
+6. [\[0.3.0\] - 2026-07-01](#030---2026-07-01)
+7. [\[0.2.1\] - 2026-06-26](#021---2026-06-26)
 
 <br>
 
@@ -36,6 +37,40 @@ This project follows Semantic Versioning.
 <!-- ======================================================== -->
 
 # [Unreleased]
+
+<br>
+
+### 💥 Breaking Change Summary
+
+<br>
+
+### ➕ Added
+
+<br>
+
+### 💔 Changed
+
+<br>
+
+### ⚠️ Deprecated
+
+<br>
+
+### 🗑️ Removed
+
+<br>
+
+### 🔨 Fixed
+
+<br>
+
+---
+
+<br>
+
+<!-- ======================================================== -->
+
+# [0.6.0] - 2026-08-31
 
 <br>
 
@@ -52,27 +87,11 @@ This project follows Semantic Versioning.
 
 <br>
 
-### ➕ Added
-
-<br>
-
 ### 💔 Changed
 
 - Quiet release builds by hiding setuptools backend logs while keeping the
   release checks visible. Align Buildben and generated-project release recipes
   with Haiu's full dependency checks, recovery messages, and release status.
-
-<br>
-
-### ⚠️ Deprecated
-
-<br>
-
-### 🗑️ Removed
-
-<br>
-
-### 🔨 Fixed
 
 <br>
 
