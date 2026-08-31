@@ -160,7 +160,9 @@ Document public surfaces here as the project grows:
 | Module entrypoint | `python -m {my_project}` | Public module execution path. |
 | CLI app owner | `{my_project}.cli.app` | Command tree implementation owner. |
 | Entrypoint wrapper | `{my_project}.main` | Thin wrapper for package metadata entry points. |
-| Config env declarations | `{my_project}.config.owners` | App-owned AppRC `rc.Config` field inventory. |
+| Config sections | `{my_project}.config.sections` | App-owned AppRC `rc.Config` field declarations. |
+| Config bundle | `{my_project}.config.<MyProject>Config` | Top-level typed object that assembles config sections. |
+| Config catalog | `{my_project}.config.catalog` | Section metadata and CLI registration import. |
 | Config facade | `{my_project}.config.APP_RC` | Public AppRC facade used by CLI bootstrap and config commands. |
 
 > [!NOTE]

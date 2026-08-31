@@ -41,6 +41,15 @@ This project follows Semantic Versioning.
 
 ### 💥 Breaking Change Summary
 
+- Breaking: Newly scaffolded projects replace
+  `<my_project>.config.owners.AppRuntimeConfig` with
+  `<my_project>.config.sections.app.AppSettings` and a project-named config
+  bundle.
+  Affected: Downstream code that imports generated configuration internals.
+  Migration: Import `AppSettings` from `config.sections.app`, or import the
+  generated bundle through the config facade. New projects should add settings
+  below `config/sections/`.
+
 <br>
 
 ### ➕ Added

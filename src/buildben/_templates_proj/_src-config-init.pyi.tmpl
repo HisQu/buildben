@@ -1,0 +1,17 @@
+"""Typed public exports for <my_project>'s AppRC config package."""
+
+from .app import APP_RC as APP_RC
+from .bundle import <MyProject>Config as <MyProject>Config
+from .catalog import (
+    CONFIG_SECTIONS as CONFIG_SECTIONS,
+    CONFIG_SPEC as CONFIG_SPEC,
+    SECTION_BY_KEY as SECTION_BY_KEY,
+)
+
+__all__: list[str]
+
+
+def __getattr__(name: str) -> object: ...
+
+
+def __dir__() -> list[str]: ...

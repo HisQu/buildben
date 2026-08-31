@@ -13,6 +13,7 @@ import typer
 
 import <my_project>
 from <my_project>.config import APP_RC
+from <my_project>.config.catalog import ensure_config_sections_registered
 
 PACKAGE_NAME = "<my_project>"
 VERSION_FALLBACK = "0.1.0"
@@ -139,6 +140,8 @@ def _echo_diagnose_payload(payload: dict[str, Any]) -> None:
     for key in sorted(payload):
         typer.echo(f"{key}: {payload[key]}")
 
+
+ensure_config_sections_registered()
 
 APP_RC.mount_cli(
     app,

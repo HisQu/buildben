@@ -20,7 +20,7 @@
 
 ## Project rules
 - Do not duplicate helpers or re-implement existing utilities without checking first.
-- App configuration belongs in `<my_project>.config.owners` and should use AppRC `rc.Config` classes with `rc.field(...)` declarations.
+- App configuration belongs in `<my_project>.config.sections`. Keep fields in focused `rc.Config` classes with `rc.field(...)` declarations, assemble them in `config.bundle`, and keep AppRC metadata in `config.catalog`.
 - CLI behavior belongs in `<my_project>.cli.app`; keep `<my_project>.main` as a thin public entry point wrapper.
 - Use stdlib `logging` for app-owned logs; AppRC integration should start from `import apprc as rc`.
 - Import `<my_project>`-owned utility helpers through the facade: `import <my_project>.utils as ut`.

@@ -1,6 +1,5 @@
-"""Packaged configuration resources and AppRC adapter for <my_project>."""
+"""Public AppRC config facade for <my_project>."""
 
-# ruff: noqa: F401
-
-from <my_project>.config.app import APP_RC
-from <my_project>.config.owners import AppRuntimeConfig
+from <my_project>.config._facade import __all__ as __all__
+from <my_project>.config._facade import __dir__ as __dir__
+from <my_project>.config._facade import __getattr__ as __getattr__

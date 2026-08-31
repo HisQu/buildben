@@ -1,0 +1,11 @@
+"""Top-level AppRC config bundle for <my_project>."""
+
+from <my_project>.config.app import APP_RC
+from <my_project>.config.sections.app import AppSettings
+
+
+@APP_RC.bundle
+class <MyProject>Config:
+    """Aggregate every registered <my_project> config section."""
+
+    app: AppSettings

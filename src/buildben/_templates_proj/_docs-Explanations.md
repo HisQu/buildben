@@ -81,10 +81,11 @@ one-off diagnostics in the nearest existing tooling, test, or experiment area.
 ## Configuration Model
 <!-- ======================================================== -->
 
-`{my_project}` uses AppRC for application configuration. The application owns
-its typed `rc.Config` declarations in `src/{my_project}/config/owners.py`;
-AppRC derives the normalized owner inventory from `APP_RC` and owns the
-repeatable workflows around it:
+`{my_project}` uses AppRC for application configuration. Put typed
+`rc.Config` declarations in `src/{my_project}/config/sections/`; the starter
+section is `app.py`. `config/bundle.py` assembles the top-level config object,
+and `config/catalog.py` imports declarations before AppRC builds CLI metadata.
+AppRC then provides these repeatable workflows:
 
 - packaged defaults in `src/{my_project}/config/.env.shared`
 - optional multi-storage index selected by `{MY_PROJECT}_APPRC_TOML`

@@ -85,6 +85,7 @@ def _project_directories(project_root: Path, name: str) -> list[Path]:
         project_root / "src" / f"{name}_dev" / "packaging",
         project_root / "src" / name / "cli",
         project_root / "src" / name / "config",
+        project_root / "src" / name / "config" / "sections",
         project_root / "src" / name / "utils",
         project_root / "src" / name / "data",
         project_root / "src" / name / "images",
@@ -132,11 +133,50 @@ def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path
         / name
         / "config"
         / "__init__.py",
-        "_src-config-owners.py.tmpl": project_root
+        "_src-config-init.pyi.tmpl": project_root
         / "src"
         / name
         / "config"
-        / "owners.py",
+        / "__init__.pyi",
+        "_src-config-facade.py.tmpl": project_root
+        / "src"
+        / name
+        / "config"
+        / "_facade.py",
+        "_src-config-sections-init.py.tmpl": project_root
+        / "src"
+        / name
+        / "config"
+        / "sections"
+        / "__init__.py",
+        "_src-config-sections-init.pyi.tmpl": project_root
+        / "src"
+        / name
+        / "config"
+        / "sections"
+        / "__init__.pyi",
+        "_src-config-sections-facade.py.tmpl": project_root
+        / "src"
+        / name
+        / "config"
+        / "sections"
+        / "_facade.py",
+        "_src-config-sections-app.py.tmpl": project_root
+        / "src"
+        / name
+        / "config"
+        / "sections"
+        / "app.py",
+        "_src-config-bundle.py.tmpl": project_root
+        / "src"
+        / name
+        / "config"
+        / "bundle.py",
+        "_src-config-catalog.py.tmpl": project_root
+        / "src"
+        / name
+        / "config"
+        / "catalog.py",
         "_src-config-env.shared": project_root
         / "src"
         / name
@@ -166,6 +206,15 @@ def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path
     }
 
 
+def _pascal_project_name(name: str) -> str:
+    """Convert a valid package name into a class-name stem.
+
+    :param name: Valid Python package identifier selected for the scaffold.
+    :return: PascalCase form suitable for generated public class names.
+    """
+    return "".join(part[:1].upper() + part[1:] for part in name.split("_") if part)
+
+
 def _project_placeholders(name: str, github_user: str) -> dict[str, str]:
     """Return placeholder replacements for project templates.
 
@@ -174,11 +223,14 @@ def _project_placeholders(name: str, github_user: str) -> dict[str, str]:
     :return: Placeholder replacement mapping.
     """
     scaffold_date = dt.date.today().isoformat()
+    pascal_name = _pascal_project_name(name)
     return {
         "<my_project>": name,
         "{my_project}": name,
         "<project_name>": name,
         "{project_name}": name,
+        "<MyProject>": pascal_name,
+        "{MyProject}": pascal_name,
         "<MY_PROJECT>": name.upper(),
         "{MY_PROJECT}": name.upper(),
         "<PROJECT_NAME>": name.upper(),

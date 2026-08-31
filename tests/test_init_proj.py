@@ -115,8 +115,14 @@ def test_scaffolded_project_runs_pytest(bube_test_project: Path) -> None:
             "        'main.py',\n"
             "        '__main__.py',\n"
             "        'cli/app.py',\n"
+            "        'config/__init__.py',\n"
+            "        'config/_facade.py',\n"
             "        'config/app.py',\n"
-            "        'config/owners.py',\n"
+            "        'config/bundle.py',\n"
+            "        'config/catalog.py',\n"
+            "        'config/sections/__init__.py',\n"
+            "        'config/sections/_facade.py',\n"
+            "        'config/sections/app.py',\n"
             "    ):\n"
             "        py_compile.compile(package_root / relative, doraise=True)\n\n"
             "def test_cli_runtime_when_apprc_is_installed() -> None:\n"
@@ -300,6 +306,7 @@ def test_scaffolded_project_includes_typer_cli_scaffold(
     assert '@app.command("version")' in cli_text
     assert '@app.command("diagnose")' in cli_text
     assert "APP_RC.mount_cli" in cli_text
+    assert "ensure_config_sections_registered()" in cli_text
     assert "rc.cli.CliRuntimePolicy" in cli_text
     assert "rc.cli.RuntimeIndependentCommand" in cli_text
     assert "rc.cli.dump_json" in cli_text
@@ -331,16 +338,36 @@ def test_scaffolded_project_has_apprc_config_package(
     proot = bube_test_project
     package_root = proot / "src" / "bube_test_tmp"
 
-    assert (package_root / "config" / "__init__.py").is_file()
-    assert (package_root / "config" / "app.py").is_file()
-    assert (package_root / "config" / "owners.py").is_file()
+    config_files = [
+        package_root / "config" / "__init__.py",
+        package_root / "config" / "__init__.pyi",
+        package_root / "config" / "_facade.py",
+        package_root / "config" / "app.py",
+        package_root / "config" / "bundle.py",
+        package_root / "config" / "catalog.py",
+        package_root / "config" / "sections" / "__init__.py",
+        package_root / "config" / "sections" / "__init__.pyi",
+        package_root / "config" / "sections" / "_facade.py",
+        package_root / "config" / "sections" / "app.py",
+    ]
+    for config_file in config_files:
+        assert config_file.is_file(), config_file
+
+    assert not (package_root / "config" / "owners.py").exists()
     assert (package_root / "config" / ".env.shared").is_file()
     assert not (package_root / "paths.py").exists()
     assert not (package_root / "utils" / "path_resolver.py").exists()
     assert not (proot / ".env.template").exists()
 
     config_app_text = (package_root / "config" / "app.py").read_text(encoding="utf-8")
-    owners_text = (package_root / "config" / "owners.py").read_text(encoding="utf-8")
+    config_facade_text = (package_root / "config" / "_facade.py").read_text(
+        encoding="utf-8"
+    )
+    section_text = (package_root / "config" / "sections" / "app.py").read_text(
+        encoding="utf-8"
+    )
+    bundle_text = (package_root / "config" / "bundle.py").read_text(encoding="utf-8")
+    catalog_text = (package_root / "config" / "catalog.py").read_text(encoding="utf-8")
     shared_env_text = (package_root / "config" / ".env.shared").read_text(
         encoding="utf-8"
     )
@@ -351,20 +378,26 @@ def test_scaffolded_project_has_apprc_config_package(
     assert 'command_name="bube_test_tmp"' in config_app_text
     assert 'index_filename="bube_test_tmp.apprc.toml"' in config_app_text
     assert 'storage_env_filename=".env.apprc-storage"' in config_app_text
-    assert "@APP_RC.config(" in owners_text
-    assert "class AppRuntimeConfig(rc.Config):" in owners_text
-    assert "rc.field(" in owners_text
+    assert "@APP_RC.config(" in section_text
+    assert "class AppSettings(rc.Config):" in section_text
+    assert 'rc_path=("app",)' in section_text
+    assert "rc.field(" in section_text
+    assert "class BubeTestTmpConfig:" in bundle_text
+    assert "app: AppSettings" in bundle_text
+    assert "CONFIG_SECTIONS = CONFIG_SPEC.owners" in catalog_text
+    assert "ensure_config_sections_registered" in catalog_text
+    assert '"BubeTestTmpConfig"' in config_facade_text
     assert "APP_CONFIG" not in config_app_text
     assert "AppConfigKit" not in config_app_text
-    assert "EnvConfig" not in owners_text
-    assert "env_field" not in owners_text
-    assert "env_owner" not in owners_text
-    assert "config_owner_for" not in owners_text
-    assert "AppRuntimeConfig" in owners_text
-    assert "ConfigField" not in owners_text
-    assert "config_field" not in owners_text
-    assert "apprc.config" not in owners_text
-    assert 'prefix="BUBE_TEST_TMP_"' in owners_text
+    assert "EnvConfig" not in section_text
+    assert "env_field" not in section_text
+    assert "env_owner" not in section_text
+    assert "config_owner_for" not in section_text
+    assert "AppRuntimeConfig" not in section_text
+    assert "ConfigField" not in section_text
+    assert "config_field" not in section_text
+    assert "apprc.config" not in section_text
+    assert 'prefix="BUBE_TEST_TMP_"' in section_text
     assert 'BUBE_TEST_TMP_MESSAGE="Hello from bube_test_tmp"' in shared_env_text
     assert "bube_test_tmp.config" in agents_text
     assert "apprc.cli" in agents_text
@@ -500,7 +533,9 @@ def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> N
     assert "BUBE_TEST_TMP_STORAGE" in references_text
     assert ".env.apprc-storage" in references_text
     assert "bube_test_tmp config storage add" in references_text
-    assert "bube_test_tmp.config.owners" in references_text
+    assert "bube_test_tmp.config.sections" in references_text
+    assert "bube_test_tmp.config.BubeTestTmpConfig" in references_text
+    assert "bube_test_tmp.config.owners" not in references_text
     assert "AppRC" in explanations_text
 
     assert "Figure Visual Tokens" in references_text
