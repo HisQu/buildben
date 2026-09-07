@@ -56,6 +56,28 @@ def _project_env(project_root: Path) -> dict[str, str]:
     return env
 
 
+def _assert_release_banner(recipe: str) -> None:
+    """Protect the established visual treatment of prepared releases.
+
+    :param recipe: Complete justfile text.
+    :return: None.
+    """
+    banner = '''    echo "================================================================="
+    echo "✅  RELEASE ${tag} PREPARED LOCALLY"
+    echo "================================================================="
+    echo
+    echo "Nothing has been uploaded."
+    echo
+    echo "NEXT COMMAND, THIS STARTS THE RELEASE:"
+    echo
+    echo "  just release-push ${tag}"
+    echo
+    echo "GitHub will run CI, validate wheel and sdist artifacts, and create"
+    echo "the GitHub Release. PyPI follows RELEASE_PYPI in the tagged justfile."
+    echo "================================================================="'''
+    assert banner in recipe
+
+
 @pytest.fixture()
 def bube_test_project(
     tmp_path: Path,
@@ -218,9 +240,14 @@ def test_scaffolded_project_uses_dependency_group_template(
     assert "uv build --python 3.12 --no-sources --no-build-logs" in justfile_text
     assert 'twine check "$wheel" "$sdist"' in justfile_text
     assert "uv version --bump" in justfile_text
-    assert "PUBLISH_PYPI=true" in justfile_text
+    assert 'RELEASE_PYPI := "false"' in justfile_text
+    assert "PUBLISH_PYPI" not in justfile_text
     assert "uv publish --token" not in justfile_text
-    assert "RELEASE ${tag} PREPARED LOCALLY" in justfile_text
+    _assert_release_banner(justfile_text)
+    assert 'release-prepare level="patch":' in justfile_text
+    assert "release-push tag:" in justfile_text
+    assert "publish-pypi tag:" in justfile_text
+    assert 'git push --atomic origin main "$tag"' in justfile_text
     assert "--all-extras --all-groups" in justfile_text
 
     readme_text = (proot / "README.md").read_text(encoding="utf-8")
@@ -430,14 +457,35 @@ def test_scaffolded_project_includes_release_workflow(
     )
     release_text = release.read_text(encoding="utf-8")
     assert "github-release" in release_text
-    assert "PUBLISH_PYPI" in release_text
+    assert "workflow_dispatch:" in release_text
+    assert "release_tag:" in release_text
+    assert "just --evaluate RELEASE_PYPI" in release_text
+    assert "PUBLISH_PYPI" not in release_text
     assert "trusted-publishing" in release_text
+    assert "publish-existing-release:" in release_text
+    assert "needs.build.outputs.release_pypi == 'true'" in release_text
+    assert release_text.count("if: github.event_name == 'push'") == 3
+    assert "if: github.event_name == 'workflow_dispatch'" in release_text
+    assert "gh release download" in release_text
+    assert "--check-url" in release_text
+    assert "actions/upload-artifact@v7" in release_text
+    assert release_text.count("actions/download-artifact@v8") == 2
+
+    manual_publish = release_text.split("  publish-existing-release:\n", 1)[1]
+    assert "actions/checkout" not in manual_publish
+    assert "uv build" not in manual_publish
+    assert "environment: pypi" in manual_publish
+    assert "id-token: write" in manual_publish
 
     development_text = (bube_test_project / "docs" / "Development.md").read_text(
         encoding="utf-8"
     )
     assert "just release-check" in development_text
-    assert "PUBLISH_PYPI=true" in development_text
+    assert 'RELEASE_PYPI := "true"' in development_text
+    assert "just release-prepare patch" in development_text
+    assert "just release-push vMAJOR.MINOR.PATCH" in development_text
+    assert "just publish-pypi vMAJOR.MINOR.PATCH" in development_text
+    assert "PUBLISH_PYPI" not in development_text
     assert "just lock" in development_text
 
     release_notes_output = bube_test_project / "release-notes.md"
@@ -467,8 +515,97 @@ def test_buildben_release_recipe_keeps_checks_visible_and_builds_quiet() -> None
     assert "uv build --python 3.12 --no-sources --no-build-logs" in recipe
     assert "Python {{version}}: checks passed." in recipe
     assert "Version commit succeeded, but tag creation failed." in recipe
-    assert "RELEASE ${tag} PREPARED LOCALLY" in recipe
-    assert "git push origin main ${tag}" in recipe
+    _assert_release_banner(recipe)
+    assert 'RELEASE_PYPI := "false"' in recipe
+    assert 'release-prepare level="patch":' in recipe
+    assert "release-push tag:" in recipe
+    assert "publish-pypi tag:" in recipe
+    assert 'git push --atomic origin main "$tag"' in recipe
+    assert "PUBLISH_PYPI" not in recipe
+
+
+def test_buildben_release_workflow_supports_policy_and_recovery() -> None:
+    """Check the repository workflow against the current release contract.
+
+    :return: None.
+    """
+    workflow = (
+        Path(__file__).resolve().parents[1] / ".github" / "workflows" / "release.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "workflow_dispatch:" in workflow
+    assert "just --evaluate RELEASE_PYPI" in workflow
+    assert "needs.build.outputs.release_pypi == 'true'" in workflow
+    assert "PUBLISH_PYPI" not in workflow
+    assert "publish-existing-release:" in workflow
+    assert workflow.count("if: github.event_name == 'push'") == 3
+    assert "if: github.event_name == 'workflow_dispatch'" in workflow
+    assert "--check-url https://pypi.org/simple/buildben/" in workflow
+    assert "actions/upload-artifact@v7" in workflow
+    assert workflow.count("actions/download-artifact@v8") == 2
+
+    manual_publish = workflow.split("  publish-existing-release:\n", 1)[1]
+    assert "actions/checkout" not in manual_publish
+    assert "uv build" not in manual_publish
+    assert "gh release download" in manual_publish
+    assert "uv publish" in manual_publish
+
+
+def test_scaffolded_release_push_updates_main_and_tag_together(
+    bube_test_project: Path,
+    tmp_path: Path,
+) -> None:
+    """Publish one prepared commit and its annotated tag to a test remote.
+
+    :param bube_test_project: Generated project under test.
+    :param tmp_path: Temporary parent for the bare Git remote.
+    :return: None.
+    """
+    proot = bube_test_project
+    env = _project_env(proot)
+    remote = tmp_path / "release-remote.git"
+
+    policy = subprocess.run(
+        ["just", "--evaluate", "RELEASE_PYPI"],
+        cwd=proot,
+        env=env,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    assert policy.stdout == "false"
+
+    _run(["git", "init", "--initial-branch", "main"], cwd=proot, env=env)
+    _run(["git", "config", "user.email", "test@example.com"], cwd=proot, env=env)
+    _run(["git", "config", "user.name", "Buildben Test"], cwd=proot, env=env)
+    _run(["git", "add", "."], cwd=proot, env=env)
+    _run(["git", "commit", "-m", "Prepared release"], cwd=proot, env=env)
+    _run(["git", "tag", "-a", "v0.1.0", "-m", "Release v0.1.0"], cwd=proot, env=env)
+    _run(["git", "init", "--bare", str(remote)], cwd=tmp_path, env=env)
+    _run(["git", "remote", "add", "origin", str(remote)], cwd=proot, env=env)
+
+    missing_tag = subprocess.run(
+        ["just", "release-push", "v0.1.1"],
+        cwd=proot,
+        env=env,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    assert missing_tag.returncode != 0
+    assert "Annotated local tag v0.1.1 does not exist" in missing_tag.stderr
+
+    _run(["just", "release-push", "v0.1.0"], cwd=proot, env=env)
+    _run(
+        ["git", "--git-dir", str(remote), "show-ref", "--verify", "refs/heads/main"],
+        cwd=tmp_path,
+        env=env,
+    )
+    _run(
+        ["git", "--git-dir", str(remote), "show-ref", "--verify", "refs/tags/v0.1.0"],
+        cwd=tmp_path,
+        env=env,
+    )
 
 
 def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> None:

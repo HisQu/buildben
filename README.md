@@ -267,6 +267,42 @@ bube env-snapshot experiments/2025-06-13_experiment1
 # > Creates experiment.env, requirements.lock, wheel, and sdist artifacts
 ```
 
+### Maintainer releases
+
+Buildben keeps its PyPI policy in the `justfile`:
+
+```just
+RELEASE_PYPI := "false"
+```
+
+Keep it at `"false"` for GitHub-only releases. Set it to `"true"` once for a
+public package after configuring PyPI trusted publishing for the `pypi` GitHub
+environment.
+
+> [!IMPORTANT]
+> Edit and commit this setting before the release. Shell variables and
+> `just --set` overrides are not stored in the tag and cannot select PyPI.
+
+```bash
+just release-check
+just release patch
+```
+
+> [!WARNING]
+> `just release` creates the version commit and annotated tag, then atomically
+> pushes `main` and the tag. Use `just release-prepare patch` when you only want
+> the checked local commit and tag.
+
+If a GitHub Release already exists but PyPI was skipped, publish its attached
+wheel and source archive without rebuilding them:
+
+```bash
+just publish-pypi vMAJOR.MINOR.PATCH
+```
+
+This recovery command requires an authenticated GitHub CLI. GitHub Actions
+performs the PyPI upload through trusted publishing.
+
 
 <br>
 

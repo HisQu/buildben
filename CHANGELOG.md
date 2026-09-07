@@ -42,13 +42,36 @@ This project follows Semantic Versioning.
 
 ### 💥 Breaking Change Summary
 
+- Breaking: `just release` now prepares the release and atomically pushes
+  `main` plus the new tag instead of stopping after local tag creation.
+  Affected: Maintainers who use `just release` only to prepare local release
+  state.
+  Migration: Use `just release-prepare` for the previous local-only behavior,
+  or use `release-prepare` followed by `release-push` for manual control.
+- Breaking: Tag workflows now read the tracked `RELEASE_PYPI` setting from the
+  tagged `justfile` instead of the `PUBLISH_PYPI` GitHub repository variable.
+  Affected: Maintainers whose release workflow uses `PUBLISH_PYPI=true`.
+  Migration: Set `RELEASE_PYPI := "true"` in the `justfile` for projects that
+  publish every release to PyPI. The old repository variable can be removed.
+
 <br>
 
 ### ➕ Added
 
+- Add `release-prepare` and `release-push` recipes for step-by-step releases.
+- Add `publish-pypi TAG` and a manual GitHub Actions job that publishes the
+  wheel and source archive attached to an existing GitHub Release.
+
 <br>
 
 ### 💔 Changed
+
+- Store the default PyPI release policy in version control and validate it
+  before building release artifacts.
+- Make PyPI publication retries check for identical existing files before
+  uploading missing artifacts.
+- Update release artifact upload and download actions in Buildben and generated
+  projects.
 
 <br>
 

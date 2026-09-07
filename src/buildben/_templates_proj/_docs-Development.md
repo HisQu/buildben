@@ -133,22 +133,47 @@ Run the local rehearsal first:
 just release-check
 ```
 
-Then prepare a version commit and annotated local tag:
+Run the release:
 
 ```bash
 just release patch
-git push origin main vMAJOR.MINOR.PATCH
 ```
 
-Pushing the tag runs CI, validates wheel and sdist installs on Python 3.12 and
+> [!WARNING]
+> `just release` creates the version commit and annotated tag, then atomically
+> pushes `main` and the tag. It returns after the push without waiting for
+> GitHub Actions.
+
+GitHub Actions runs CI, validates wheel and sdist installs on Python 3.12 and
 3.13, and creates the GitHub Release with the changelog section as its notes.
-The workflow does not publish from a local machine.
+The workflow publishes the validated artifacts to PyPI when the tagged
+`justfile` contains:
+
+```just
+RELEASE_PYPI := "true"
+```
+
+Keep the generated default at `"false"` for private packages and GitHub-only
+releases. Configure PyPI trusted publishing for the `pypi` GitHub environment
+before setting it to `"true"`.
+
+> [!IMPORTANT]
+> Edit and commit this setting before the release. Shell variables and
+> `just --set` overrides are not stored in the tag and cannot select PyPI.
+
+To stop after creating the checked local commit and tag, run the steps
+separately:
+
+```bash
+just release-prepare patch
+just release-push vMAJOR.MINOR.PATCH
+```
 
 > [!NOTE]
-> PyPI is optional. After configuring PyPI trusted publishing for the `pypi`
-> GitHub environment, set the repository variable `PUBLISH_PYPI=true`. The
-> release workflow then publishes the already validated artifacts only after
-> the GitHub Release succeeds.
+> If the GitHub Release exists but PyPI was skipped, run
+> `just publish-pypi vMAJOR.MINOR.PATCH`. This requires an authenticated `gh`
+> command. The recovery workflow downloads the existing release assets and
+> never rebuilds them.
 
 <br>
 

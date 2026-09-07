@@ -62,6 +62,11 @@ Common commands:
 | `just sync` | Sync the full maintainer environment from `uv.lock`. |
 | `python -m pip install -e "."` | Install runtime package dependencies without `uv`. |
 | `python -m pip install -e "." --group dev` | Install maintainer tools without `uv`. |
+| `just release-check` | Run the complete local release rehearsal without changing version or publishing. |
+| `just release LEVEL` | Prepare and atomically push `main` plus the new release tag. |
+| `just release-prepare LEVEL` | Create the checked version commit and annotated tag without pushing. |
+| `just release-push TAG` | Atomically push an existing prepared release commit and tag. |
+| `just publish-pypi TAG` | Ask GitHub Actions to publish an existing GitHub Release to PyPI. |
 | `{my_project} --help` | Show the console command tree. |
 | `{my_project} version` | Print the installed package version. |
 | `{my_project} diagnose` | Print local package and Python diagnostics. |
@@ -117,6 +122,11 @@ Common environment variables:
 | `VIRTUAL_ENV` | Active virtual environment path. |
 | `PYTHONPATH` | Import-path override for local smoke tests. Prefer editable installs for normal development. |
 | `UV_PROJECT_ENVIRONMENT` | Optional `uv` virtual environment path override. |
+
+`RELEASE_PYPI` is not an environment variable. It is a tracked `justfile`
+setting. `"true"` includes PyPI in normal tag releases, while `"false"` keeps
+the release on GitHub. The `publish-pypi` recipe is an explicit recovery path
+and ignores that setting.
 
 > [!NOTE]
 > Related: use [How-To User Guides: environment problems](How-To-User-Guides.md#environment-problems)
