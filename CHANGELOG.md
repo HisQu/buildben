@@ -63,6 +63,9 @@ This project follows Semantic Versioning.
 
 ### 🔨 Fixed
 
+- Install `just` in Buildben CI before tests that execute generated release
+  recipes.
+
 <br>
 
 ---

@@ -551,6 +551,19 @@ def test_buildben_release_workflow_supports_policy_and_recovery() -> None:
     assert "uv publish" in manual_publish
 
 
+def test_buildben_ci_installs_just_for_release_recipe_tests() -> None:
+    """Require the command used by release integration tests in CI.
+
+    :return: None.
+    """
+    workflow = (
+        Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ci.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "extractions/setup-just@v4" in workflow
+    assert 'just-version: "1.56.0"' in workflow
+
+
 def test_scaffolded_release_push_updates_main_and_tag_together(
     bube_test_project: Path,
     tmp_path: Path,
