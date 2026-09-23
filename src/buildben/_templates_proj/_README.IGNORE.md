@@ -49,10 +49,9 @@
 <hr>
 
 ###  `{my_project}` ...
-<!-- Summarize the top 3 features -->
-- ... integrates cool things like lorem ipsum dolor
-- ... standardizes Dolor sit amet dolor blah bla
-- ... Ipsum dolor sit amet 
+<!-- Replace this starter description when the application has its own purpose. -->
+A Python command-line application with typed settings and named directories for
+persistent data. AppRC supplies configuration commands and a terminal editor.
 
 
 #### Main dependencies:
@@ -92,171 +91,69 @@
 
 <!-- ============================================================== -->
 <!-- ============================================================== -->
-### Table of Contents
+## Table of contents
 
-<!-- toc -->
+- [Installation](#installation)
+- [Usage](#usage)
+- [Development](#development)
+- [Documentation](#documentation)
 
-1. [`{my_project}`: A Template](#my_project-a-template)
-   1. [📦 Installation](#-installation)
-   2. [🚀 Usage](#-usage)
-   3. [💻  Development](#--development)
-   4. [📚  Examples / Documentation](#--examples--documentation)
+## Installation
 
-<!-- tocstop -->
-<!-- /toc -->
+Use Python 3.12 or newer. From this checkout:
 
-<br>
-
-<!-- ============================================================== -->
-<!-- ============================================================== -->
-## 📦 Installation
-
-### Prerequisites:
-- Python >=3.12,<3.13
-- `git`
-- [`uv`] (optional)
-
-
-### Install with `pip`:
-#### 1. Install system dependencies:
-``` bash
-apt update
-apt install python3.12
+```shell
+python -m venv .venv
+.venv/bin/python -m pip install -e .
+.venv/bin/{my_project} --help
 ```
-<!-- git clone https://github.com/{github_username}/{my_project}.git -->
-#### 2. Clone & Install `{my_project}`:
-``` bash
-git clone https://github.com/HisQu/{my_project}.git
-cd {my_project}
-python -m pip install -e "."              # Core runtime dependencies
-python -m pip install -e ".[rag]"         # Core + published RAG extra
-python -m pip install -e "." --group dev  # Core + local dev tools
-python -m pip install -e ".[rag]" --group dev
-```
-The `rag` commands apply after the commented `rag` extra in `pyproject.toml` is
-uncommented and populated.
 
-#### ✅ Verify installation: 
-```bash
-python -m {my_project} --help
+On Windows use `.venv\Scripts\python.exe` and `.venv\Scripts\{my_project}.exe`.
+Activate the environment for the commands below. The application requires AppRC
+0.25.x. Before that release is published, install the locally built `apprc_core`
+and `apprc` wheels first. The [installation guide](docs/How-To-User-Guides.md#install-the-package)
+explains the environment setup.
+
+## Usage
+
+The starter reads typed settings and manages a directory for persistent data.
+This POSIX example keeps that data next to the checkout:
+
+```shell
+export {MY_PROJECT}_APPRC_DIR="$PWD/.demo-config"
 {my_project} version
-{my_project} config setup --yes --storage-root ./local-storage
-export {MY_PROJECT}_STORAGE="$(pwd)/local-storage"
-{my_project} config doctor
-```
-
-
-<br>
-
-<!-- ============================================================== -->
-<!-- ============================================================== -->
-## 🚀 Usage
-
-<!-- Present a minimal example of the most important feature! -->
-
-### Show the command tree:
-```bash
-{my_project} --help
-{my_project} diagnose
 {my_project} diagnose --json
-```
-
-### Initialize local configuration:
-```bash
-{my_project} config setup --yes --storage-root /absolute/path/to/storage
-export {MY_PROJECT}_STORAGE="/absolute/path/to/storage"
+{my_project} config setup --yes --storage-root ../{my_project}-data
 {my_project} config doctor
-{my_project} config show --json
-```
- 
-### Edit local configuration:
-```bash
 {my_project} config set app.message "Hello local storage" --scope storage
-{my_project} config edit
-```
-
-
-
-<br>
-
-<!-- ============================================================== -->
-<!-- ============================================================== -->
-## 💻  Development 
-
-### Dev-Hints:
-- **Issues:** Open an issue on GitHub!
-- **Contribute:** Feel free to fork this repo and submit a PR!
-
-
-
-<!-- --- Testing ------------------------------------------------- -->
-
-<details><summary> <h3> <i> Testing </i> </h3> </summary>
-
-*!! Pytest not yet Implemented!*
-```bash
-python -m pip install -e "." --group dev  # Install testing tools from [dependency-groups]
-pytest                                    # Run tests
-```
-</details>
-
-
-<!-- --- Diagrams ------------------------------------------------- -->
-
-<details><summary> <h3> <i> Class Diagram </i> </h3> </summary>
-<blockquote>
-
-<!-- Make a mermaid class diagram / flowchart! -->
-
-<!-- <img src="https://raw.githubusercontent.com/markur4/plotastic/main/class_diagram.svg" alt="logo"> -->
-
-</blockquote></details>
-
-
-
-<br>
-
-<!-- ============================================================== -->
-<!-- ============================================================== -->
-## 📚  Examples / Documentation 
-
-Longer project docs live in [`docs/README.md`](docs/README.md). Start there
-when you need task recipes, maintainer workflow, exact references, or system
-explanations.
-
-- **[`docs/How-To-User-Guides.md`](docs/How-To-User-Guides.md)**: commands in order.
-- **[`docs/Development.md`](docs/Development.md)**: maintainer workflow and verification.
-- **[`docs/References.md`](docs/References.md)**: exact paths, commands, and public names.
-- **[`docs/Explanations.md`](docs/Explanations.md)**: architecture and design context.
-
-<!-- This is a presentation / documentation of **specific** options. 
-If available, link to files (e.g. .ipynb) in the examples folder! -->
-
-<details><summary> <h3> <i> Example 1 </i> </h3> </summary>
-<blockquote>
-
-```bash
-# Create a local storage root and inspect the resolved config
-{my_project} config setup --yes --storage-root ./local-storage
-export {MY_PROJECT}_STORAGE="$(pwd)/local-storage"
 {my_project} config show --json
 ```
 
-</blockquote></details>
+With `{MY_PROJECT}_MESSAGE` unset, the output includes `Hello local storage`.
+The [storage explanation](docs/Explanations.md#storage) describes where data and
+settings live. Open `{my_project} config edit` to inspect and edit settings in
+the terminal, or [register another storage](docs/How-To-User-Guides.md#switch-storage).
 
+## Development
 
-<!-- --- Separator ------------------------------------------------ -->
+Install maintainer tools with pip 25.1 or newer:
 
-<details><summary> <h3> <i> Example 1 </i> </h3> </summary>
-<blockquote>
-
-
-```bash
-# Print local package and Python diagnostics
-{my_project} diagnose
+```shell
+python -m pip install -e "." --group dev
+python -m pytest
 ```
 
-</blockquote></details>
+[Development](docs/Development.md) covers verification, optional extras, locks,
+and releases. The [config-section guide](docs/How-To-User-Guides.md#add-a-setting)
+shows where to add a setting and its help text.
 
+## Documentation
 
-<br>
+| Page | Contents |
+| --- | --- |
+| [Documentation](docs/README.md) | Reading order, component names, and writing rules. |
+| [Explanations](docs/Explanations.md) | Components and how they connect. |
+| [How-to user guides](docs/How-To-User-Guides.md) | Tasks with prerequisites and expected results. |
+| [References](docs/References.md) | Exact commands, paths, keys, and Python names. |
+| [Examples](docs/EXAMPLES.md) | Complete storage, override, and multi-section examples. |
+| [Development](docs/Development.md) | Maintainer setup and release workflow. |

@@ -116,11 +116,15 @@ def validate_unreleased_section(markdown: str) -> None:
     :return: None.
     """
     if markdown.count(UNRELEASED_HEADING) != 1:
-        raise ValueError("Changelog must contain exactly one [Unreleased] heading.")
+        raise ValueError(
+            "Changelog must contain exactly one [Unreleased] heading."
+        )
     start = markdown.index(UNRELEASED_HEADING) + len(UNRELEASED_HEADING)
     next_release = RELEASE_HEADING_RE.search(markdown, start)
     if next_release is None:
-        raise ValueError("Changelog has no released section after [Unreleased].")
+        raise ValueError(
+            "Changelog has no released section after [Unreleased]."
+        )
     section = markdown[start : next_release.start()]
     for heading in UNRELEASED_SECTIONS:
         if section.count(heading) != 1:
@@ -209,8 +213,10 @@ def _content_lines(section: str) -> list[str]:
 
 def _is_layout_line(line: str) -> bool:
     """Return whether one line exists only for changelog page layout."""
-    return line == "<br>" or line == "---" or (
-        line.startswith("<!--") and line.endswith("-->")
+    return (
+        line == "<br>"
+        or line == "---"
+        or (line.startswith("<!--") and line.endswith("-->"))
     )
 
 
@@ -230,9 +236,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=ROOT / "CHANGELOG.md",
         help="Changelog source path.",
     )
-    parser.add_argument("--output", type=Path, required=True, help="Destination path.")
+    parser.add_argument(
+        "--output", type=Path, required=True, help="Destination path."
+    )
     parser.add_argument("--tag", help="Optional pushed tag to validate.")
-    parser.add_argument("--project-version", help="Project version to validate.")
+    parser.add_argument(
+        "--project-version", help="Project version to validate."
+    )
     return parser.parse_args(argv)
 
 
@@ -244,7 +254,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
     args = parse_args(argv)
     if (args.tag is None) != (args.project_version is None):
-        raise ValueError("--tag and --project-version must be provided together.")
+        raise ValueError(
+            "--tag and --project-version must be provided together."
+        )
     if args.tag is not None:
         validate_tag_version(args.tag, args.project_version)
         if args.version != args.project_version:

@@ -1,11 +1,17 @@
-"""Top-level AppRC config bundle for <my_project>."""
+"""Config bundle passed to <my_project> application code."""
+
+from dataclasses import dataclass, field
 
 from <my_project>.config.app import APP_RC
 from <my_project>.config.sections.app import AppSettings
 
 
 @APP_RC.bundle
+@dataclass(kw_only=True)
 class <MyProject>Config:
-    """Aggregate every registered <my_project> config section."""
+    """Application settings grouped by config section.
 
-    app: AppSettings
+    :param app: The starter application's settings.
+    """
+
+    app: AppSettings = field(default_factory=AppSettings)

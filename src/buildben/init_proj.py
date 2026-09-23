@@ -109,6 +109,7 @@ def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path
         "_CHANGELOG.md": project_root / "CHANGELOG.md",
         "_TODO.md": project_root / "TODO.md",
         "_docs-README.md": project_root / "docs" / "README.md",
+        "_docs-EXAMPLES.md": project_root / "docs" / "EXAMPLES.md",
         "_docs-How-To-User-Guides.md": project_root / "docs" / "How-To-User-Guides.md",
         "_docs-Development.md": project_root / "docs" / "Development.md",
         "_docs-References.md": project_root / "docs" / "References.md",
@@ -133,34 +134,12 @@ def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path
         / name
         / "config"
         / "__init__.py",
-        "_src-config-init.pyi.tmpl": project_root
-        / "src"
-        / name
-        / "config"
-        / "__init__.pyi",
-        "_src-config-facade.py.tmpl": project_root
-        / "src"
-        / name
-        / "config"
-        / "_facade.py",
         "_src-config-sections-init.py.tmpl": project_root
         / "src"
         / name
         / "config"
         / "sections"
         / "__init__.py",
-        "_src-config-sections-init.pyi.tmpl": project_root
-        / "src"
-        / name
-        / "config"
-        / "sections"
-        / "__init__.pyi",
-        "_src-config-sections-facade.py.tmpl": project_root
-        / "src"
-        / name
-        / "config"
-        / "sections"
-        / "_facade.py",
         "_src-config-sections-app.py.tmpl": project_root
         / "src"
         / name
@@ -172,16 +151,11 @@ def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path
         / name
         / "config"
         / "bundle.py",
-        "_src-config-catalog.py.tmpl": project_root
+        "_src-config-apprc.defaults.env": project_root
         / "src"
         / name
         / "config"
-        / "catalog.py",
-        "_src-config-env.shared": project_root
-        / "src"
-        / name
-        / "config"
-        / ".env.shared",
+        / "apprc.defaults.env",
         "_utils-stdlib.py.tmpl": project_root / "src" / name / "utils" / "stdlib.py",
         "_src-dev-packaging-release_notes.py.tmpl": project_root
         / "src"

@@ -1,17 +1,14 @@
-"""<my_project>-bound AppRC application contract."""
+"""AppRC declaration shared by <my_project> settings and commands."""
 
 from __future__ import annotations
 
-# == 3rd Party ===============================
+# == Third-party imports
 import apprc as rc
 
-APP_RC = rc.AppRC.storage_only(
-    app_name="<my_project>",
+APP_RC = rc.AppRC(
+    app_id="<my_project>",
     display_name="<my_project>",
     config_package="<my_project>.config",
-    storage_env_key="<MY_PROJECT>_STORAGE",
+    storage=rc.Storage(selector_env_key="<MY_PROJECT>_STORAGE"),
     command_name="<my_project>",
-    index_filename="<my_project>.apprc.toml",
-    shared_env_filename=".env.shared",
-    storage_env_filename=".env.apprc-storage",
 )

@@ -42,15 +42,41 @@ This project follows Semantic Versioning.
 
 <br>
 
-### 💥 Breaking Change Summary
+### 💥 Breaking changes
+
+- Breaking: New projects require `apprc>=0.25.0,<0.26` and use `AppRC`,
+  `ResolvedConfig.build()`, and `rc.cli.mount_config_cli()`. Config imports now
+  come from `config.app`, `config.bundle`, and section modules.
+  Affected: Users adopting regenerated templates in an existing project.
+  Migration: Replace `.storage_only()`, `.spec`, `.mount_cli()`, and
+  `.env_bootstrap` with the generated examples. Import classes from their modules
+  instead of the removed config catalog and lazy facades.
+- Breaking: Generated projects use `apprc.defaults.env`, `apprc.storage.env`,
+  and `<APP>_APPRC_DIR/apprc.toml` instead of the custom legacy filenames.
+  Affected: Existing projects adopting the new config declaration.
+  Migration: Preserve existing data directories; copy packaged defaults and
+  storage overrides to the new filenames, set `<APP>_APPRC_DIR`, and register
+  existing roots with `config storage add`. Keep legacy files until values and
+  storage selection have been verified.
 
 <br>
 
 ### ➕ Added
 
+- An Examples page with complete storage, environment override, shared user
+  preferences, and multiple config-section setups.
+- Documentation checks for generated links, anchors, page labels, and runnable
+  examples against the installed AppRC package.
+
 <br>
 
 ### 💔 Changed
+
+- Generated documentation explains components before dependent tasks and links
+  explanations, guides, and references at the relevant words. Documentation and
+  AGENTS.md require fixed terminology, independent examples, and concrete prose.
+- The generated starter keeps storage-only behavior and standard-library logging.
+  Buildben's runtime dependencies remain empty.
 
 <br>
 
@@ -63,6 +89,9 @@ This project follows Semantic Versioning.
 <br>
 
 ### 🔨 Fixed
+
+- Generated entrypoints, utility imports, and release helpers pass the starter's
+  Ruff checks without an initial cleanup pass.
 
 <br>
 

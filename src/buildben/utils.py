@@ -249,7 +249,6 @@ def create_init_dot_py(
 
             block = _format_from_import_block(module_name, func_names)
             if block:
-                parts.append("\n")
                 parts.append(block)
 
     init_path.write_text("".join(parts), encoding="utf-8")

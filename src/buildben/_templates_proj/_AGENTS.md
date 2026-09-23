@@ -13,14 +13,15 @@
   - procedures in `docs/How-To-User-Guides.md`
   - maintainer workflow in `docs/Development.md`
   - exact paths, commands, and public names in `docs/References.md`
-  - concepts and architecture in `docs/Explanations.md`
+  - component explanations in `docs/Explanations.md`
+  - complete application examples in `docs/EXAMPLES.md`
 - Put CLI behavior in `<my_project>.cli.app`; keep `<my_project>.main` as a
   thin public entry point wrapper.
 - Check the TODO.md and assess if your task is related to any issues and should be resolved as part of your pass.
 
 ## Project rules
 - Do not duplicate helpers or re-implement existing utilities without checking first.
-- App configuration belongs in `<my_project>.config.sections`. Keep fields in focused `rc.Config` classes with `rc.field(...)` declarations, assemble them in `config.bundle`, and keep AppRC metadata in `config.catalog`.
+- App configuration belongs in `<my_project>.config.sections`. Keep fields in focused `rc.Config` classes with `rc.field(...)` declarations, assemble them in `config.bundle`, and declare the shared `APP_RC` in `config.app`. Import declarations and classes directly from their modules. Use `rc.cli.mount_config_cli` to mount configuration commands; runtime values come from `state.resolved`.
 - CLI behavior belongs in `<my_project>.cli.app`; keep `<my_project>.main` as a thin public entry point wrapper.
 - Use stdlib `logging` for app-owned logs; AppRC integration should start from `import apprc as rc`.
 - Import `<my_project>`-owned utility helpers through the facade: `import <my_project>.utils as ut`.
@@ -32,16 +33,16 @@
 - If a boundary is truly dynamic, model that boundary explicitly; do not probe strict domain objects defensively.
 
 ## Documentation rules
-- Start major docs files with a compact table of contents.
-- Use repeated `#` headings for major document parts.
-- Use separator comments before major sections.
-- Use GitHub callouts consistently.
-- Use `[!NOTE]` callouts for related links and return links.
-- Start one-line related-link callouts with `Related:`.
-- Start multi-link related-link callouts with `Related links:`.
-- Do not use standalone backlink labels in prose.
-- Update the CHANGELOG.md after each pass
-- Update the TODO.md 
+- Follow [Documentation](docs/README.md#documentation-rules), including its component-name table.
+- Use the exact page names: Documentation, Explanations, How-to user guides, References, Examples, and Development.
+- Explain each component's job, inputs, outputs, and connections before introducing more complex combinations.
+- Define a component name before using it; reuse that name rather than inventing synonyms.
+- Link relevant words inside paragraphs and tables to exact chapters. Connect explanations, implementations, and references in both directions.
+- Do not use generic further-reading lists or related-link callouts.
+- Give each guide explicit prerequisites, complete files or labeled excerpts, commands, and expected results. Keep examples independent.
+- Start major docs with a table of contents. Use sentence-case headings and GitHub callouts for their stated purposes.
+- Preserve Graphigs figure standards and regenerate assets through their source builders.
+- Update CHANGELOG.md for user-visible changes. Add TODO.md entries only for actionable unresolved work, after checking for duplicates.
 
 ## Verification
 - Review the diff for duplicate helpers, naming drift, unnecessary abstractions, and regressions.

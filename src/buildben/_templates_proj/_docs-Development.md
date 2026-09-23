@@ -1,115 +1,135 @@
-<!-- ======================================================== -->
-## Table Of Contents
-<!-- ======================================================== -->
+# Development
 
-1. [Development](#1-development)
-2. [Maintainer Workflow](#2-maintainer-workflow)
-   1. [Maintainer Loop](#maintainer-loop)
-   2. [Repository Routing](#repository-routing)
-   3. [Before Editing](#before-editing)
-   4. [Releases](#releases)
-3. [Implementation Standards](#3-implementation-standards)
-   1. [Source Editing Rules](#source-editing-rules)
-   2. [Documentation Authoring](#documentation-authoring)
-4. [Documentation Standards](#4-documentation-standards)
-   1. [Heading Structure](#heading-structure)
-   2. [Markdown Formatting Rules](#markdown-formatting-rules)
-   3. [GitHub Callouts](#github-callouts)
-   4. [Link And Backlink Rules](#link-and-backlink-rules)
-   5. [Static Figure Rules](#static-figure-rules)
-5. [Verification And Commit](#5-verification-and-commit)
-   1. [Verification](#verification)
-   2. [Review Checklist](#review-checklist)
-   3. [Commit Checklist](#commit-checklist)
+[Documentation](README.md) · [Explanations](Explanations.md) · [How-to user guides](How-To-User-Guides.md) · [References](References.md) · [Examples](EXAMPLES.md)
 
-<br>
+- [Maintainer environment](#maintainer-environment)
+- [Repository routing](#repository-routing)
+- [Before editing](#before-editing)
+- [Documentation authoring](#documentation-authoring)
+- [Static figure rules](#static-figure-rules)
+- [Verification](#verification)
+- [Releases](#releases)
 
-# 1. Development
+## Maintainer environment
 
-Use this file before changing `{my_project}`.
+From the project root, install the package and development tools with Python
+3.12 or newer. The `--group` option requires pip 25.1 or newer:
 
-<br>
-
-# 2. Maintainer Workflow
-
-<!-- ======================================================== -->
-## Maintainer Loop
-<!-- ======================================================== -->
-
-The maintainer loop is:
-
-1. Read [AGENTS.md](../AGENTS.md), this file, and the relevant docs chapter.
-2. Check the current worktree.
-3. Locate the source owner for the behavior.
-4. Edit the smallest source surface that owns the behavior.
-5. Run focused verification.
-6. Run broader verification when shared behavior changes.
-7. Review the Git diff.
-8. Commit.
-
-> [!NOTE]
-> Related links:
-> - Use [How-To User Guides](How-To-User-Guides.md) for user-facing command recipes.
-> - Use [References](References.md) for exact paths, commands, and public surfaces.
-> - Use [Explanations](Explanations.md) for the project model behind the workflow.
-
-<br>
-
-<!-- ======================================================== -->
-## Repository Routing
-<!-- ======================================================== -->
-
-Put changes where the repo already has an owner.
-
-| Change Type | Owner |
-|---|---|
-| Runtime package behavior | [src/{my_project}](../src/{my_project}) |
-| Tests | [tests](../tests) |
-| Small user-facing examples | [examples](../examples) |
-| Static assets | [assets](../assets) |
-| Documentation | [docs](.) |
-| Project metadata and dependency declarations | [pyproject.toml](../pyproject.toml) |
-| Development recipes | [justfile](../justfile) |
-| Local agent guidance | [AGENTS.md](../AGENTS.md) |
-
-Ask before creating a new top-level directory when one of these owners is a
-reasonable fit.
-
-> [!NOTE]
-> Related: use [project paths](References.md#project-paths) for source file
-> owners and [package layout](Explanations.md#package-layout) for import
-> boundaries.
-
-<br>
-
-<!-- ======================================================== -->
-## Before Editing
-<!-- ======================================================== -->
-
-Run these checks before a non-trivial change:
-
-```bash
-git status --short
-rg --files
+```shell
+python -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -e "." --group dev
 ```
 
-Then read the source owner and nearby files. For example, a CLI change usually
-requires checking `src/{my_project}/cli/app.py`, the thin wrapper in
-`src/{my_project}/main.py`, tests, README, and docs references.
+On Windows use `.venv\Scripts\python.exe`. With uv, use `just sync` after
+[creating the lock files](#releases). `uv`, `direnv`, and `just` are optional for
+application users. The [dependency reference](References.md#dependency-declarations)
+distinguishes installed requirements from maintainer tools.
 
-> [!IMPORTANT]
-> Do not weaken production contracts to make a test easier. Add or reuse a
-> dedicated test helper when a test needs lighter setup.
+The starter has no enabled optional extras. If you add and populate the
+commented `rag` extra in `pyproject.toml`, these commands install it:
 
-> [!NOTE]
-> Related: use [verification](#verification) for the local verification
-> checklist.
+```shell
+python -m pip install -e ".[rag]"
+python -m pip install -e ".[rag]" --group dev
+```
 
-<br>
+## Repository routing
 
-<!-- ======================================================== -->
+| Change | Location |
+| --- | --- |
+| Runtime behavior | `src/{my_project}` |
+| Commands | `src/{my_project}/cli/app.py` |
+| Settings | `src/{my_project}/config/sections` |
+| Tests | `tests` |
+| Small user-facing programs | `examples` |
+| Documentation | `docs` |
+| Release and build helpers | `src/{my_project}_dev/packaging` |
+| Static assets | `assets` or `docs/assets` |
+
+The [project paths](References.md#project-paths) table links to existing owners.
+Ask before adding a top-level directory when one of these locations fits.
+Keep package initializers limited to imports and module docstrings. Reuse
+existing helpers, use exact attributes on known types, and write Sphinx-style
+docstrings for public behavior.
+
+## Before editing
+
+Read [AGENTS.md](../AGENTS.md), [TODO.md](../TODO.md), and the relevant component
+in [Explanations](Explanations.md). Inspect `git status --short` and nearby
+source before editing. Keep unrelated user changes untouched. Explain the
+intended change before editing several files.
+
+Update docs when setup, commands, APIs, environment variables, or saved file
+formats change. Record the final behavior in [CHANGELOG.md](../CHANGELOG.md),
+including affected users and migration instructions for breaking changes.
+
+## Documentation authoring
+
+Follow the [documentation rules](README.md#documentation-rules) and
+[component names](README.md#component-names). They define the names used across
+all six pages. An explanation must identify a component, explain its job and
+connections, and link the relevant words to a working implementation.
+
+Write from the smallest usable configuration to optional features. Introduce a
+term before using it in a task title. Keep exact API names and filenames. Link
+inside the sentence or table cell where a reader needs the information; do not
+append generic further-reading lists or related-link callouts. References must
+connect commands and fields to their explanations and practical examples.
+
+Give each guide its own prerequisites, complete files or clearly labeled
+excerpts, commands, and expected results. Give [Examples](EXAMPLES.md) complete
+application setups. Do not assume a reader ran an unrelated earlier example.
+
+Use a table of contents near the top of major documents and sentence-case
+headings. Use `<details>` for long examples. GitHub callouts have specific uses:
+
+| Marker | Use |
+| --- | --- |
+| `[!TIP]` | Optional workflow advice. |
+| `[!NOTE]` | Helpful background. |
+| `[!IMPORTANT]` | Required prerequisite or architecture rule. |
+| `[!WARNING]` | Deprecated behavior, temporary bugs, or costly operations. |
+| `[!CAUTION]` | Destructive or security-relevant actions. |
+
+Place the marker alone on its blockquote line; GitHub ignores custom titles.
+
+## Static figure rules
+
+Static documentation figures live in [docs/assets](assets/). Graphigs owns
+repeatable builders and the [figure visual tokens](References.md#figure-visual-tokens).
+Change a figure's source and regenerate the output when a builder exists.
+Small SVGs without a builder may be edited directly.
+
+Keep the canvas transparent, black text on a readable fill, and neutral strokes
+for outlines and edges. Use the existing Graphigs theme for colors and
+fonts. Explain what distinct visual treatments mean; do not give actions and
+components identical styling. Embed figures in a centered Markdown table with
+a numbered caption. Keep theme swatches in Graphigs rather than duplicating them.
+
+## Verification
+
+Run the tools from the project environment:
+
+```shell
+.venv/bin/ruff format .
+.venv/bin/ruff check .
+.venv/bin/pyright
+.venv/bin/python -m pytest
+```
+
+For documentation, execute changed examples in disposable directories and
+check each result against the prose. Check file links and heading anchors,
+including links back from reference tables. Read the introduction without prior
+project knowledge: every component name must be defined before it is needed.
+Run `git diff --check` and inspect the diff for unrelated changes.
+
+Before finishing, review names, duplicated helpers, comments, and module
+ownership. Add a TODO only for a real unresolved issue and check for an existing
+entry first. Report verification and unresolved work with a copyable commit
+message. Commit or publish only when requested.
+
 ## Releases
-<!-- ======================================================== -->
 
 `CHANGELOG.md` is the source for GitHub Release notes. Before a release, move
 every entry from `[Unreleased]` into a new `# [MAJOR.MINOR.PATCH] - YYYY-MM-DD`
@@ -174,288 +194,3 @@ just release-push vMAJOR.MINOR.PATCH
 > `just publish-pypi vMAJOR.MINOR.PATCH`. This requires an authenticated `gh`
 > command. The recovery workflow downloads the existing release assets and
 > never rebuilds them.
-
-<br>
-
-# 3. Implementation Standards
-
-<!-- ======================================================== -->
-## Source Editing Rules
-<!-- ======================================================== -->
-
-Follow these rules for normal edits:
-
-- Keep runtime behavior in [src/{my_project}](../src/{my_project}).
-- Keep CLI behavior in `src/{my_project}/cli/app.py`; keep
-  `src/{my_project}/main.py` wrapper-only.
-- Keep tests in [tests](../tests).
-- Reuse existing helpers before adding new helpers.
-- Keep `__init__.py` files limited to imports and module docstrings.
-- Prefer exact domain attributes over defensive probes against strict objects.
-- Document public behavior with Sphinx-style docstrings.
-- Update docs when a change affects setup, usage, CLI behavior, public APIs,
-  environment variables, or user-visible workflows.
-
-> [!NOTE]
-> Related: use [public interfaces](References.md#public-interfaces) for the
-> surfaces that need stable names and documentation.
-
-<br>
-
-<!-- ======================================================== -->
-## Documentation Authoring
-<!-- ======================================================== -->
-
-Docs live in [docs](.) and follow the standards in this file.
-
-When editing docs:
-
-1. Keep [docs/README.md](README.md) as the reading map.
-2. Put procedures in [How-To User Guides](How-To-User-Guides.md).
-3. Put maintainer workflow in [Development](Development.md).
-4. Put exact names in [References](References.md).
-5. Put system concepts in [Explanations](Explanations.md).
-6. Use separator comments before major sections.
-7. Add direct links to source files when a reader may need to edit them.
-8. Add `[!NOTE]` related-link callouts from concept sections to task recipes.
-9. Use [figure visual tokens](References.md#figure-visual-tokens) before
-   choosing reusable figure colors, strokes, fills, and typography.
-10. Update figure assets when prose changes a diagrammed concept.
-
-> [!NOTE]
-> Related links:
-> - Use [Markdown formatting rules](#markdown-formatting-rules) for docs layout.
-> - Use [link and backlink rules](#link-and-backlink-rules) for related-link callouts.
-> - Use [static figure rules](#static-figure-rules) for docs assets.
-> - Use [figure visual tokens](References.md#figure-visual-tokens) for the Graphigs-owned figure theme source of truth.
-
-<br>
-
-# 4. Documentation Standards
-
-<!-- ======================================================== -->
-## Heading Structure
-<!-- ======================================================== -->
-
-Long docs files may use multiple `#` headings. Use them for major document
-parts, not only for the file title. The table of contents must mirror the real
-structure so a reader can tell which sections are sequences, which sections are
-tool groups, and which sections are independent references.
-
-Use this hierarchy:
-
-| Level | Use |
-|---|---|
-| `#` | Major document parts, for example `First-Time Setup`, `Common Workflows`, or `Failure Model`. |
-| `##` | Recipes or concept chapters inside a major part. |
-| `###` | Ordered substeps inside a large recipe. |
-
-Avoid a flat file where every section is a `##` peer. A long sequence should be
-one recipe with substeps, not a cluster of unrelated recipes.
-
-<br>
-
-<!-- ======================================================== -->
-## Markdown Formatting Rules
-<!-- ======================================================== -->
-
-- Start every major docs file with a compact table of contents.
-- Make the ToC match the heading hierarchy.
-- Use the repository terms from [Repository Terms](README.md#repository-terms).
-- Use exact technical names: source paths, environment variables, CLI commands,
-  config attributes, and file names.
-- Avoid generic advice such as "check settings"; say which value to inspect,
-  for example `{MY_PROJECT}_STORAGE`, `VIRTUAL_ENV`, or `src/{my_project}`.
-- Use separator comments before major sections:
-
-```md
-<!-- ======================================================== -->
-## Section Title
-<!-- ======================================================== -->
-```
-
-- Use centralized reference links near the bottom of a file when a link is
-  reused:
-
-```md
-<!-- --- URLs --------------------------------------------------- -->
-[`uv`]: https://github.com/astral-sh/uv
-```
-
-- Use `<details>` dropdowns for long examples inside procedural docs:
-
-````md
-<details><summary> <u> <i> Longer command sequence </i> </u> </summary>
-<blockquote>
-
-```bash
-just sync
-just test
-```
-
-</blockquote></details>
-````
-
-<br>
-
-<!-- ======================================================== -->
-## GitHub Callouts
-<!-- ======================================================== -->
-
-Use callouts to mark the job a paragraph does. GitHub renders only the fixed
-labels `TIP`, `NOTE`, `IMPORTANT`, `WARNING`, and `CAUTION`; text after the
-marker is not rendered as a custom title.
-
-### Callout Syntax
-
-````md
-> [!TIP]
-> Explanation text goes here.
->
-> ```bash
-> just sync
-> ```
-````
-
-### Callout Types
-
-> [!TIP]
-> Optional advice that improves speed, clarity, or workflow.
-
-> [!NOTE]
-> Helpful context that is not required to complete the task.
-
-> [!IMPORTANT]
-> Required prerequisites, environment variables, version constraints, or
-> architecture rules.
-
-> [!WARNING]
-> Risks, deprecated behavior, high-cost operations, or temporary bugs.
-
-> [!CAUTION]
-> Destructive or security-relevant actions.
-
-<br>
-
-<!-- ======================================================== -->
-## Link And Backlink Rules
-<!-- ======================================================== -->
-
-- Prefer relative links.
-- Link to exact chapters when the target section matters.
-- Use `[!NOTE]` callouts for return links from concept and reference sections.
-- Start one-line related-link callouts with `Related:`.
-- Start multi-link related-link callouts with `Related links:`.
-- Add a short purpose phrase for every related link so the reader knows why it
-  matters.
-- Do not use standalone backlink labels in prose.
-- Add return links from explanations to the relevant how-to recipes and
-  references.
-- Add reference links from recipes when exact paths, config keys, or
-  environment variables matter.
-- Link to source files directly when a user may need to edit the file.
-- After moving docs, check file links, image links, and local anchors together.
-
-<br>
-
-<!-- ======================================================== -->
-## Static Figure Rules
-<!-- ======================================================== -->
-
-Static docs figures live in [assets](assets/). This scaffold starts with one
-small static SVG. Put repeatable figure builders in Graphigs and keep only
-generated SVG/PNG assets here.
-
-Figure rules:
-
-1. Change the Graphigs figure builder for generated figures.
-2. Edit small one-off SVG assets directly only when no builder exists.
-3. Keep the canvas transparent.
-4. Keep black text on a readable surface fill so GitHub dark mode remains
-   legible.
-5. Use neutral strokes for outlines and edges.
-6. Use [figure visual tokens](References.md#figure-visual-tokens) for the
-   Graphigs-owned figure theme source of truth.
-7. Embed SVG files in Markdown with a centered table:
-
-```md
-| ![Alt text](assets/example.svg) |
-|:--:|
-| **Fig. N - Figure Title:** Caption sentence. |
-```
-
-> [!NOTE]
-> Related links:
-> - Use [documentation authoring](#documentation-authoring) before expanding
->   the docs structure or adding new figure assets.
-> - Use [References: figure visual tokens](References.md#figure-visual-tokens)
->   for the Graphigs-owned figure theme source of truth.
-
-<br>
-
-# 5. Verification And Commit
-
-<!-- ======================================================== -->
-## Verification
-<!-- ======================================================== -->
-
-Run verification that matches the change.
-
-For Python changes:
-
-```bash
-ruff format .
-ruff check .
-pyright
-python -m pytest
-```
-
-For docs-only changes:
-
-```bash
-git diff --check
-rg -n "TO[D]O|FIX[M]E|content[R]eference|oai[c]ite" README.md docs
-python -c "import pathlib, xml.etree.ElementTree as ET; [ET.parse(p) for p in pathlib.Path('docs/assets').glob('*.svg')]"
-```
-
-> [!NOTE]
-> The exact command depends on the local environment. If a command is not
-> installed, state that in the final report and verify the closest safe
-> surface.
-
-<br>
-
-<!-- ======================================================== -->
-## Review Checklist
-<!-- ======================================================== -->
-
-Before finishing, review:
-
-- The change is in the existing owner file or directory.
-- New names match existing terminology.
-- Docs link to exact files and exact chapters.
-- Tests cover the behavior changed.
-- The diff does not include unrelated formatting churn.
-- New comments follow the local comment style.
-
-> [!NOTE]
-> Related: use [Development: before editing](#before-editing) before widening
-> the scope of a change.
-
-<br>
-
-<!-- ======================================================== -->
-## Commit Checklist
-<!-- ======================================================== -->
-
-Before committing:
-
-1. Run focused tests for the touched area.
-2. Run broader checks when shared behavior changed.
-3. Review `git diff --check`.
-4. Review `git status --short`.
-5. Write a commit message that names the user-facing behavior.
-
-> [!NOTE]
-> Related: use [How-To User Guides: run tests](How-To-User-Guides.md#run-tests)
-> for the short command recipe.

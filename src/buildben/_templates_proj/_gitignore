@@ -29,6 +29,9 @@ db/
 .env.local
 .env.apprc-app
 .env.apprc-storage
+apprc.user.env
+apprc.storage.env
+apprc.toml
 .env.1password
 # .envrc
 

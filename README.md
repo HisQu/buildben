@@ -187,17 +187,35 @@ bube init-proj \   # Long Alias for `bube proj`
   -g               # Initializes git repo and commits scaffold
 ```
 
-The generated project includes a `docs/` scaffold with:
+The generated project includes six documentation pages. They use fixed page
+labels and introduce components before instructions that depend on them:
 
-- `docs/README.md` for the documentation reading map and authoring rules.
-- `docs/How-To-User-Guides.md` for task recipes.
-- `docs/Development.md` for maintainer workflow and verification.
-- `docs/References.md` for exact paths, commands, and public names.
-- `docs/Explanations.md` for architecture and design context.
+- `docs/README.md`: Documentation, the reading order and authoring rules.
+- `docs/Explanations.md`: Explanations, each component's job and connections.
+- `docs/How-To-User-Guides.md`: How-to user guides, tasks with prerequisites and expected results.
+- `docs/References.md`: References, exact commands, paths, keys, and Python names.
+- `docs/EXAMPLES.md`: Examples, complete storage and configuration setups.
+- `docs/Development.md`: Development, verification and release instructions.
 
-It also includes a Typer CLI scaffold with a console script named after the
-project, `python -m <my_project>` support, and starter `version` and
-`diagnose` commands.
+The starter has a Typer CLI, `python -m <my_project>` support, and AppRC
+configuration. It enables named storage without a user dotenv. One `APP_RC`
+declaration registers typed sections; a config bundle passes those sections to
+application code. The `config` commands initialize storage, edit settings, and
+open the terminal editor. The generated docs and `AGENTS.md` require consistent
+component names and links inside the paragraphs and tables where they are useful.
+
+> [!IMPORTANT]
+> Generated projects now require `apprc>=0.25.0,<0.26`. AppRC 0.25 is prepared
+> locally; until it is published, install locally built `apprc_core` and `apprc`
+> wheels before installing a generated project. Buildben itself still has no
+> runtime dependencies. Existing projects are not rewritten automatically.
+
+To verify a scaffold migration against local AppRC artifacts, install both
+wheels into Buildben's development environment. Set `APPRC_ARTIFACTS` to that
+wheel directory, then run `UV_FIND_LINKS="$APPRC_ARTIFACTS" .venv/bin/pytest`.
+The generated project's lock test uses these artifacts before PyPI has 0.25.0.
+Without AppRC installed, the optional generated-runtime checks are skipped;
+such a run does not verify compatibility with AppRC.
 
 #### Create virtual environment (``/.direnv``):
 

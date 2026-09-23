@@ -24,10 +24,10 @@ class AppSettings(rc.Config):
     storage_root: Path = rc.field(
         "<MY_PROJECT>_STORAGE",
         title="Storage root",
-        explanation_short="Active local data root selected by AppRC.",
+        explanation_short="Directory where the application stores its persistent data.",
         explanation_long=(
-            "The storage root is selected through the user-level AppRC "
-            "selector, not by editing a packaged dotenv file."
+            "Choose the storage root through the command-line option, environment "
+            "variable, or saved storage registry selection."
         ),
         editable=False,
         required=True,

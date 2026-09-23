@@ -1,223 +1,161 @@
-<!-- ======================================================== -->
-## Table Of Contents
-<!-- ======================================================== -->
+# How-to user guides
 
-1. [How-To User Guides](#1-how-to-user-guides)
-   1. [Recipe Map](#recipe-map)
-2. [First-Time Setup](#2-first-time-setup)
-   1. [Install The Package](#install-the-package)
-   2. [Run The First Command](#run-the-first-command)
-3. [Common Workflows](#3-common-workflows)
-   1. [Sync Dependencies](#sync-dependencies)
-   2. [Run Tests](#run-tests)
-   3. [Inspect The Project](#inspect-the-project)
-4. [Troubleshooting](#4-troubleshooting)
-   1. [Environment Problems](#environment-problems)
-   2. [Command Problems](#command-problems)
+[Documentation](README.md) · [Explanations](Explanations.md) · [References](References.md) · [Examples](EXAMPLES.md) · [Development](Development.md)
 
-<br>
+- [Install the package](#install-the-package)
+- [Run the first command](#run-the-first-command)
+- [Initialize storage](#initialize-storage)
+- [Edit a saved setting](#edit-a-saved-setting)
+- [Switch storage](#switch-storage)
+- [Add a setting](#add-a-setting)
+- [Use settings in application code](#use-settings-in-application-code)
+- [Troubleshoot configuration](#troubleshoot-configuration)
 
-# 1. How-To User Guides
+Each guide states its starting point. Commands use the generated application
+name. Replace demonstration paths with your chosen directories for actual use.
 
-<!-- ======================================================== -->
-## Recipe Map
-<!-- ======================================================== -->
+## Install the package
 
-Use this file when you want commands in order. Use
-[References](References.md) when you need exact names and
-[Explanations](Explanations.md) when you need the system model.
+From the generated project root, use Python 3.12 or newer:
 
-> [!NOTE]
-> Related: use [documentation standards](Development.md#4-documentation-standards)
-> when adding new recipes so headings, callouts, and links stay consistent.
-
-<br>
-
-# 2. First-Time Setup
-
-<!-- ======================================================== -->
-## Install The Package
-<!-- ======================================================== -->
-
-Use this recipe from the project root.
-
-1. Create or activate a Python environment.
-2. Install the package for runtime use:
-
-```bash
-python -m pip install -e "."
+```shell
+python -m venv .venv
+.venv/bin/python -m pip install -e .
 ```
 
-3. Install the maintainer tools when you plan to edit the project:
+On Windows use `.venv\Scripts\python.exe`. Activate the environment to run the
+console commands below, or call `.venv/bin/{my_project}` directly. No `uv` command
+is required. Installation requires AppRC 0.25.x; when testing before its release,
+install the locally built `apprc_core` and `apprc` wheels in this environment first.
+The [dependency reference](References.md#dependency-declarations) explains the
+runtime and maintainer requirements.
 
-```bash
-python -m pip install -e "." --group dev
-```
+## Run the first command
 
-4. If you use `uv`, sync the locked maintainer environment:
+After [installation](#install-the-package), run:
 
-```bash
-just sync
-```
-
-> [!NOTE]
-> Related: use [dependency surfaces](References.md#dependency-surfaces) for the
-> difference between runtime dependencies, optional extras, and dependency
-> groups.
-
-<br>
-
-<!-- ======================================================== -->
-## Run The First Command
-<!-- ======================================================== -->
-
-Show the command tree through the console script:
-
-```bash
+```shell
 {my_project} --help
-```
-
-The module entry point should show the same command tree:
-
-```bash
 python -m {my_project} --help
-```
-
-Run the starter commands:
-
-```bash
 {my_project} version
-{my_project} diagnose
 {my_project} diagnose --json
 ```
 
-Initialize AppRC storage before commands that need local runtime state:
+Both help commands show the same Typer command tree. `version` prints the package
+version; `diagnose` reports package, interpreter, and AppRC paths. These commands
+work before [storage](Explanations.md#storage) is configured and create no files.
 
-```bash
-{my_project} config setup --yes --storage-root ./local-storage
-export {MY_PROJECT}_STORAGE="$(pwd)/local-storage"
+## Initialize storage
+
+After installation, choose where configuration and data should live. This POSIX
+example keeps data next to the checkout rather than inside it:
+
+```shell
+export {MY_PROJECT}_APPRC_DIR="$PWD/.demo-config"
+{my_project} config setup --yes --storage-root ../{my_project}-data
 {my_project} config doctor
 {my_project} config show --json
 ```
 
-> [!NOTE]
-> Related: use [public interfaces](References.md#public-interfaces) for the
-> commands and import paths users can rely on.
+On PowerShell set `$env:{MY_PROJECT}_APPRC_DIR = "$PWD/.demo-config"` instead.
+Setup creates `.demo-config/apprc.toml`, registers the initial `default` storage,
+and initializes its `apprc.storage.env`. Repeating setup for the same existing
+root preserves data. Doctor reports ready settings, and show includes the
+selected root and the starter `message`. The
+[storage-only example](EXAMPLES.md#storage-only-application) explains the resulting files.
 
-<br>
+## Edit a saved setting
 
-# 3. Common Workflows
+Start from an [initialized storage](#initialize-storage) and retain the same
+`{MY_PROJECT}_APPRC_DIR` value in your shell:
 
-<!-- ======================================================== -->
-## Sync Dependencies
-<!-- ======================================================== -->
-
-Use `just sync` to install the full maintainer environment from `uv.lock`:
-
-```bash
-just sync
+```shell
+{my_project} config set app.message "Hello local storage" --scope storage
+{my_project} config show --json
+{my_project} config edit
 ```
 
-Use plain `pip` when you only need the package and do not want `uv`:
+With `{MY_PROJECT}_MESSAGE` unset, show reports `Hello local storage`. The value
+is saved in the selected directory's `apprc.storage.env`. The
+[config editor](Explanations.md#configuration-tools) displays source values and
+field help. A process value can override a successful edit, as the
+[invocation example](EXAMPLES.md#an-invocation-override) demonstrates.
 
-```bash
-python -m pip install -e "."
+## Switch storage
+
+Start from an initialized storage. Register another directory and try it for
+one invocation:
+
+```shell
+{my_project} config storage add work ../{my_project}-work --yes
+{my_project} --storage work config set app.message "Work data" --scope storage
+{my_project} --storage work config show --json
+{my_project} config storage select work
+{my_project} config storage list
 ```
 
-> [!NOTE]
-> Related: use [configuration and dependency model](Explanations.md#configuration-and-dependency-model)
-> for why runtime installs and maintainer installs are documented separately.
+The explicit `--storage work` affects those invocations. `select work` then records
+the saved default for later invocations. The [storage registry](Explanations.md#storage)
+holds both registrations. [References](References.md#storage-commands) distinguishes
+moving data, reconnecting a path, and unregistering a name.
 
-<br>
+## Add a setting
 
-<!-- ======================================================== -->
-## Run Tests
-<!-- ======================================================== -->
+In [`AppSettings`](../src/{my_project}/config/sections/app.py), add this field
+inside the existing class. This is a class-body excerpt:
 
-Run the focused tests first:
-
-```bash
-python -m pytest tests
+```python
+retries: int = rc.field(
+    "{MY_PROJECT}_RETRIES",
+    default=3,
+    title="Request retries",
+    explanation_short="Number of retries after a failed request.",
+)
 ```
 
-Run the quality tools before finishing a code change:
+No separate CLI field list is needed. After setup, run
+`{my_project} config set app.retries 5 --scope storage`, then
+`{my_project} config show --json`. The `config` object contains integer `retries=5`.
+The [config-field explanation](Explanations.md#config-sections) describes how the
+Python type, key, default, and help text are used. For a second section, use the
+[complete two-section example](EXAMPLES.md#several-config-sections).
 
-```bash
-ruff format .
-ruff check .
-pyright
-python -m pytest
+## Use settings in application code
+
+After installation and setup, save this complete program as `read_settings.py`
+in the project root. Keep the same AppRC directory environment variable:
+
+<!-- example-file: read_settings.py -->
+```python
+from {my_project}.config.app import APP_RC
+from {my_project}.config.bundle import {MyProject}Config
+
+resolved = APP_RC.resolve()
+config = resolved.build({MyProject}Config)
+print(config.app.message)
+print(config.app.storage_root)
 ```
 
-> [!NOTE]
-> Related: use [Development: verification](Development.md#verification) for
-> the maintainer checklist before a commit.
+Run `python read_settings.py`. Pass `config` or `config.app` to application
+functions that need these values. Within a Typer runtime command, obtain the
+existing [`ResolvedConfig`](Explanations.md#resolvedconfig) from
+`rc.cli.state_from(ctx, rc.cli.DefaultConfigCliState).resolved` instead of reading
+inputs again. The [bundle](Explanations.md#config-bundle) groups sections for
+passing them through application code.
 
-<br>
+## Troubleshoot configuration
 
-<!-- ======================================================== -->
-## Inspect The Project
-<!-- ======================================================== -->
+Run `{my_project} config paths --json` to see which directory and registry the
+current invocation uses. Run `{my_project} config doctor --json` to inspect
+readiness without writing files.
 
-Use these commands when you need to understand the current shape:
+| Symptom | Action |
+| --- | --- |
+| Command is unavailable | Use the installed environment's executable or `python -m {my_project}`. |
+| Storage is missing | [Initialize it](#initialize-storage), or correct `{MY_PROJECT}_APPRC_DIR`. |
+| A saved value does not win | Compare [configuration layers](Explanations.md#configuration-files), especially `{MY_PROJECT}_MESSAGE`. |
+| A directory moved elsewhere | Use `config storage repoint NAME ROOT` to reconnect its existing path. |
+| An edit reports a stale file | Inspect current values and make a fresh edit; do not reuse the old plan. |
 
-```bash
-rg --files
-git status --short
-{my_project} diagnose
-{my_project} config doctor
-python -m {my_project} --help
-```
-
-When a command fails, copy the exact command, current directory, exit code, and
-stderr into the issue or debugging note.
-
-> [!NOTE]
-> Related links:
-> - Use [project paths](References.md#project-paths) for the main source and docs locations.
-> - Use [system model](Explanations.md#system-model) for the package and tooling boundaries.
-
-<br>
-
-# 4. Troubleshooting
-
-<!-- ======================================================== -->
-## Environment Problems
-<!-- ======================================================== -->
-
-Check the active Python and environment first:
-
-```bash
-python --version
-python -c "import sys; print(sys.executable)"
-python -c "import {my_project}; print({my_project}.__file__)"
-```
-
-If the package imports from an unexpected location, reinstall it from the
-project root.
-
-> [!NOTE]
-> Related: use [failure model](Explanations.md#failure-model) for the normal
-> order of checks when a command behaves differently across machines.
-
-<br>
-
-<!-- ======================================================== -->
-## Command Problems
-<!-- ======================================================== -->
-
-When a `just` recipe fails:
-
-1. Run `just --list`.
-2. Run the underlying command manually.
-3. Check whether the virtual environment is active.
-4. Check whether the command exists in `.venv/bin`.
-
-```bash
-just --list
-ls .venv/bin
-```
-
-> [!NOTE]
-> Related: use [command reference](References.md#command-reference) for the
-> expected commands and their owners.
+The [command reference](References.md#command-reference) lists the commands and
+links to their intended tasks.

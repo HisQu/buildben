@@ -1,157 +1,150 @@
-<!-- ======================================================== -->
-## Table Of Contents
-<!-- ======================================================== -->
+# Explanations
 
-1. [Explanations](#1-explanations)
-2. [System Architecture](#2-system-architecture)
-   1. [System Model](#system-model)
-   2. [Package Layout](#package-layout)
-3. [Configuration And Dependency Model](#3-configuration-and-dependency-model)
-   1. [Configuration Model](#configuration-model)
-   2. [Dependency Model](#dependency-model)
-4. [Failure Model](#4-failure-model)
+[Documentation](README.md) · [How-to user guides](How-To-User-Guides.md) · [References](References.md) · [Examples](EXAMPLES.md) · [Development](Development.md)
 
-<br>
+- [Command-line application](#command-line-application)
+- [AppRC](#apprc)
+- [Config sections](#config-sections)
+- [ResolvedConfig](#resolvedconfig)
+- [Configuration files](#configuration-files)
+- [Storage](#storage)
+- [Configuration tools](#configuration-tools)
+- [Config bundle](#config-bundle)
+- [Package layout and dependencies](#package-layout-and-dependencies)
 
-# 1. Explanations
+This page describes the generated application's components. As the application
+grows, explain each new component and connect it to these existing components.
 
-Use this file when you need to understand why `{my_project}` is shaped the way
-it is. Use [How-To User Guides](How-To-User-Guides.md) for commands and
-[References](References.md) for exact names.
+## Command-line application
 
-<br>
+The command-line application is the Typer `app` in
+[`cli/app.py`](../src/{my_project}/cli/app.py). Both the `{my_project}` console
+script and `python -m {my_project}` run that object. The starter provides
+`version` and `diagnose`; AppRC adds the `config` commands.
 
-# 2. System Architecture
+`version` and `diagnose` can run before storage is configured. Runtime configuration
+commands such as `config show` need selected storage. The
+[first-command guide](How-To-User-Guides.md#run-the-first-command) demonstrates
+that distinction. Add application commands to this command tree rather than
+creating a second entrypoint with different configuration behavior.
 
-<!-- ======================================================== -->
-## System Model
-<!-- ======================================================== -->
+## AppRC
 
-`{my_project}` is a src-layout Python project. Runtime code lives under
-[src/{my_project}](../src/{my_project}), tests live under [tests](../tests),
-and long-form documentation lives under [docs](.).
+`APP_RC` in [`config/app.py`](../src/{my_project}/config/app.py) is one `rc.AppRC`
+declaration shared by the command-line application and its settings. It records
+`app_id="{my_project}"`, the package containing defaults, and storage support.
+The starter enables `rc.Storage()` but does not enable a user dotenv.
 
-The main idea is simple:
+Importing a [config section](#config-sections) registers it on `APP_RC`.
+The [config CLI](#configuration-tools) reads that same declaration to determine
+which settings and commands to expose. Defining a setting once therefore makes
+it available to loading, diagnostics, and editing.
 
-1. `pyproject.toml` describes the package and development tools.
-2. `src/{my_project}` owns importable runtime behavior.
-3. `tests` verifies behavior from the outside where possible.
-4. `docs` explains setup, workflows, exact names, and design context.
-5. `justfile` provides repeatable maintainer commands.
+## Config sections
 
-> [!NOTE]
-> Related links:
-> - Use [install the package](How-To-User-Guides.md#install-the-package) for the first setup path.
-> - Use [project paths](References.md#project-paths) for exact source owners.
-> - Use [repository routing](Development.md#repository-routing) before moving behavior.
+A config section is a class of related settings. The starter's
+[`AppSettings`](../src/{my_project}/config/sections/app.py) contains `storage_root`
+and `message`. Each `rc.field(...)` connects a Python attribute to an environment
+key and supplies its default and help text.
 
-<br>
+`message` is a string with a Python fallback. The packaged dotenv also supplies
+its initial value. `storage_root` is a required `Path` populated from the selected
+storage; it is not an editable preference. [Adding a setting](How-To-User-Guides.md#add-a-setting)
+means adding a field to this section, or adding a focused section for another
+part of the application.
 
-<!-- ======================================================== -->
-## Package Layout
-<!-- ======================================================== -->
+Field `title`, `explanation_short`, and `explanation_long` are reused by the
+config editor. Use `secret=True` for redacted display of sensitive values; this
+flag does not encrypt stored values.
 
-The project uses a `src` layout so imports come from the installed package
-rather than accidentally from the repository root.
+## ResolvedConfig
 
-Core boundaries:
+A `ResolvedConfig` contains the values read for one invocation. The mounted CLI
+calls `APP_RC.resolve()` and stores the result as `state.resolved`.
+`resolved.build({MyProject}Config)` converts those inputs into the application's
+[config bundle](#config-bundle).
 
-| Area | Responsibility |
-|---|---|
-| `src/{my_project}` | Runtime behavior and package-owned helpers. |
-| `src/{my_project}/cli` | Typer command tree and CLI presentation. |
-| `src/{my_project}/config` | AppRC config contract, packaged defaults, and config facade. |
-| `tests` | Behavior checks, fixtures, and regression tests. |
-| `examples` | Small user-facing examples. |
-| `docs` | Longer usage, reference, and architecture material. |
-| `assets` | Static project assets. |
+For example, `{MY_PROJECT}_MESSAGE=hello` supplies a string to the `message`
+field. Each result retains the values it read. Selecting another storage for a
+later run does not change an earlier result or mutate `os.environ`.
+The [application-code guide](How-To-User-Guides.md#use-settings-in-application-code)
+shows how to construct settings explicitly outside the CLI.
 
-Keep broadly reusable helpers near the package area that owns the domain. Keep
-one-off diagnostics in the nearest existing tooling, test, or experiment area.
+## Configuration files
 
-> [!NOTE]
-> Related: use [Development: source editing rules](Development.md#source-editing-rules)
-> for implementation rules that preserve these boundaries.
+The starter reads configuration layers in increasing priority: Python defaults,
+packaged defaults, selected storage's dotenv, explicit dotenv files, and process
+environment. A later value replaces an earlier value for the same key.
 
-<br>
+For example, `message` can be `Hello from {my_project}` in
+[`apprc.defaults.env`](../src/{my_project}/config/apprc.defaults.env), `work` in the
+storage dotenv, and `temporary` in the process environment. The application
+uses `temporary`. The [precedence example](EXAMPLES.md#an-invocation-override)
+shows this with commands. Provenance records which source supplied each field.
 
-# 3. Configuration And Dependency Model
+The AppRC directory defaults to `~/.local/share/{my_project}`.
+`{MY_PROJECT}_APPRC_DIR` relocates it. It contains the storage registry and, if
+user overrides are later enabled, `apprc.user.env`. It is separate from the
+installed Python package and can be separate from the storage directories.
+[References](References.md#configuration-files) lists the exact filenames.
 
-<!-- ======================================================== -->
-## Configuration Model
-<!-- ======================================================== -->
+## Storage
 
-`{my_project}` uses AppRC for application configuration. Put typed
-`rc.Config` declarations in `src/{my_project}/config/sections/`; the starter
-section is `app.py`. `config/bundle.py` assembles the top-level config object,
-and `config/catalog.py` imports declarations before AppRC builds CLI metadata.
-AppRC then provides these repeatable workflows:
+A storage is a directory for the application's persistent data. Its
+`apprc.storage.env` supplies settings specific to that directory. AppRC registers
+and manages the directory; application code writes its own data using the
+selected root path.
 
-- packaged defaults in `src/{my_project}/config/.env.shared`
-- optional multi-storage index selected by `{MY_PROJECT}_APPRC_TOML`
-- storage-local overrides in `<storage-root>/.env.apprc-storage`
-- shell and explicit dotenv overrides for one process
-- generated `config` CLI commands and the Textual editor
+The storage registry is `apprc.toml` in the AppRC directory. It maps names to
+paths and remembers a default. An invocation can select another name with
+`--storage NAME`, while `config storage select NAME` changes the saved default
+for later runs. [Switching storage](How-To-User-Guides.md#switch-storage) shows both.
 
-Keep new config fields in the AppRC `rc.Config` class before reading them from
-runtime code. That keeps defaults, docs metadata, CLI editing, and validation
-pointing at the same contract.
+The generated CLI explicitly requires selected storage for runtime commands.
+Help, setup, and diagnostics remain usable before setup. A
+[storage-only application](EXAMPLES.md#storage-only-application) is the starter's
+complete setup. The [user-preferences example](EXAMPLES.md#user-preferences-and-storage)
+adds a shared user layer beneath storage-specific settings.
 
-When configuration affects a user-visible workflow, update
-[How-To User Guides](How-To-User-Guides.md) and [References](References.md)
-together.
+## Configuration tools
 
-> [!NOTE]
-> Related: use [environment variables](References.md#environment-variables) for
-> exact variable names and [configuration files](References.md#configuration-files)
-> for file owners.
+`APP_RC.manage()` returns a `ConfigManager` that initializes files, inspects
+settings, plans edits, and manages storages. It provides the same operations to
+Python code and the interactive interfaces. Creating a manager does not write.
 
-<br>
+The config CLI is the `config` command group mounted on Typer. `config doctor`
+reports missing values and source problems; `config set` saves an override;
+`config edit` opens the Textual config editor. The
+[editing guide](How-To-User-Guides.md#edit-a-saved-setting) shows which file changes.
 
-<!-- ======================================================== -->
-## Dependency Model
-<!-- ======================================================== -->
+The config editor displays effective values and their contributing layers. It
+can edit saved user or storage overrides, but it does not rewrite packaged
+defaults or the parent shell's environment. Opening it writes nothing; setup and
+save are explicit actions. Terminal setup exists today. Toga and native installer
+integrations are future AppRC work and are not generated by this scaffold.
 
-The project separates dependency types by audience:
+## Config bundle
 
-| Dependency Type | Owner | Audience |
-|---|---|---|
-| Runtime dependency | `[project].dependencies` | Users who install the package. |
-| Optional extra | `[project.optional-dependencies]` | Users who opt into an optional runtime feature. |
-| Dependency group | `[dependency-groups]` | Maintainers who run tests, typing, linting, docs, or profiling. |
+A config bundle is a dataclass containing config sections. The starter's
+[`{MyProject}Config`](../src/{my_project}/config/bundle.py) contains one `app`
+section. Adding another section gives application code another named attribute
+without mixing unrelated settings into one class.
 
-This split keeps normal installs small while leaving maintainer workflows
-repeatable. AppRC is a runtime dependency because the generated command tree
-uses AppRC for dotenv layering, storage registry management, config editing,
-and logging setup.
+`@APP_RC.bundle` registers the dataclass. `resolved.build({MyProject}Config)`
+constructs its registered section factories from the same `ResolvedConfig`.
+The [two-section example](EXAMPLES.md#several-config-sections) shows the
+additional class and bundle field. Importing the bundle imports its sections;
+there is no separate config catalog.
 
-> [!NOTE]
-> Related links:
-> - Use [install the package](How-To-User-Guides.md#install-the-package) for install commands.
-> - Use [dependency surfaces](References.md#dependency-surfaces) for exact `pyproject.toml` sections.
+## Package layout and dependencies
 
-<br>
+Runtime source lives under `src/{my_project}`. Package initializers stay small;
+commands import the declaration and bundle directly from their modules. The
+[project paths](References.md#project-paths) table identifies each source file,
+and [Development](Development.md#repository-routing) explains where to add code.
 
-# 4. Failure Model
-
-Most failures become easier to debug when checked in this order:
-
-1. Confirm the current directory is the project root.
-2. Confirm the active Python executable.
-3. Confirm the package imports from `src/{my_project}` or the editable install.
-4. Confirm dependencies are installed for the workflow.
-5. Confirm the command is documented in [References](References.md).
-6. Re-run the smallest command that reproduces the problem.
-
-```bash
-pwd
-python -c "import sys; print(sys.executable)"
-python -c "import {my_project}; print({my_project}.__file__)"
-just --list
-```
-
-> [!NOTE]
-> Related links:
-> - Use [environment problems](How-To-User-Guides.md#environment-problems) for import and interpreter checks.
-> - Use [command problems](How-To-User-Guides.md#command-problems) when a recipe fails.
-> - Use [command reference](References.md#command-reference) for the expected command names.
+`apprc>=0.25.0,<0.26` provides configuration and the terminal dependencies.
+`apprc` installs the matching `apprc-core`; Typer is also a direct dependency
+because application code imports it. Test and maintainer tools belong to the
+`dev` dependency group. [Dependency declarations](References.md#dependency-declarations)
+state where to add each kind of requirement.

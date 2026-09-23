@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import argparse
 import importlib
-import importlib.metadata as metadata
 import importlib.resources
 import shutil
 import subprocess
 from dataclasses import dataclass
+from importlib import metadata
 
 PACKAGE_NAME = "{my_project}"
-REQUIRED_RESOURCES = ("config/.env.shared",)
+REQUIRED_RESOURCES = ("config/apprc.defaults.env",)
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,7 +96,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Smoke-test an installed distribution."
     )
-    parser.add_argument("--expected-version", help="Optional version to require.")
+    parser.add_argument(
+        "--expected-version", help="Optional version to require."
+    )
     return parser.parse_args(argv)
 
 
