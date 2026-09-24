@@ -2,14 +2,21 @@
 
 [Documentation](README.md) · [Explanations](Explanations.md) · [How-to user guides](How-To-User-Guides.md) · [Examples](EXAMPLES.md) · [Development](Development.md)
 
-- [Project paths](#project-paths)
-- [Command reference](#command-reference)
-- [Storage commands](#storage-commands)
-- [Environment variables](#environment-variables)
-- [Configuration files](#configuration-files)
-- [Public interfaces](#public-interfaces)
-- [Dependency declarations](#dependency-declarations)
-- [Figure visual tokens](#figure-visual-tokens)
+- [Project and commands](#project-and-commands)
+  - [Project paths](#project-paths)
+  - [Command reference](#command-reference)
+  - [Storage commands](#storage-commands)
+- [Configuration and Python interfaces](#configuration-and-python-interfaces)
+  - [Environment variables](#environment-variables)
+  - [Configuration files](#configuration-files)
+  - [Public interfaces](#public-interfaces)
+- [Development reference](#development-reference)
+  - [Dependency declarations](#dependency-declarations)
+  - [Figure visual tokens](#figure-visual-tokens)
+
+<br>
+
+# Project and commands
 
 ## Project paths
 
@@ -67,6 +74,10 @@ how that differs from changing the saved default.
 | `{my_project} config storage repoint NAME ROOT` | Reconnect a registration to a directory already at that path. |
 | `{my_project} config storage remove NAME` | Unregister the directory, leaving its data on disk. |
 
+<br>
+
+# Configuration and Python interfaces
+
 ## Environment variables
 
 | Name | Meaning |
@@ -107,6 +118,10 @@ Import config classes from these modules. The
 [application-code guide](How-To-User-Guides.md#use-settings-in-application-code)
 shows how `APP_RC.resolve()` and `ResolvedConfig.build()` construct them. The
 [two-section example](EXAMPLES.md#several-config-sections) extends the bundle.
+
+<br>
+
+# Development reference
 
 ## Dependency declarations
 

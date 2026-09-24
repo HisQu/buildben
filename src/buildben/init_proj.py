@@ -170,6 +170,9 @@ def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path
         "_tests-test_package.py.tmpl": project_root
         / "tests"
         / f"test_{name}_package.py",
+        "_tests-test_documentation.py.tmpl": project_root
+        / "tests"
+        / "test_documentation.py",
         "_README.IGNORE.md": project_root / "README.md",
         "_assets-flowchart.IGNORE.mmd": project_root
         / "assets"

@@ -670,6 +670,7 @@ def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> N
         "Development.md": "Development",
     }
     docs = bube_test_project / "docs"
+    assert (bube_test_project / "tests" / "test_documentation.py").is_file()
     ET.parse(docs / "assets" / "docs-reading-map.svg")
     for filename, label in labels.items():
         text = (docs / filename).read_text()
@@ -704,6 +705,37 @@ def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> N
             elif target.parent == docs and target.name in labels:
                 assert label == labels[target.name], (path, label, href)
     assert not errors, "\n".join(errors)
+
+
+@pytest.mark.parametrize("defect", ["group", "indent", "spacer"])
+def test_scaffolded_documentation_rejects_outline_errors(
+    bube_test_project: Path, defect: str
+) -> None:
+    """Prove generated CI rejects missing groups, nesting, and spacing.
+
+    :param bube_test_project: Disposable rendered project.
+    :param defect: One deliberate documentation-rule violation.
+    :return: None.
+    """
+    page = bube_test_project / "docs" / "README.md"
+    source = page.read_text(encoding="utf-8")
+    replacements = {
+        "group": ("# Find the right page\n", ""),
+        "indent": ("  - [Start here](#start-here)", "- [Start here](#start-here)"),
+        "spacer": ("<br>\n\n# Find the right page", "# Find the right page"),
+    }
+    original, broken = replacements[defect]
+    assert original in source
+    page.write_text(source.replace(original, broken, 1), encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "tests/test_documentation.py"],
+        cwd=bube_test_project,
+        env=_project_env(bube_test_project),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0, result.stdout + result.stderr
 
 
 @pytest.mark.skipif(
@@ -812,6 +844,7 @@ def test_buildben_wheel_includes_all_template_assets(tmp_path: Path) -> None:
     assert "buildben/_templates_proj/_CHANGELOG.md" in names
     assert "buildben/_templates_proj/_TODO.md" in names
     assert "buildben/_templates_proj/_src-cli-app.py.tmpl" in names
+    assert "buildben/_templates_proj/_tests-test_documentation.py.tmpl" in names
     assert "buildben/_templates_proj/_github-release.yml" in names
     assert "buildben/_templates_proj/_src-dev-packaging-release_notes.py.tmpl" in names
 

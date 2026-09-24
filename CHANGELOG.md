@@ -72,6 +72,9 @@ This project follows Semantic Versioning.
 
 ### 💔 Changed
 
+- Generated documentation now groups H2 sections under topical H1 headings.
+  Generated projects test their table-of-contents order and major-section
+  spacing during CI.
 - Generated documentation explains components before dependent tasks and links
   explanations, guides, and references at the relevant words. Documentation and
   AGENTS.md require fixed terminology, independent examples, and concrete prose.

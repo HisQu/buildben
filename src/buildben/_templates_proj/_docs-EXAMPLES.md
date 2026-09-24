@@ -2,14 +2,20 @@
 
 [Documentation](README.md) · [Explanations](Explanations.md) · [How-to user guides](How-To-User-Guides.md) · [References](References.md) · [Development](Development.md)
 
-- [Storage-only application](#storage-only-application)
-- [An invocation override](#an-invocation-override)
-- [User preferences and storage](#user-preferences-and-storage)
-- [Several config sections](#several-config-sections)
+- [Basic storage behavior](#basic-storage-behavior)
+  - [Storage-only application](#storage-only-application)
+  - [An invocation override](#an-invocation-override)
+- [Extend the setup](#extend-the-setup)
+  - [User preferences and storage](#user-preferences-and-storage)
+  - [Several config sections](#several-config-sections)
 
 These examples start from the installed generated project. Each states the
 files it changes and the result to expect. Use a disposable checkout when
 trying examples that replace Python modules.
+
+<br>
+
+# Basic storage behavior
 
 ## Storage-only application
 
@@ -50,6 +56,10 @@ The first show prints `One invocation`; the second prints `Saved value`.
 The environment value changes no file. The [configuration layers](Explanations.md#configuration-files)
 explain that precedence; the [editing guide](How-To-User-Guides.md#edit-a-saved-setting)
 shows how to make a persistent edit.
+
+<br>
+
+# Extend the setup
 
 ## User preferences and storage
 

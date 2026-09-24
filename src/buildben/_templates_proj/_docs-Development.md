@@ -2,13 +2,20 @@
 
 [Documentation](README.md) · [Explanations](Explanations.md) · [How-to user guides](How-To-User-Guides.md) · [References](References.md) · [Examples](EXAMPLES.md)
 
-- [Maintainer environment](#maintainer-environment)
-- [Repository routing](#repository-routing)
-- [Before editing](#before-editing)
-- [Documentation authoring](#documentation-authoring)
-- [Static figure rules](#static-figure-rules)
-- [Verification](#verification)
-- [Releases](#releases)
+- [Work in the project](#work-in-the-project)
+  - [Maintainer environment](#maintainer-environment)
+  - [Repository routing](#repository-routing)
+  - [Before editing](#before-editing)
+- [Document the project](#document-the-project)
+  - [Documentation authoring](#documentation-authoring)
+  - [Static figure rules](#static-figure-rules)
+- [Verify and release](#verify-and-release)
+  - [Verification](#verification)
+  - [Releases](#releases)
+
+<br>
+
+# Work in the project
 
 ## Maintainer environment
 
@@ -64,6 +71,10 @@ Update docs when setup, commands, APIs, environment variables, or saved file
 formats change. Record the final behavior in [CHANGELOG.md](../CHANGELOG.md),
 including affected users and migration instructions for breaking changes.
 
+<br>
+
+# Document the project
+
 ## Documentation authoring
 
 Follow the [documentation rules](README.md#documentation-rules) and
@@ -81,8 +92,11 @@ Give each guide its own prerequisites, complete files or clearly labeled
 excerpts, commands, and expected results. Give [Examples](EXAMPLES.md) complete
 application setups. Do not assume a reader ran an unrelated earlier example.
 
-Use a table of contents near the top of major documents and sentence-case
-headings. Use `<details>` for long examples. GitHub callouts have specific uses:
+The six `docs/` pages use topical H1 sections with H2 entries nested beneath
+them in the table of contents. Put a standalone `<br>` before each topical H1.
+The generated documentation test checks the hierarchy and spacing during
+`pytest`. Use sentence-case headings and `<details>` for long examples. GitHub
+callouts have specific uses:
 
 | Marker | Use |
 | --- | --- |
@@ -106,6 +120,10 @@ for outlines and edges. Use the existing Graphigs theme for colors and
 fonts. Explain what distinct visual treatments mean; do not give actions and
 components identical styling. Embed figures in a centered Markdown table with
 a numbered caption. Keep theme swatches in Graphigs rather than duplicating them.
+
+<br>
+
+# Verify and release
 
 ## Verification
 

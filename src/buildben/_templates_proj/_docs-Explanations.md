@@ -2,18 +2,25 @@
 
 [Documentation](README.md) · [How-to user guides](How-To-User-Guides.md) · [References](References.md) · [Examples](EXAMPLES.md) · [Development](Development.md)
 
-- [Command-line application](#command-line-application)
-- [AppRC](#apprc)
-- [Config sections](#config-sections)
-- [ResolvedConfig](#resolvedconfig)
-- [Configuration files](#configuration-files)
-- [Storage](#storage)
-- [Configuration tools](#configuration-tools)
-- [Config bundle](#config-bundle)
-- [Package layout and dependencies](#package-layout-and-dependencies)
+- [Application and settings](#application-and-settings)
+  - [Command-line application](#command-line-application)
+  - [AppRC](#apprc)
+  - [Config sections](#config-sections)
+  - [ResolvedConfig](#resolvedconfig)
+- [Files and storage](#files-and-storage)
+  - [Configuration files](#configuration-files)
+  - [Storage](#storage)
+- [Tools and package structure](#tools-and-package-structure)
+  - [Configuration tools](#configuration-tools)
+  - [Config bundle](#config-bundle)
+  - [Package layout and dependencies](#package-layout-and-dependencies)
 
 This page describes the generated application's components. As the application
 grows, explain each new component and connect it to these existing components.
+
+<br>
+
+# Application and settings
 
 ## Command-line application
 
@@ -70,6 +77,10 @@ later run does not change an earlier result or mutate `os.environ`.
 The [application-code guide](How-To-User-Guides.md#use-settings-in-application-code)
 shows how to construct settings explicitly outside the CLI.
 
+<br>
+
+# Files and storage
+
 ## Configuration files
 
 The starter reads configuration layers in increasing priority: Python defaults,
@@ -105,6 +116,10 @@ Help, setup, and diagnostics remain usable before setup. A
 [storage-only application](EXAMPLES.md#storage-only-application) is the starter's
 complete setup. The [user-preferences example](EXAMPLES.md#user-preferences-and-storage)
 adds a shared user layer beneath storage-specific settings.
+
+<br>
+
+# Tools and package structure
 
 ## Configuration tools
 

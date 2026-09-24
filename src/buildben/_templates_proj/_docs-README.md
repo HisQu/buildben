@@ -1,9 +1,15 @@
 # Documentation
 
-- [Start here](#start-here)
-- [Choose a document](#choose-a-document)
-- [Component names](#component-names)
-- [Documentation rules](#documentation-rules)
+- [Find the right page](#find-the-right-page)
+  - [Start here](#start-here)
+  - [Choose a document](#choose-a-document)
+- [Documentation conventions](#documentation-conventions)
+  - [Component names](#component-names)
+  - [Documentation rules](#documentation-rules)
+
+<br>
+
+# Find the right page
 
 ## Start here
 
@@ -27,6 +33,10 @@ components here as you implement them.
 | [References](References.md) | Look up exact commands, files, environment variables, and Python names. |
 | [Examples](EXAMPLES.md) | Compare complete setups and run them. |
 | [Development](Development.md) | Change source, verify behavior, and prepare releases. |
+
+<br>
+
+# Documentation conventions
 
 ## Component names
 
@@ -92,7 +102,15 @@ package descriptions. Contributors and coding agents must follow them.
 
 ### Review
 
-- Start major documents with a compact table of contents.
+- In the six pages in `docs/`, keep the document-title H1 above the table of
+  contents. Add topical H1 sections below it and put every H2 under one of them.
+  List each topical H1 at the top level of the table of contents and every H2
+  exactly once beneath its H1, in document order. The title does not need a
+  table-of-contents link; H3 headings may stay out of the compact list.
+- Put a standalone `<br>` before the first topical H1 and between later H1
+  sections. Do not add spacers between H2 sections. The root README, changelog,
+  and TODO keep their own heading layouts. The generated documentation test
+  checks this rule in CI.
 - Review prose for undefined terms, naming drift, unsupported claims, and lists
   that fail to explain relationships. Link checks cannot judge explanation quality.
 - Run the [verification commands](Development.md#verification) and the documented

@@ -40,7 +40,8 @@
 - Link relevant words inside paragraphs and tables to exact chapters. Connect explanations, implementations, and references in both directions.
 - Do not use generic further-reading lists or related-link callouts.
 - Give each guide explicit prerequisites, complete files or labeled excerpts, commands, and expected results. Keep examples independent.
-- Start major docs with a table of contents. Use sentence-case headings and GitHub callouts for their stated purposes.
+- In all six `docs/` pages, put every H2 under a topical H1. Nest every H2 under that H1 in the table of contents, and put a standalone `<br>` before each topical H1. The generated documentation test enforces this rule.
+- Use sentence-case headings and GitHub callouts for their stated purposes.
 - Preserve Graphigs figure standards and regenerate assets through their source builders.
 - Update CHANGELOG.md for user-visible changes. Add TODO.md entries only for actionable unresolved work, after checking for duplicates.
 

@@ -2,17 +2,24 @@
 
 [Documentation](README.md) · [Explanations](Explanations.md) · [References](References.md) · [Examples](EXAMPLES.md) · [Development](Development.md)
 
-- [Install the package](#install-the-package)
-- [Run the first command](#run-the-first-command)
-- [Initialize storage](#initialize-storage)
-- [Edit a saved setting](#edit-a-saved-setting)
-- [Switch storage](#switch-storage)
-- [Add a setting](#add-a-setting)
-- [Use settings in application code](#use-settings-in-application-code)
-- [Troubleshoot configuration](#troubleshoot-configuration)
+- [Install and start](#install-and-start)
+  - [Install the package](#install-the-package)
+  - [Run the first command](#run-the-first-command)
+- [Configure storage and settings](#configure-storage-and-settings)
+  - [Initialize storage](#initialize-storage)
+  - [Edit a saved setting](#edit-a-saved-setting)
+  - [Switch storage](#switch-storage)
+- [Extend and maintain configuration](#extend-and-maintain-configuration)
+  - [Add a setting](#add-a-setting)
+  - [Use settings in application code](#use-settings-in-application-code)
+  - [Troubleshoot configuration](#troubleshoot-configuration)
 
 Each guide states its starting point. Commands use the generated application
 name. Replace demonstration paths with your chosen directories for actual use.
+
+<br>
+
+# Install and start
 
 ## Install the package
 
@@ -44,6 +51,10 @@ python -m {my_project} --help
 Both help commands show the same Typer command tree. `version` prints the package
 version; `diagnose` reports package, interpreter, and AppRC paths. These commands
 work before [storage](Explanations.md#storage) is configured and create no files.
+
+<br>
+
+# Configure storage and settings
 
 ## Initialize storage
 
@@ -98,6 +109,10 @@ The explicit `--storage work` affects those invocations. `select work` then reco
 the saved default for later invocations. The [storage registry](Explanations.md#storage)
 holds both registrations. [References](References.md#storage-commands) distinguishes
 moving data, reconnecting a path, and unregistering a name.
+
+<br>
+
+# Extend and maintain configuration
 
 ## Add a setting
 
