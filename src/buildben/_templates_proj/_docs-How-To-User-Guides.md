@@ -3,7 +3,8 @@
 [Documentation](README.md) · [Explanations](Explanations.md) · [References](References.md) · [Examples](EXAMPLES.md) · [Development](Development.md)
 
 - [Install and start](#install-and-start)
-  - [Install the package](#install-the-package)
+  - [Install online](#install-online)
+  - [Install from a checkout](#install-from-a-checkout)
   - [Run the first command](#run-the-first-command)
 - [Configure storage and settings](#configure-storage-and-settings)
   - [Initialize storage](#initialize-storage)
@@ -21,25 +22,68 @@ name. Replace demonstration paths with your chosen directories for actual use.
 
 # Install and start
 
-## Install the package
+## Install online
 
-From the generated project root, use Python 3.12 or newer:
+The online installer works after the GitHub repository has been pushed. It
+installs from the `main` branch. Have GitHub CLI `gh` and Git installed and
+authenticated for this repository. If uv is missing, the installer asks before
+installing uv 0.12.18 permanently in the user's directory. The
+[installer reference](References.md#installer-reference) describes the modes
+and options.
+
+On Linux or macOS:
+
+```shell
+installer="$(gh api repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-linux-macos.sh -H 'Accept: application/vnd.github.raw+json')" && test -n "$installer" && bash -c "$installer"
+```
+
+On Windows PowerShell:
+
+```powershell
+if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'GitHub CLI gh is required.' }; $installer = gh api repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-windows.ps1 -H 'Accept: application/vnd.github.raw+json'; if ($LASTEXITCODE -ne 0 -or $null -eq $installer -or @($installer).Count -eq 0 -or [string]::IsNullOrWhiteSpace(($installer -join "`n"))) { throw 'Could not download the installer.' }; Invoke-Expression ($installer -join "`n")
+```
+
+## Install from a checkout
+
+From the project directory, install with Python 3.12 or newer. This workflow
+uses a virtual environment and pip and does not require uv:
 
 ```shell
 python -m venv .venv
 .venv/bin/python -m pip install -e .
 ```
 
-On Windows use `.venv\Scripts\python.exe`. Activate the environment to run the
-console commands below, or call `.venv/bin/{my_project}` directly. No `uv` command
-is required. Installation requires `apprc>=0.25.0,<0.26`. PyPI provides AppRC
-0.25.1 and its matching `apprc-core`, which the generated install command resolves.
-The [dependency reference](References.md#dependency-declarations) explains the
-runtime and maintainer requirements.
+On Windows, use PowerShell:
+
+```powershell
+& '.\.venv\Scripts\python.exe' -m pip install -e .
+```
+
+Activate the environment to run the console commands below, or call
+`.venv/bin/{my_project}` on Linux or macOS and
+`& '.\.venv\Scripts\{my_project}.exe'` on Windows. Installation requires
+`apprc>=0.25.0,<0.26`; the install command
+resolves it and its dependencies from PyPI. The
+[dependency reference](References.md#dependency-declarations) lists runtime
+and maintainer requirements.
+
+uv is optional. Run `uv sync` if you use it, or use the checkout installer to
+synchronize with uv:
+
+```shell
+./install-linux-macos.sh --dev .
+```
+
+```powershell
+& '.\install-windows.cmd' --dev .
+```
+
+When the installer does not find uv, it asks before installing the pinned
+version. The pip workflow above remains available without uv.
 
 ## Run the first command
 
-After [installation](#install-the-package), run:
+After [installation](#install-from-a-checkout) or an [online install](#install-online), run:
 
 ```shell
 {my_project} --help

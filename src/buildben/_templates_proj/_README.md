@@ -94,26 +94,78 @@ persistent data. AppRC supplies configuration commands and a terminal editor.
 ## Table of contents
 
 - [Installation](#installation)
+  - [Install online](#install-online)
+  - [Install from a checkout](#install-from-a-checkout)
 - [Usage](#usage)
 - [Development](#development)
 - [Documentation](#documentation)
 
 ## Installation
 
-Use Python 3.12 or newer. From this checkout:
+Use Python 3.12 or newer.
+
+### Install online
+
+These commands work only after this repository has been pushed to GitHub. They
+fetch the installer through GitHub CLI `gh`; the installer downloads the
+project from `main`. Have `gh` and Git installed. For a private repository, both
+must already have access. If uv is missing, the installer installs version
+0.12.18 permanently under your user directory.
+
+```shell
+installer="$(gh api repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-linux-macos.sh -H 'Accept: application/vnd.github.raw+json')" && test -n "$installer" && bash -c "$installer"
+```
+
+On Windows PowerShell:
+
+```powershell
+if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'GitHub CLI gh is required.' }; $installer = gh api repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-windows.ps1 -H 'Accept: application/vnd.github.raw+json'; if ($LASTEXITCODE -ne 0 -or $null -eq $installer -or @($installer).Count -eq 0 -or [string]::IsNullOrWhiteSpace(($installer -join "`n"))) { throw 'Could not download the installer.' }; Invoke-Expression ($installer -join "`n")
+```
+
+### Install from a checkout
+
+Clone the repository and install it with Python and pip. This workflow does not
+require uv:
+
+```shell
+git clone https://github.com/<github_username>/<my_project>.git
+cd <my_project>
+```
+
+On Linux or macOS:
 
 ```shell
 python -m venv .venv
 .venv/bin/python -m pip install -e .
+.venv/bin/{my_project} config setup
 .venv/bin/{my_project} --help
 ```
 
-On Windows use `.venv\Scripts\python.exe` and `.venv\Scripts\{my_project}.exe`.
-Activate the environment for the commands below. The application requires
-`apprc>=0.25.0,<0.26`. AppRC 0.25.1 and its matching `apprc-core` are available
-on PyPI, so the install command resolves them automatically. The
-[installation guide](docs/How-To-User-Guides.md#install-the-package) explains the
-environment setup.
+On Windows, use these commands in PowerShell:
+
+```powershell
+py -m venv .venv
+& '.\.venv\Scripts\python.exe' -m pip install -e .
+& '.\.venv\Scripts\{my_project}.exe' config setup
+& '.\.venv\Scripts\{my_project}.exe' --help
+```
+
+uv is optional. Run `uv sync` if you use it. The root checkout shortcuts also
+accept `--dev` to sync an existing checkout; if uv is missing, they ask before
+installing the pinned version. The
+[installation guide](docs/How-To-User-Guides.md#install-online) covers both
+workflows.
+
+<!--
+Future agents: Keep this offline bundle placeholder in the README. Do not remove
+the comment. Activate the section only after this repository has a working
+bundle production process that creates and tests the complete offline files.
+
+### Offline bundle
+
+Install from a produced offline bundle here. Describe its contents, supported
+platforms, and command only after bundle production exists.
+-->
 
 ## Usage
 

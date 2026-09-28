@@ -45,6 +45,16 @@
 - Preserve Graphigs figure standards and regenerate assets through their source builders.
 - Update CHANGELOG.md for user-visible changes. Add TODO.md entries only for actionable unresolved work, after checking for duplicates.
 
+## Installation rules
+- Keep the root README concise and installation-first. Under `Installation`, use the H3 headings `Install online` and `Install from a checkout`.
+- Online one-liners work only after the GitHub repository has been pushed. Fetch scripts with authenticated `gh api` so private repositories work when existing credentials allow it. Require GitHub CLI `gh` and Git access, and do not add an authentication tutorial.
+- Make a failed or empty installer fetch stop before execution. Bash examples must guard `bash -c` with a successful, nonempty `gh api` command substitution; PowerShell examples must check `$LASTEXITCODE` and reject empty content before `Invoke-Expression`.
+- The checkout instructions use `python -m venv` and `python -m pip install -e .`. They must work without uv. Mention uv only as an optional workflow.
+- Keep the offline bundle placeholder in the README as an HTML comment. Do not remove or activate it until this repository has a bundle production process that creates and tests the offline files.
+- Do not claim offline bundles are available before that process exists, and do not add generic upgrade warnings.
+- Keep installer implementation in `src/<my_project>_dev/distribution`. Root `install-linux-macos.sh` and `install-windows.cmd` files are thin shortcuts. Update the canonical scripts and their shortcuts together when paths or options change.
+- The installers support online Git, checkout `--dev`, and local wheel modes. Wheel mode must use local uv and local files only, with Python downloads, package index access, and source builds disabled. Do not make it bootstrap uv or access the network.
+
 ## Verification
 - Review the diff for duplicate helpers, naming drift, unnecessary abstractions, and regressions.
 - Run the project’s relevant lint, type-check, and test commands before considering the task done.

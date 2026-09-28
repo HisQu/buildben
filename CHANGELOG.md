@@ -50,6 +50,9 @@ This project follows Semantic Versioning.
 
 ### ➕ Added
 
+- Generated projects now include online, checkout, and local wheel installers
+  with generated README instructions and an inactive offline bundle placeholder.
+
 <br>
 
 ### 💔 Changed
