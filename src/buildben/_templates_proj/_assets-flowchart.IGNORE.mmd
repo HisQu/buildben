@@ -1,138 +1,96 @@
 ---
 config:
-    title: Docker Container Architecture
-    theme: base
-    themeVariables:
-        fontSize: 20px
-        
-        # Nodes
-        primaryTextColor: "#000000"      # Black
-        primaryColor: "#999999"          # Grey
-        primaryBorderColor: "#00000099"  # Black transparent
-        
-        # Links
-        lineColor: "#0e467bee"        # Dark Blue transparent
-        secondaryColor: "#0e467b03"   # Dark Blue transparent
-        
-        # Subgraphs
-        tertiaryTextColor: "#ffffff"  # White
-        tertiaryColor: "#99999999"    # Grey transparent
-        tertiaryBorderColor: "#00000000" # Fully transparent
+  title: "{my_project} flowchart"
+  theme: base
+  themeVariables:
+    fontSize: 20px
+    primaryTextColor: "#000000"
+    primaryColor: "#cccccc77"
+    primaryBorderColor: "#666666"
+    lineColor: "#00A2FF"
+    secondaryColor: "#00A2FF19"
+    tertiaryTextColor: "#000000"
+    tertiaryColor: "#44444419"
+    tertiaryBorderColor: "#00000000"
 ---
 
-%% => Only Nodes have borders, 
-%% => Subgraphs are transparent and borderless
-%% => Subgraph color is the same as node fill color with opacity
-%% =>   (append 70 or 90 to hex color, the lower, the more transparent)
-%% => stroke widths must be set in classes at the end
+%% Node borders show ownership. Group fills show boundaries.
+%% Set link and class styles after declaring the links and nodes.
 
 flowchart TB
 
-    
-    %%## System Dependencies
-    subgraph Dependencies
-        django["Django"]
-        mysqlclient["mysqlclient, pkg-config, libmariadb-dev"]
+    subgraph Dependencies[Dependencies]
+        auth["Authentication library"]
+        client["Service client"]
     end
-    
-    %%## Container installed by Docker-Services
-    subgraph Docker-Services
 
-    
-        %%##Volumes
-        subgraph SharedVolumes
-            images[("images")]
-        end
-
-        
-        %%## Docker services
-        subgraph Frontend
+    subgraph {MyProject}System["{my_project} system"]
+        subgraph RuntimeServices[Runtime services]
             direction LR
-            wikibase["wikibase"]
-            mediawiki["mediawiki"]
-            jobrunner["wikibase-jobrunner"]
+            api["Application API"]
+            worker["Background worker"]
+            scheduler["Scheduler"]
         end
 
-        subgraph Databases
-            db_wb[("db_wb")]
-            db_mw[("db_mw")]
+        subgraph DataStores[Data stores]
+            records[("Records")]
+            cache[("Cache")]
         end
 
-        subgraph Backend
-            holyapp["holyapp"]
+        subgraph SharedStorage[Shared storage]
+            files[("Files")]
         end
 
-        subgraph WebUI-Tools
-            adminer["Adminer"]
-            WDQS["WDQS"]
+        subgraph Operations[Operations tools]
+            monitor["Monitor"]
+            admin["Admin tool"]
         end
     end
 
-    subgraph ExternalVolumes
-        dbvolume[("dbvolume")]
-        db_wb_volume[("db_wb_volume")]
+    subgraph ExternalServices[External services]
+        identity["Identity provider"]
+        partner["Partner API"]
     end
-    
-    wikibase["wikibase"]
-    mediawiki["mediawiki"]
-    jobrunner["wikibase-jobrunner"]
 
+    request["Request"]
+    response(["Response"])
+    archive[("Backup archive")]
 
+    request --> api
+    auth -. validates .-> api
+    api --> worker
+    worker -.-> scheduler
+    api <--> records
+    worker --> cache
+    worker -. writes .-> files
+    scheduler -. archives .-> archive
+    api -. identity .-> identity
+    client -. calls .-> api
+    api <-- response --> partner
+    monitor -. inspects .-> worker
+    admin -. manages .-> DataStores
+    api --> response
 
-    %% === Links ======================================================
-    
-    mediawiki --> db_mw
-    wikibase --> db_wb
-    
-    jobrunner -.-> wikibase 
-    
-    holyapp -. maintain .-> Databases
-    
-    holyapp <-- HTML views --> mediawiki
-    holyapp <-- API --> wikibase
-    django -.-> holyapp
-    mysqlclient -.-> holyapp
-    
-    WDQS -. query .-> db_wb
-    adminer -. inspect .-> Databases
-    
-    %% db_wb_volume -- bind mount --o db_wb
-    %% dbvolume -- bind mount --o db_mw
-    
-    db_mw --o dbvolume
-    db_wb --o db_wb_volume
-    
-    %% Shared volumes
-    %% mediawiki --o SharedVolumes
-    %% wikibase --o SharedVolumes
-    %% holyapp --o SharedVolumes
-    
-    %% === Styles ======================================================
-    
-    %% ## Links
-    %% !! Must be at end, otherwise it will not work
+    %% Links
+    %% Indexes follow the links above, starting at zero.
+    linkStyle default stroke-width:2px
+    linkStyle 1,3,6,7,9 stroke-dasharray:4,3
+    linkStyle 4 stroke:#00A2FF,stroke-width:3px
 
-    %% > Default
-    linkStyle default stroke-width:4px, color:#ffffff, font-size:17px, font-style:italic;
-    
-    %% > Select links by Index
-    linkStyle 10,11 stroke: #7eb8f0
+    %% Node styles
+    %% Set node and link widths in styles at the end of the diagram.
+    classDef service fill:#cccccc77,stroke:#666666,stroke-width:2px
+    classDef dependency fill:#00A2FF19,stroke:#00A2FF,stroke-width:2px
+    classDef infrastructure fill:#44444419,stroke:#666666,stroke-width:2px
+    classDef output fill:#32bc0019,stroke:#32bc00ff,stroke-width:2px
+    class api,worker,scheduler,request service
+    class auth,client,identity,partner dependency
+    class records,cache,files,archive,monitor,admin infrastructure
+    class response output
 
-
-    %% ## Node styles (primary color
-    classDef docker fill: #7eb8f0,  stroke-width:2px;
-    classDef dependency stroke-width:2px;
-    classDef flow_docker fill: #7eb8f0, stroke-width:2px;
-    
-    %% > Assign class to nodes
-    class adminer,WDQS,jobrunner,mediawiki,holyapp,db_mw,db_wb,images,wikibase,dbvolume,db_wb_volume docker;
-    class django,mysqlclient dependency;
-
-
-
-    %% ## Subgraph styles (tertiary)
-    classDef subgraph_default stroke-width:2px;
-    classDef subgraph_blue fill: #7eb8f070, stroke-width:0px;
-    
-    class Dependencies,ExternalVolumes subgraph_default;
-    class Docker-Services,Frontend,Databases,Backend,WebUI-Tools,SharedVolumes subgraph_blue;
+    %% Group styles
+    %% Subgraphs stay borderless unless their boundary carries meaning.
+    classDef subgraph_default fill:#00000000,stroke:#666666,stroke-width:1px
+    classDef subgraph_project fill:#00A2FF19,stroke:#00000000,stroke-width:0px
+    class Dependencies,ExternalServices subgraph_default
+    class {MyProject}System,RuntimeServices,DataStores,SharedStorage,Operations subgraph_project

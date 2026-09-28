@@ -205,17 +205,17 @@ open the terminal editor. The generated docs and `AGENTS.md` require consistent
 component names and links inside the paragraphs and tables where they are useful.
 
 > [!IMPORTANT]
-> Generated projects now require `apprc>=0.25.0,<0.26`. AppRC 0.25 is prepared
-> locally; until it is published, install locally built `apprc_core` and `apprc`
-> wheels before installing a generated project. Buildben itself still has no
-> runtime dependencies. Existing projects are not rewritten automatically.
+> Generated projects require `apprc>=0.25.0,<0.26`. AppRC 0.25.1 and its matching
+> `apprc-core` are available on PyPI, and the generated install command resolves
+> them from there. Buildben itself still has no runtime dependencies. Existing
+> projects are not rewritten automatically.
 
-To verify a scaffold migration against local AppRC artifacts, install both
-wheels into Buildben's development environment. Set `APPRC_ARTIFACTS` to that
-wheel directory, then run `UV_FIND_LINKS="$APPRC_ARTIFACTS" .venv/bin/pytest`.
-The generated project's lock test uses these artifacts before PyPI has 0.25.0.
-Without AppRC installed, the optional generated-runtime checks are skipped;
-such a run does not verify compatibility with AppRC.
+To verify generated projects with the published version, install
+`apprc>=0.25.0,<0.26` in Buildben's development environment before running tests.
+For unreleased AppRC changes, install both locally built `apprc-core` and `apprc`
+wheels, set `APPRC_ARTIFACTS` to their directory, and run
+`UV_FIND_LINKS="$APPRC_ARTIFACTS" .venv/bin/pytest`. Without a compatible AppRC
+installation, generated-runtime checks are skipped.
 
 #### Create virtual environment (``/.direnv``):
 
@@ -386,6 +386,11 @@ just figures
 # or run one colocated renderer:
 uv run --locked python assets/figures/diagram_graphviz.py
 ```
+
+New project scaffolds copy flowchart and class diagram starters from Graphigs.
+After installing Graphigs in the maintainer environment, refresh the snapshots
+with `PYTHONPATH=src python -m buildben_dev.sync_mermaid_templates`. Add
+`--check` to report stale snapshots without writing files.
 <br>
 
 

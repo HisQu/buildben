@@ -109,10 +109,11 @@ python -m venv .venv
 ```
 
 On Windows use `.venv\Scripts\python.exe` and `.venv\Scripts\{my_project}.exe`.
-Activate the environment for the commands below. The application requires AppRC
-0.25.x. Before that release is published, install the locally built `apprc_core`
-and `apprc` wheels first. The [installation guide](docs/How-To-User-Guides.md#install-the-package)
-explains the environment setup.
+Activate the environment for the commands below. The application requires
+`apprc>=0.25.0,<0.26`. AppRC 0.25.1 and its matching `apprc-core` are available
+on PyPI, so the install command resolves them automatically. The
+[installation guide](docs/How-To-User-Guides.md#install-the-package) explains the
+environment setup.
 
 ## Usage
 

@@ -42,7 +42,7 @@ def sample_changelog(
 
 # [Unreleased]
 
-### 💥 Breaking Change Summary
+### 💥 Breaking changes
 
 ### ➕ Added
 

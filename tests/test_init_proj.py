@@ -150,7 +150,7 @@ def _runtime_command(project_root: Path, *arguments: str) -> str:
 
 @pytest.mark.skipif(
     importlib.util.find_spec("apprc") is None,
-    reason="Install the local AppRC 0.25 wheels to verify generated runtime behavior.",
+    reason="Install AppRC >=0.25.0,<0.26 to verify generated runtime behavior.",
 )
 def test_scaffolded_project_runs_apprc_configuration(bube_test_project: Path) -> None:
     """Exercise setup, storage edits, precedence, and named storage selection."""
@@ -199,7 +199,7 @@ def test_scaffolded_project_runs_apprc_configuration(bube_test_project: Path) ->
 
 @pytest.mark.skipif(
     importlib.util.find_spec("apprc") is None,
-    reason="Install the local AppRC wheels to type-check a generated consumer.",
+    reason="Install AppRC >=0.25.0,<0.26 to type-check a generated consumer.",
 )
 def test_generated_python_passes_quality_checks(bube_test_project: Path) -> None:
     """Check generated imports and downstream use of AppRC's public types."""
@@ -707,6 +707,28 @@ def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> N
     assert not errors, "\n".join(errors)
 
 
+def test_scaffolded_project_includes_project_neutral_mermaid_templates(
+    bube_test_project: Path,
+) -> None:
+    """Check generated Mermaid assets substitute project names and stay ignored.
+
+    :param bube_test_project: Project generated for this test.
+    :return: None.
+    """
+    assets = bube_test_project / "assets"
+    flowchart = (assets / "flowchart.IGNORE.mmd").read_text(encoding="utf-8")
+    class_diagram = (assets / "classdiagram.IGNORE.mmd").read_text(encoding="utf-8")
+    gitignore = (bube_test_project / ".gitignore").read_text(encoding="utf-8")
+
+    assert "bube_test_tmp" in flowchart
+    assert "BubeTestTmp" in class_diagram
+    assert "{my_project}" not in flowchart + class_diagram
+    assert "{MyProject}" not in flowchart + class_diagram
+    assert "Docker" not in flowchart + class_diagram
+    assert "LLM" not in flowchart + class_diagram
+    assert "*.IGNORE*" in gitignore
+
+
 @pytest.mark.parametrize("defect", ["group", "indent", "spacer"])
 def test_scaffolded_documentation_rejects_outline_errors(
     bube_test_project: Path, defect: str
@@ -740,7 +762,7 @@ def test_scaffolded_documentation_rejects_outline_errors(
 
 @pytest.mark.skipif(
     importlib.util.find_spec("apprc") is None,
-    reason="Install the local AppRC 0.25 wheels to execute the generated documentation.",
+    reason="Install AppRC >=0.25.0,<0.26 to execute the generated documentation.",
 )
 @pytest.mark.parametrize(
     "title", ["User preferences and storage", "Several config sections"]
@@ -843,6 +865,8 @@ def test_buildben_wheel_includes_all_template_assets(tmp_path: Path) -> None:
     assert "buildben/_templates_experim/_run.py.tmpl" in names
     assert "buildben/_templates_proj/_CHANGELOG.md" in names
     assert "buildben/_templates_proj/_TODO.md" in names
+    assert "buildben/_templates_proj/_assets-flowchart.IGNORE.mmd" in names
+    assert "buildben/_templates_proj/_assets-classdiagram.IGNORE.mmd" in names
     assert "buildben/_templates_proj/_src-cli-app.py.tmpl" in names
     assert "buildben/_templates_proj/_tests-test_documentation.py.tmpl" in names
     assert "buildben/_templates_proj/_github-release.yml" in names

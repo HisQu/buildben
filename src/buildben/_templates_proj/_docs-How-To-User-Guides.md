@@ -32,8 +32,8 @@ python -m venv .venv
 
 On Windows use `.venv\Scripts\python.exe`. Activate the environment to run the
 console commands below, or call `.venv/bin/{my_project}` directly. No `uv` command
-is required. Installation requires AppRC 0.25.x; when testing before its release,
-install the locally built `apprc_core` and `apprc` wheels in this environment first.
+is required. Installation requires `apprc>=0.25.0,<0.26`. PyPI provides AppRC
+0.25.1 and its matching `apprc-core`, which the generated install command resolves.
 The [dependency reference](References.md#dependency-declarations) explains the
 runtime and maintainer requirements.
 

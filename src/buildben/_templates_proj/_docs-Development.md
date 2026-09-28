@@ -53,6 +53,10 @@ python -m pip install -e ".[rag]" --group dev
 | Documentation | `docs` |
 | Release and build helpers | `src/{my_project}_dev/packaging` |
 | Static assets | `assets` or `docs/assets` |
+| Mermaid starters | `assets/flowchart.IGNORE.mmd` and `assets/classdiagram.IGNORE.mmd` |
+
+Buildben ignores the starter diagrams because their filenames contain
+`.IGNORE.mmd`. Rename a diagram when you are ready to track and edit it.
 
 The [project paths](References.md#project-paths) table links to existing owners.
 Ask before adding a top-level directory when one of these locations fits.
