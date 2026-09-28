@@ -83,6 +83,7 @@ def _project_directories(project_root: Path, name: str) -> list[Path]:
         project_root / ".github" / "workflows_inactive",
         project_root / "src" / name,
         project_root / "src" / f"{name}_dev" / "packaging",
+        project_root / "src" / f"{name}_dev" / "distribution",
         project_root / "src" / name / "cli",
         project_root / "src" / name / "config",
         project_root / "src" / name / "config" / "sections",
@@ -167,6 +168,28 @@ def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path
         / f"{name}_dev"
         / "packaging"
         / "install_smoke.py",
+        "_src-dev-distribution-install-linux-macos.sh": project_root
+        / "src"
+        / f"{name}_dev"
+        / "distribution"
+        / "install-linux-macos.sh",
+        "_src-dev-distribution-install-windows.ps1": project_root
+        / "src"
+        / f"{name}_dev"
+        / "distribution"
+        / "install-windows.ps1",
+        "_src-dev-distribution-install-windows.cmd": project_root
+        / "src"
+        / f"{name}_dev"
+        / "distribution"
+        / "install-windows.cmd",
+        "_src-dev-distribution-prepare-powershell-windows.cmd": project_root
+        / "src"
+        / f"{name}_dev"
+        / "distribution"
+        / "prepare-powershell-windows.cmd",
+        "_install-linux-macos.sh": project_root / "install-linux-macos.sh",
+        "_install-windows.cmd": project_root / "install-windows.cmd",
         "_tests-test_package.py.tmpl": project_root
         / "tests"
         / f"test_{name}_package.py",
@@ -249,6 +272,7 @@ def _create_init_files(project_root: Path, name: str) -> None:
     utils.create_init_dot_py(package_root)
     utils.create_init_dot_py(project_root / "src" / f"{name}_dev")
     utils.create_init_dot_py(project_root / "src" / f"{name}_dev" / "packaging")
+    utils.create_init_dot_py(project_root / "src" / f"{name}_dev" / "distribution")
     utils.create_init_dot_py(package_root / "cli", imports=["app"])
     utils.create_init_dot_py(
         package_root / "utils",

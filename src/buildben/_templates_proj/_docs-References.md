@@ -5,6 +5,7 @@
 - [Project and commands](#project-and-commands)
   - [Project paths](#project-paths)
   - [Command reference](#command-reference)
+  - [Installer reference](#installer-reference)
   - [Storage commands](#storage-commands)
 - [Configuration and Python interfaces](#configuration-and-python-interfaces)
   - [Environment variables](#environment-variables)
@@ -32,13 +33,16 @@
 | [config/app.py](../src/{my_project}/config/app.py) | The shared [AppRC](Explanations.md#apprc) declaration. |
 | [config/sections/app.py](../src/{my_project}/config/sections/app.py) | The `AppSettings` [config section](Explanations.md#config-sections). |
 | [config/bundle.py](../src/{my_project}/config/bundle.py) | The application's [config bundle](Explanations.md#config-bundle). |
+| [distribution](../src/{my_project}_dev/distribution) | Canonical [installer scripts](#installer-reference). |
+| [install-linux-macos.sh](../install-linux-macos.sh) | Root shortcut to the canonical Unix installer. |
+| [install-windows.cmd](../install-windows.cmd) | Double-click entry point and root shortcut to the canonical Windows installer. |
 | [tests](../tests) | Automated checks. |
 | [examples](../examples) | Small user-facing programs, described in [Examples](EXAMPLES.md). |
 | [docs](.) | Documentation, following the [authoring rules](README.md#documentation-rules). |
 
 ## Command reference
 
-Run these commands in the [installed environment](How-To-User-Guides.md#install-the-package).
+Run these commands in the [installed environment](How-To-User-Guides.md#install-from-a-checkout).
 Configuration commands use the AppRC directory selected by `{MY_PROJECT}_APPRC_DIR`.
 
 | Command | Result |
@@ -57,6 +61,42 @@ Configuration commands use the AppRC directory selected by `{MY_PROJECT}_APPRC_D
 `config show --json` contains `package`, `version`, `storage_name`, `storage_root`,
 `storage_count`, and `config`. `config` holds the `AppSettings` fields. This shape
 is defined by `_config_show_payload` in the application's CLI module.
+
+## Installer reference
+
+The canonical scripts live in `src/{my_project}_dev/distribution`. The root
+[`install-linux-macos.sh`](../install-linux-macos.sh) and
+[`install-windows.cmd`](../install-windows.cmd) files only forward arguments to
+those scripts. The Windows CMD entry point runs a PowerShell policy preflight
+before starting its installer.
+
+| Script | Platform and role |
+| --- | --- |
+| `install-linux-macos.sh` | Bash installer for Linux and macOS. |
+| `install-windows.cmd` | Windows entry point, including double-click support. |
+| `install-windows.ps1` | Windows installer implementation. |
+| `prepare-powershell-windows.cmd` | Handles RemoteSigned policy and downloaded-file marks for the Windows entry point. |
+
+Both installers accept these modes:
+
+| Option | Effect |
+| --- | --- |
+| `--git` | Install the `main` branch from Git. |
+| `--dev [PATH]` | Run `uv sync` in an existing checkout; `PATH` defaults to the current directory. |
+| `--wheel [PATH]` | Install from a local wheel and wheelhouse. Without `PATH`, exactly one matching application wheel must be beside the installer or in its `wheels` directory. |
+| `--version VERSION` | Install a Git tag, adding a leading `v` when needed. |
+| `--uv PATH` | Use a specific uv executable. |
+| `--yes` | Skip the installer confirmation. |
+| `--skip-config` | Skip `{my_project} config setup` after installation. |
+| `--help` | Print the supported options. |
+
+With no mode, the installer selects a local wheel only when it finds exactly
+one matching application wheel. In every other case it selects Git. Wheel mode
+is offline: it requires local uv, an existing Python 3.12 or 3.13 interpreter,
+and a wheelhouse containing the application and its dependencies. It disables
+package indexes, Python downloads, and source builds. Git and development modes
+can install uv 0.12.18 permanently in the user's directory if no uv
+executable is available.
 
 ## Storage commands
 

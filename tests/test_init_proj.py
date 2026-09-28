@@ -64,6 +64,26 @@ def _project_env(project_root: Path) -> dict[str, str]:
     return env
 
 
+def _fake_uv_script(tmp_path: Path) -> Path:
+    """Write a uv stand-in that records commands without accessing the network.
+
+    :param tmp_path: Temporary directory that owns the fake executable.
+    :return: Executable path for the generated installer.
+    """
+    fake_uv = tmp_path / "fake-uv"
+    fake_uv.write_text(
+        "#!/bin/sh\n"
+        'printf \'%s\\n\' "$*" >> "$INSTALLER_TEST_UV_LOG"\n'
+        "if [ \"${1:-}\" = --version ]; then printf 'uv fake\\n'; fi\n"
+        'if [ "${1:-}" = python ] && [ "${2:-}" = find ]; then\n'
+        "  printf '%s\\n' \"$INSTALLER_TEST_PYTHON\"\n"
+        "fi\n",
+        encoding="utf-8",
+    )
+    fake_uv.chmod(0o755)
+    return fake_uv
+
+
 def _assert_release_banner(recipe: str) -> None:
     """Protect the established visual treatment of prepared releases.
 
@@ -127,6 +147,202 @@ def test_scaffolded_project_runs_pytest(bube_test_project: Path) -> None:
         env=_project_env(proot),
     )
     _run([sys.executable, "-m", "pytest", "-q"], cwd=proot, env=_project_env(proot))
+
+
+def test_scaffolded_project_includes_installers(bube_test_project: Path) -> None:
+    """Assert generated installer paths, project values, and README rules."""
+    proot = bube_test_project
+    distribution = proot / "src" / "bube_test_tmp_dev" / "distribution"
+    bash_installer = distribution / "install-linux-macos.sh"
+    powershell_installer = distribution / "install-windows.ps1"
+    windows_entrypoint = distribution / "install-windows.cmd"
+    preflight = distribution / "prepare-powershell-windows.cmd"
+
+    for path in (bash_installer, powershell_installer, windows_entrypoint, preflight):
+        assert path.is_file(), path
+
+    bash_text = bash_installer.read_text(encoding="utf-8")
+    powershell_text = powershell_installer.read_text(encoding="utf-8")
+    root_bash = (proot / "install-linux-macos.sh").read_text(encoding="utf-8")
+    root_windows = (proot / "install-windows.cmd").read_text(encoding="utf-8")
+    windows_text = windows_entrypoint.read_text(encoding="utf-8")
+    preflight_text = preflight.read_text(encoding="utf-8")
+    for text in (
+        bash_text,
+        powershell_text,
+        windows_text,
+        preflight_text,
+        root_bash,
+        root_windows,
+    ):
+        assert "<my_project>" not in text
+        assert "<github_username>" not in text
+        assert "<MY_PROJECT>" not in text
+
+    assert "https://github.com/github-user/bube_test_tmp.git" in bash_text
+    assert "https://github.com/github-user/bube_test_tmp.git" in powershell_text
+
+    for text in (bash_text, powershell_text):
+        assert "--no-python-downloads" in text
+        assert "--offline" in text
+        assert "--no-index" in text
+        assert "--no-build" in text
+
+    assert "uv sync" in bash_text
+    assert "uv sync" in powershell_text
+    assert 'UV_VERSION="0.12.18"' in bash_text
+    assert '$UvVersion = "0.12.18"' in powershell_text
+    assert "RemoteSigned" in preflight_text
+
+    assert "src/bube_test_tmp_dev/distribution/install-linux-macos.sh" in root_bash
+    assert "src\\bube_test_tmp_dev\\distribution\\install-windows.cmd" in root_windows
+
+    readme = (proot / "README.md").read_text(encoding="utf-8")
+    assert "# `bube_test_tmp`: A Template" in readme
+    assert "[![uv]" in readme
+    assert "Graphical Abstract goes here:" in readme
+    assert "## Table of contents" in readme
+    assert "[Install online](#install-online)" in readme
+    assert "[Install from a checkout](#install-from-a-checkout)" in readme
+    assert "<my_project>" not in readme
+    assert "<github_username>" not in readme
+    assert "### Install online" in readme
+    assert "### Install from a checkout" in readme
+    assert "only after this repository has been pushed" in readme
+    assert "gh api repos/github-user/bube_test_tmp/contents/" in readme
+    assert '&& test -n "$installer" && bash -c "$installer"' in readme
+    assert "$LASTEXITCODE -ne 0" in readme
+    assert "Get-Command gh -ErrorAction SilentlyContinue" in readme
+    assert "python -m venv .venv" in readme
+    assert "python -m pip install -e ." in readme
+    assert r"& '.\.venv\Scripts\python.exe'" in readme
+    assert r"& '.\.venv\Scripts\bube_test_tmp.exe' config setup" in readme
+    assert "config setup" in readme
+    assert "Future agents: Keep this offline bundle placeholder" in readme
+    active_readme = re.sub(r"<!--.*?-->", "", readme, flags=re.DOTALL)
+    assert "### Offline bundle" not in active_readme
+    assert readme.index("### Install from a checkout") < readme.index(
+        "### Offline bundle"
+    )
+    assert readme.index("### Offline bundle") < readme.index("## Usage")
+
+
+@pytest.mark.skipif(
+    shutil.which("bash") is None, reason="Bash is required for installer smoke tests."
+)
+def test_scaffolded_bash_installer_dev_mode_uses_existing_uv(
+    bube_test_project: Path,
+    tmp_path: Path,
+) -> None:
+    """Exercise checkout sync with a fake uv executable and no downloads."""
+    proot = bube_test_project
+    installer = (
+        proot / "src" / "bube_test_tmp_dev" / "distribution" / "install-linux-macos.sh"
+    )
+    log = tmp_path / "uv-commands.txt"
+    fake_uv = _fake_uv_script(tmp_path)
+    env = _project_env(proot)
+    env["INSTALLER_TEST_UV_LOG"] = str(log)
+    env["INSTALLER_TEST_PYTHON"] = sys.executable
+
+    _run(
+        [
+            "bash",
+            str(installer),
+            "--dev",
+            str(proot),
+            "--uv",
+            str(fake_uv),
+            "--yes",
+            "--skip-config",
+        ],
+        cwd=proot,
+        env=env,
+    )
+
+    assert log.read_text(encoding="utf-8").splitlines() == ["--version", "sync"]
+
+
+@pytest.mark.skipif(
+    shutil.which("bash") is None, reason="Bash is required for installer smoke tests."
+)
+def test_scaffolded_bash_installer_defaults_to_git_without_one_wheel(
+    bube_test_project: Path,
+    tmp_path: Path,
+) -> None:
+    """Assert multiple local wheels fall back to the online Git installation."""
+    proot = bube_test_project
+    distribution = proot / "src" / "bube_test_tmp_dev" / "distribution"
+    installer = distribution / "install-linux-macos.sh"
+    (distribution / "bube_test_tmp-0.1.0-py3-none-any.whl").touch()
+    (distribution / "bube_test_tmp-0.2.0-py3-none-any.whl").touch()
+
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_git = fake_bin / "git"
+    git_log = tmp_path / "git-commands.txt"
+    fake_git.write_text(
+        '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$INSTALLER_TEST_GIT_LOG"\n',
+        encoding="utf-8",
+    )
+    fake_git.chmod(0o755)
+    uv_log = tmp_path / "uv-commands.txt"
+    fake_uv = _fake_uv_script(tmp_path)
+    env = _project_env(proot)
+    env["PATH"] = os.pathsep.join((str(fake_bin), env.get("PATH") or os.defpath))
+    env["INSTALLER_TEST_GIT_LOG"] = str(git_log)
+    env["INSTALLER_TEST_UV_LOG"] = str(uv_log)
+    env["INSTALLER_TEST_PYTHON"] = sys.executable
+
+    _run(
+        ["bash", str(installer), "--uv", str(fake_uv), "--yes", "--skip-config"],
+        cwd=proot,
+        env=env,
+    )
+
+    assert git_log.read_text(encoding="utf-8").splitlines() == [
+        "ls-remote --exit-code https://github.com/github-user/bube_test_tmp.git main"
+    ]
+    assert uv_log.read_text(encoding="utf-8").splitlines() == [
+        "--version",
+        "tool install --force --refresh git+https://github.com/github-user/bube_test_tmp.git@main",
+        "tool update-shell",
+    ]
+
+
+@pytest.mark.skipif(
+    shutil.which("bash") is None, reason="Bash is required for installer smoke tests."
+)
+def test_scaffolded_bash_installer_defaults_to_offline_single_wheel(
+    bube_test_project: Path,
+    tmp_path: Path,
+) -> None:
+    """Assert one local wheel selects uv's no-network installation flags."""
+    proot = bube_test_project
+    distribution = proot / "src" / "bube_test_tmp_dev" / "distribution"
+    installer = distribution / "install-linux-macos.sh"
+    (distribution / "bube_test_tmp-0.1.0-py3-none-any.whl").touch()
+    log = tmp_path / "uv-commands.txt"
+    fake_uv = _fake_uv_script(tmp_path)
+    env = _project_env(proot)
+    env["INSTALLER_TEST_UV_LOG"] = str(log)
+    env["INSTALLER_TEST_PYTHON"] = sys.executable
+
+    _run(
+        ["bash", str(installer), "--uv", str(fake_uv), "--yes", "--skip-config"],
+        cwd=proot,
+        env=env,
+    )
+
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert calls[0] == "--version"
+    install_call = next(call for call in calls if call.startswith("tool install "))
+    assert "--offline" in install_call
+    assert "--no-index" in install_call
+    assert "--no-python-downloads" in install_call
+    assert "--no-build" in install_call
+    assert "--find-links" in install_call
+    assert calls[-1] == "tool update-shell"
 
 
 def _runtime_command(project_root: Path, *arguments: str) -> str:
@@ -871,6 +1087,17 @@ def test_buildben_wheel_includes_all_template_assets(tmp_path: Path) -> None:
     assert "buildben/_templates_proj/_tests-test_documentation.py.tmpl" in names
     assert "buildben/_templates_proj/_github-release.yml" in names
     assert "buildben/_templates_proj/_src-dev-packaging-release_notes.py.tmpl" in names
+    assert (
+        "buildben/_templates_proj/_src-dev-distribution-install-linux-macos.sh" in names
+    )
+    assert "buildben/_templates_proj/_src-dev-distribution-install-windows.ps1" in names
+    assert "buildben/_templates_proj/_src-dev-distribution-install-windows.cmd" in names
+    assert (
+        "buildben/_templates_proj/_src-dev-distribution-prepare-powershell-windows.cmd"
+        in names
+    )
+    assert "buildben/_templates_proj/_install-linux-macos.sh" in names
+    assert "buildben/_templates_proj/_install-windows.cmd" in names
 
 
 def test_experiment_scaffold_is_minimal_and_runnable(
