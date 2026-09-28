@@ -22,14 +22,15 @@ This project follows Semantic Versioning.
 
 1. [Buildben Changelog](#buildben-changelog)
 2. [\[Unreleased\]](#unreleased)
-3. [\[0.8.0\] - 2026-09-28](#080---2026-09-28)
-4. [\[0.7.1\] - 2026-09-07](#071---2026-09-07)
-5. [\[0.7.0\] - 2026-09-07](#070---2026-09-07)
-6. [\[0.6.0\] - 2026-08-31](#060---2026-08-31)
-7. [\[0.5.0\] - 2026-08-31](#050---2026-08-31)
-8. [\[0.4.0\] - 2026-07-03](#040---2026-07-03)
-9. [\[0.3.0\] - 2026-07-01](#030---2026-07-01)
-10. [\[0.2.1\] - 2026-06-26](#021---2026-06-26)
+3. [\[0.9.0\] - 2026-09-28](#090---2026-09-28)
+4. [\[0.8.0\] - 2026-09-28](#080---2026-09-28)
+5. [\[0.7.1\] - 2026-09-07](#071---2026-09-07)
+6. [\[0.7.0\] - 2026-09-07](#070---2026-09-07)
+7. [\[0.6.0\] - 2026-08-31](#060---2026-08-31)
+8. [\[0.5.0\] - 2026-08-31](#050---2026-08-31)
+9. [\[0.4.0\] - 2026-07-03](#040---2026-07-03)
+10. [\[0.3.0\] - 2026-07-01](#030---2026-07-01)
+11. [\[0.2.1\] - 2026-06-26](#021---2026-06-26)
 
 <br>
 
@@ -50,9 +51,6 @@ This project follows Semantic Versioning.
 
 ### ➕ Added
 
-- Generated projects now include online, checkout, and local wheel installers
-  with generated README instructions and an inactive offline bundle placeholder.
-
 <br>
 
 ### 💔 Changed
@@ -68,6 +66,24 @@ This project follows Semantic Versioning.
 <br>
 
 ### 🔨 Fixed
+
+<br>
+
+---
+
+<br>
+
+<!-- ======================================================== -->
+
+# [0.9.0] - 2026-09-28
+
+<br>
+
+### ➕ Added
+
+- Generated projects include online, Git checkout, and local wheelhouse
+  installation modes. Their README documents the modes and keeps a placeholder
+  for a future offline bundle.
 
 <br>
 
