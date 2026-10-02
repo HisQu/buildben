@@ -125,6 +125,9 @@ installer="$(gh api repos/<github_username>/<my_project>/contents/src/<my_projec
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'GitHub CLI gh is required.' }; $installer = gh api repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-windows.ps1 -H 'Accept: application/vnd.github.raw+json'; if ($LASTEXITCODE -ne 0 -or $null -eq $installer -or @($installer).Count -eq 0 -or [string]::IsNullOrWhiteSpace(($installer -join "`n"))) { throw 'Could not download the installer.' }; Invoke-Expression ($installer -join "`n")
 ```
 
+After installation, the installer runs `{my_project} config setup`, which guides
+you through initial configuration.
+
 ### Install from a cloned repository
 
 Clone the repository and install it with Python and pip. This workflow does not

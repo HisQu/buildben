@@ -224,6 +224,10 @@ def test_scaffolded_project_includes_installers(bube_test_project: Path) -> None
     assert "$null -eq $installer" in readme
     assert "[string]::IsNullOrWhiteSpace" in readme
     assert "Get-Command gh -ErrorAction SilentlyContinue" in readme
+    assert (
+        "After installation, the installer runs `bube_test_tmp config setup`, "
+        "which guides\nyou through initial configuration."
+    ) in readme
     assert "python -m venv .venv" in readme
     assert "python -m pip install -e ." in readme
     assert "does not\nrequire uv" in readme
@@ -929,6 +933,10 @@ def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> N
     assert "$null -eq $installer" in how_to
     assert "[string]::IsNullOrWhiteSpace" in how_to
     assert "Invoke-Expression" in how_to
+    assert (
+        "After installation, the installer runs `bube_test_tmp config setup`, "
+        "which guides\nyou through initial configuration."
+    ) in how_to
     assert "does not require uv" in how_to
     assert "uv tool uninstall bube_test_tmp" in how_to
     assert "rm -f ~/.local/bin/uv ~/.local/bin/uvx ~/.local/bin/uvw" in how_to
