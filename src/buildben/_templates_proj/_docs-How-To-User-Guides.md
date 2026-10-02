@@ -3,9 +3,10 @@
 [Documentation](README.md) · [Explanations](Explanations.md) · [References](References.md) · [Examples](EXAMPLES.md) · [Development](Development.md)
 
 - [Install and start](#install-and-start)
-  - [Install online](#install-online)
-  - [Install from a checkout](#install-from-a-checkout)
+  - [One-line install](#one-line-install)
+  - [Install from a cloned repository](#install-from-a-cloned-repository)
   - [Run the first command](#run-the-first-command)
+  - [Remove an installation](#remove-an-installation)
 - [Configure storage and settings](#configure-storage-and-settings)
   - [Initialize storage](#initialize-storage)
   - [Edit a saved setting](#edit-a-saved-setting)
@@ -22,38 +23,40 @@ name. Replace demonstration paths with your chosen directories for actual use.
 
 # Install and start
 
-## Install online
+## One-line install
 
-The online installer works after the GitHub repository has been pushed. It
+The one-line installer works after the GitHub repository has been pushed. It
 installs from the `main` branch. Have GitHub CLI `gh` and Git installed and
 authenticated for this repository. If uv is missing, the installer asks before
-installing uv 0.12.18 permanently in the user's directory. The
+it installs the pinned uv version in the user's directory. The
 [installer reference](References.md#installer-reference) describes the modes
 and options.
 
-On Linux or macOS:
+### For Linux & macOS
 
 ```shell
 installer="$(gh api repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-linux-macos.sh -H 'Accept: application/vnd.github.raw+json')" && test -n "$installer" && bash -c "$installer"
 ```
 
-On Windows PowerShell:
+### For Windows
 
 ```powershell
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'GitHub CLI gh is required.' }; $installer = gh api repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-windows.ps1 -H 'Accept: application/vnd.github.raw+json'; if ($LASTEXITCODE -ne 0 -or $null -eq $installer -or @($installer).Count -eq 0 -or [string]::IsNullOrWhiteSpace(($installer -join "`n"))) { throw 'Could not download the installer.' }; Invoke-Expression ($installer -join "`n")
 ```
 
-## Install from a checkout
+## Install from a cloned repository
 
 From the project directory, install with Python 3.12 or newer. This workflow
 uses a virtual environment and pip and does not require uv:
+
+### For Linux & macOS
 
 ```shell
 python -m venv .venv
 .venv/bin/python -m pip install -e .
 ```
 
-On Windows, use PowerShell:
+### For Windows
 
 ```powershell
 & '.\.venv\Scripts\python.exe' -m pip install -e .
@@ -67,8 +70,8 @@ resolves it and its dependencies from PyPI. The
 [dependency reference](References.md#dependency-declarations) lists runtime
 and maintainer requirements.
 
-uv is optional. Run `uv sync` if you use it, or use the checkout installer to
-synchronize with uv:
+uv is optional. Run `uv sync` if you use it, or use the root install script's
+`--dev` option to synchronize the cloned repository with uv:
 
 ```shell
 ./install-linux-macos.sh --dev .
@@ -83,7 +86,7 @@ version. The pip workflow above remains available without uv.
 
 ## Run the first command
 
-After [installation](#install-from-a-checkout) or an [online install](#install-online), run:
+After [installation](#install-from-a-cloned-repository) or a [one-line install](#one-line-install), run:
 
 ```shell
 {my_project} --help
@@ -95,6 +98,33 @@ python -m {my_project} --help
 Both help commands show the same Typer command tree. `version` prints the package
 version; `diagnose` reports package, interpreter, and AppRC paths. These commands
 work before [storage](Explanations.md#storage) is configured and create no files.
+
+## Remove an installation
+
+For a one-line installation, remove the application with
+`uv tool uninstall {my_project}`. For an editable install from a cloned
+repository, run `.venv/bin/python -m pip uninstall {my_project}` on Linux or
+macOS, or `& '.\.venv\Scripts\python.exe' -m pip uninstall {my_project}` in
+Windows PowerShell. Remove the clone and its `.venv` when you no longer need
+them.
+
+If the one-line installer also installed uv in the default directory, remove
+its executables:
+
+Linux and macOS:
+
+```shell
+rm -f ~/.local/bin/uv ~/.local/bin/uvx ~/.local/bin/uvw
+```
+
+Windows PowerShell:
+
+```powershell
+Remove-Item -ErrorAction SilentlyContinue "$HOME\.local\bin\uv.exe", "$HOME\.local\bin\uvx.exe", "$HOME\.local\bin\uvw.exe"
+```
+
+See Astral's [uv uninstallation guide](https://docs.astral.sh/uv/getting-started/installation/#uninstallation)
+for other install locations and optional data cleanup.
 
 <br>
 

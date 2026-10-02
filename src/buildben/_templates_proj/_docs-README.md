@@ -57,7 +57,7 @@ actual application behavior is implemented.
 | [ConfigManager](Explanations.md#configuration-tools) | `APP_RC.manage()` | Shared operations for setup, inspection, editing, and storage management. |
 | [Config CLI](Explanations.md#configuration-tools) | `{my_project} config ...` | Configuration commands mounted on the application. |
 | [Config editor](Explanations.md#configuration-tools) | `{my_project} config edit` | Terminal interface for inspecting layers and editing saved overrides. |
-| [Installers](References.md#installer-reference) | `src/{my_project}_dev/distribution` | Platform scripts for online Git installs, checkout sync, and local wheel installs. |
+| [Installers](References.md#installer-reference) | `src/{my_project}_dev/distribution` | Platform scripts for the one-line Git install, cloned-repository sync, and local wheel install. |
 
 ## Documentation rules
 
@@ -66,12 +66,12 @@ package descriptions. Contributors and coding agents must follow them.
 
 ### Installation instructions
 
-- Keep the root README concise and put installation before usage. Under `Installation`, use the H3 headings `Install online` and `Install from a checkout`.
-- Online one-liners work only after the repository has been pushed to GitHub. Fetch scripts with authenticated `gh api` so private repositories work with existing credentials. Require GitHub CLI `gh` and Git access, and do not add an authentication tutorial.
+- Keep the root README concise and put installation before usage. Under `Installation`, put the H3 heading `One-line install` before `Install from a cloned repository`. Under each, label platform commands with `For Linux & macOS` and `For Windows` headings.
+- The one-line install works only after the repository has been pushed to GitHub. Fetch scripts with authenticated `gh api` so private repositories work with existing credentials. Require GitHub CLI `gh` and Git access, and do not add an authentication tutorial.
 - Stop on a failed or empty script fetch before executing any response. Bash examples must guard `bash -c` with a successful, nonempty `gh api` command substitution; PowerShell examples must check `$LASTEXITCODE` and reject empty content before `Invoke-Expression`.
-- Checkout instructions use `python -m venv` and `python -m pip install -e .`, so users can install without uv. Mention uv as optional.
-- Keep the offline bundle placeholder in the root README as an HTML comment. Do not remove it or make it active until the repository has a bundle production process that creates and tests the offline files.
-- Do not say that offline bundles are available before that process exists. Avoid generic upgrade warnings.
+- Cloned-repository instructions use `python -m venv` and `python -m pip install -e .`, so users can install without uv. Mention uv as optional.
+- Keep the future installation-bundle section in the root README as an HTML comment. Do not remove it or make it active until the repository has a bundle production process that creates and tests the complete files.
+- Do not say that installation bundles are available before that process exists. Avoid generic upgrade warnings.
 - Keep platform installer code in `src/{my_project}_dev/distribution`; the root install scripts are thin shortcuts. See the [installer reference](References.md#installer-reference) for modes and options.
 
 ### Names and explanations

@@ -94,8 +94,9 @@ persistent data. AppRC supplies configuration commands and a terminal editor.
 ## Table of contents
 
 - [Installation](#installation)
-  - [Install online](#install-online)
-  - [Install from a checkout](#install-from-a-checkout)
+  - [One-line install](#one-line-install)
+  - [Install from a cloned repository](#install-from-a-cloned-repository)
+  - [Remove an installation](#remove-an-installation)
 - [Usage](#usage)
 - [Development](#development)
 - [Documentation](#documentation)
@@ -104,25 +105,27 @@ persistent data. AppRC supplies configuration commands and a terminal editor.
 
 Use Python 3.12 or newer.
 
-### Install online
+### One-line install
 
 These commands work only after this repository has been pushed to GitHub. They
 fetch the installer through GitHub CLI `gh`; the installer downloads the
 project from `main`. Have `gh` and Git installed. For a private repository, both
-must already have access. If uv is missing, the installer installs version
-0.12.18 permanently under your user directory.
+must already have access. If uv is missing, the installer asks before it
+installs the pinned uv version under your user directory.
+
+#### For Linux & macOS
 
 ```shell
 installer="$(gh api repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-linux-macos.sh -H 'Accept: application/vnd.github.raw+json')" && test -n "$installer" && bash -c "$installer"
 ```
 
-On Windows PowerShell:
+#### For Windows
 
 ```powershell
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'GitHub CLI gh is required.' }; $installer = gh api repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-windows.ps1 -H 'Accept: application/vnd.github.raw+json'; if ($LASTEXITCODE -ne 0 -or $null -eq $installer -or @($installer).Count -eq 0 -or [string]::IsNullOrWhiteSpace(($installer -join "`n"))) { throw 'Could not download the installer.' }; Invoke-Expression ($installer -join "`n")
 ```
 
-### Install from a checkout
+### Install from a cloned repository
 
 Clone the repository and install it with Python and pip. This workflow does not
 require uv:
@@ -132,7 +135,7 @@ git clone https://github.com/<github_username>/<my_project>.git
 cd <my_project>
 ```
 
-On Linux or macOS:
+#### For Linux & macOS
 
 ```shell
 python -m venv .venv
@@ -141,7 +144,7 @@ python -m venv .venv
 .venv/bin/{my_project} --help
 ```
 
-On Windows, use these commands in PowerShell:
+#### For Windows
 
 ```powershell
 py -m venv .venv
@@ -150,22 +153,49 @@ py -m venv .venv
 & '.\.venv\Scripts\{my_project}.exe' --help
 ```
 
-uv is optional. Run `uv sync` if you use it. The root checkout shortcuts also
-accept `--dev` to sync an existing checkout; if uv is missing, they ask before
+uv is optional. Run `uv sync` if you use it. The root install scripts also
+accept `--dev` to sync a cloned repository; if uv is missing, they ask before
 installing the pinned version. The
-[installation guide](docs/How-To-User-Guides.md#install-online) covers both
+[installation guide](docs/How-To-User-Guides.md#one-line-install) covers both
 workflows.
 
 <!--
-Future agents: Keep this offline bundle placeholder in the README. Do not remove
-the comment. Activate the section only after this repository has a working
-bundle production process that creates and tests the complete offline files.
+Future agents: Keep this installation-bundle placeholder in the README. Do not
+remove the comment. Activate the section only after this repository has a
+working bundle production process that creates and tests the complete files.
 
-### Offline bundle
+### Installation bundle
 
-Install from a produced offline bundle here. Describe its contents, supported
-platforms, and command only after bundle production exists.
+Describe bundle contents, supported platforms, and installation commands here
+only after bundle production creates and tests the complete files.
 -->
+
+### Remove an installation
+
+For a one-line installation, remove the application with
+`uv tool uninstall {my_project}`. For an editable install from a cloned
+repository, run `.venv/bin/python -m pip uninstall {my_project}` on Linux or
+macOS, or `& '.\.venv\Scripts\python.exe' -m pip uninstall {my_project}` in
+Windows PowerShell. Remove the clone and its `.venv` when you no longer need
+them.
+
+If the one-line installer also installed uv in the default directory, remove
+its executables:
+
+Linux and macOS:
+
+```shell
+rm -f ~/.local/bin/uv ~/.local/bin/uvx ~/.local/bin/uvw
+```
+
+Windows PowerShell:
+
+```powershell
+Remove-Item -ErrorAction SilentlyContinue "$HOME\.local\bin\uv.exe", "$HOME\.local\bin\uvx.exe", "$HOME\.local\bin\uvw.exe"
+```
+
+See Astral's [uv uninstallation guide](https://docs.astral.sh/uv/getting-started/installation/#uninstallation)
+for other install locations and optional data cleanup.
 
 ## Usage
 
