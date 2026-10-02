@@ -42,7 +42,7 @@
 
 ## Command reference
 
-Run these commands in the [installed environment](How-To-User-Guides.md#install-from-a-checkout).
+Run these commands in the [installed environment](How-To-User-Guides.md#install-from-a-cloned-repository).
 Configuration commands use the AppRC directory selected by `{MY_PROJECT}_APPRC_DIR`.
 
 | Command | Result |
@@ -82,7 +82,7 @@ Both installers accept these modes:
 | Option | Effect |
 | --- | --- |
 | `--git` | Install the `main` branch from Git. |
-| `--dev [PATH]` | Run `uv sync` in an existing checkout; `PATH` defaults to the current directory. |
+| `--dev [PATH]` | Run `uv sync` in an existing cloned repository; `PATH` defaults to the current directory. |
 | `--wheel [PATH]` | Install from a local wheel and wheelhouse. Without `PATH`, exactly one matching application wheel must be beside the installer or in its `wheels` directory. |
 | `--version VERSION` | Install a Git tag, adding a leading `v` when needed. |
 | `--uv PATH` | Use a specific uv executable. |

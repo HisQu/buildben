@@ -55,6 +55,8 @@ This project follows Semantic Versioning.
 
 ### 💔 Changed
 
+- Changed: Scaffolded installation docs now put the one-line install before the cloned-repository install, label platform commands, and explain how to remove the application and uv.
+
 <br>
 
 ### ⚠️ Deprecated

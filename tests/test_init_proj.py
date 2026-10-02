@@ -202,29 +202,55 @@ def test_scaffolded_project_includes_installers(bube_test_project: Path) -> None
     assert "[![uv]" in readme
     assert "Graphical Abstract goes here:" in readme
     assert "## Table of contents" in readme
-    assert "[Install online](#install-online)" in readme
-    assert "[Install from a checkout](#install-from-a-checkout)" in readme
+    assert "[One-line install](#one-line-install)" in readme
+    assert (
+        "[Install from a cloned repository](#install-from-a-cloned-repository)"
+        in readme
+    )
+    assert "[Remove an installation](#remove-an-installation)" in readme
     assert "<my_project>" not in readme
     assert "<github_username>" not in readme
-    assert "### Install online" in readme
-    assert "### Install from a checkout" in readme
+    assert "### One-line install" in readme
+    assert "### Install from a cloned repository" in readme
+    assert readme.index("### One-line install") < readme.index(
+        "### Install from a cloned repository"
+    )
+    assert readme.count("#### For Linux & macOS") == 2
+    assert readme.count("#### For Windows") == 2
     assert "only after this repository has been pushed" in readme
     assert "gh api repos/github-user/bube_test_tmp/contents/" in readme
     assert '&& test -n "$installer" && bash -c "$installer"' in readme
     assert "$LASTEXITCODE -ne 0" in readme
+    assert "$null -eq $installer" in readme
+    assert "[string]::IsNullOrWhiteSpace" in readme
     assert "Get-Command gh -ErrorAction SilentlyContinue" in readme
+    assert (
+        "After installation, the installer runs `bube_test_tmp config setup`, "
+        "which guides\nyou through initial configuration."
+    ) in readme
     assert "python -m venv .venv" in readme
     assert "python -m pip install -e ." in readme
+    assert "does not\nrequire uv" in readme
     assert r"& '.\.venv\Scripts\python.exe'" in readme
     assert r"& '.\.venv\Scripts\bube_test_tmp.exe' config setup" in readme
     assert "config setup" in readme
-    assert "Future agents: Keep this offline bundle placeholder" in readme
-    active_readme = re.sub(r"<!--.*?-->", "", readme, flags=re.DOTALL)
-    assert "### Offline bundle" not in active_readme
-    assert readme.index("### Install from a checkout") < readme.index(
-        "### Offline bundle"
+    assert "uv tool uninstall bube_test_tmp" in readme
+    assert "python -m pip uninstall bube_test_tmp" in readme
+    assert "rm -f ~/.local/bin/uv ~/.local/bin/uvx ~/.local/bin/uvw" in readme
+    assert "Remove-Item -ErrorAction SilentlyContinue" in readme
+    assert '"$HOME\\.local\\bin\\uv.exe"' in readme
+    assert "uv self uninstall" not in readme
+    assert (
+        "https://docs.astral.sh/uv/getting-started/installation/#uninstallation"
+        in readme
     )
-    assert readme.index("### Offline bundle") < readme.index("## Usage")
+    assert "Future agents: Keep this installation-bundle placeholder" in readme
+    active_readme = re.sub(r"<!--.*?-->", "", readme, flags=re.DOTALL)
+    assert "### Installation bundle" not in active_readme
+    assert readme.index("### Install from a cloned repository") < readme.index(
+        "### Installation bundle"
+    )
+    assert readme.index("### Installation bundle") < readme.index("## Usage")
 
 
 @pytest.mark.skipif(
@@ -886,6 +912,38 @@ def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> N
         "Development.md": "Development",
     }
     docs = bube_test_project / "docs"
+    how_to = (docs / "How-To-User-Guides.md").read_text(encoding="utf-8")
+    assert "[One-line install](#one-line-install)" in how_to
+    assert (
+        "[Install from a cloned repository](#install-from-a-cloned-repository)"
+        in how_to
+    )
+    assert "[Remove an installation](#remove-an-installation)" in how_to
+    assert "## One-line install" in how_to
+    assert "## Install from a cloned repository" in how_to
+    assert how_to.index("## One-line install") < how_to.index(
+        "## Install from a cloned repository"
+    )
+    assert how_to.count("### For Linux & macOS") == 2
+    assert how_to.count("### For Windows") == 2
+    assert "gh api repos/github-user/bube_test_tmp/contents/" in how_to
+    assert '&& test -n "$installer" && bash -c "$installer"' in how_to
+    assert "Get-Command gh -ErrorAction SilentlyContinue" in how_to
+    assert "$LASTEXITCODE -ne 0" in how_to
+    assert "$null -eq $installer" in how_to
+    assert "[string]::IsNullOrWhiteSpace" in how_to
+    assert "Invoke-Expression" in how_to
+    assert (
+        "After installation, the installer runs `bube_test_tmp config setup`, "
+        "which guides\nyou through initial configuration."
+    ) in how_to
+    assert "does not require uv" in how_to
+    assert "uv tool uninstall bube_test_tmp" in how_to
+    assert "rm -f ~/.local/bin/uv ~/.local/bin/uvx ~/.local/bin/uvw" in how_to
+    assert "Remove-Item -ErrorAction SilentlyContinue" in how_to
+    assert "uv self uninstall" not in how_to
+    references = (docs / "References.md").read_text(encoding="utf-8")
+    assert "How-To-User-Guides.md#install-from-a-cloned-repository" in references
     assert (bube_test_project / "tests" / "test_documentation.py").is_file()
     ET.parse(docs / "assets" / "docs-reading-map.svg")
     for filename, label in labels.items():
