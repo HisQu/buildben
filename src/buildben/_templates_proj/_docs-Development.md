@@ -188,8 +188,8 @@ just release patch
 
 GitHub Actions runs CI, validates wheel and sdist installs on Python 3.12 and
 3.13, and creates the GitHub Release with the changelog section as its notes.
-The workflow publishes the validated artifacts to PyPI when the tagged
-`justfile` contains:
+The automatic tag workflow publishes the validated artifacts to PyPI when the
+tagged `justfile` contains:
 
 ```just
 RELEASE_PYPI := "true"
@@ -211,8 +211,16 @@ just release-prepare patch
 just release-push vMAJOR.MINOR.PATCH
 ```
 
-> [!NOTE]
-> If the GitHub Release exists but PyPI was skipped, run
-> `just publish-pypi vMAJOR.MINOR.PATCH`. This requires an authenticated `gh`
-> command. The recovery workflow downloads the existing release assets and
-> never rebuilds them.
+Manual publication and retries require `RELEASE_PYPI := "true"` in both the
+current committed `justfile` and the target tag's committed `justfile`. The
+manual workflow applies that check to its selected workflow ref and target
+tag. If both policies are true and a GitHub Release already exists, publish
+its attached artifacts without rebuilding them:
+
+```bash
+just publish-pypi vMAJOR.MINOR.PATCH
+```
+
+The command checks policy before GitHub authentication or network calls. A
+false policy exits locally, and the manual workflow skips before requesting
+the PyPI environment or OIDC token.

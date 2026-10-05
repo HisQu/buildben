@@ -1,5 +1,10 @@
 # Repository conventions
 
+## Release policy
+- Treat the committed `RELEASE_PYPI` value in `justfile` as a hard gate. When it is `"false"`, do not recommend or run a manual PyPI publish or retry command.
+- Manual PyPI publication requires `RELEASE_PYPI := "true"` in both the current committed `justfile` and the requested tag's committed `justfile`. A `just --set` override does not satisfy either check.
+- The manual workflow checks the selected workflow ref and target tag before it requests the PyPI environment or OIDC token. GitHub Release creation on a valid tag remains available when PyPI is disabled.
+
 ## Repo routing
 - Warn me if the paths below appear outdated.
 - Reuse existing helpers and utilities before adding new helper functions.

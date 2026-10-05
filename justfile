@@ -53,6 +53,27 @@ _check-gh:
     }
 
 [private]
+_committed-release-pypi-policy ref:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ref="{{ ref }}"
+    committed_justfile="$(mktemp)"
+    trap 'rm -f "$committed_justfile"' EXIT
+    if ! git show "${ref}:justfile" > "$committed_justfile"; then
+        echo "Could not read justfile from commit ${ref}." >&2
+        exit 1
+    fi
+    if ! release_pypi="$(just --no-dotenv --justfile "$committed_justfile" --evaluate RELEASE_PYPI)"; then
+        echo "Could not evaluate RELEASE_PYPI in the committed justfile at ${ref}." >&2
+        exit 1
+    fi
+    if [[ "$release_pypi" != "true" && "$release_pypi" != "false" ]]; then
+        echo "RELEASE_PYPI must be \"true\" or \"false\" in the committed justfile at ${ref}, found '${release_pypi}'." >&2
+        exit 1
+    fi
+    printf '%s\n' "$release_pypi"
+
+[private]
 _check-clean-worktree action="publishing":
     @git diff --quiet || { \
         echo "Unstaged changes exist. Commit or stash before {{action}}." >&2; \
@@ -379,11 +400,7 @@ release-push tag:
         echo "Tag ${tag} does not point to the current main commit." >&2
         exit 1
     fi
-    release_pypi="$(just --evaluate RELEASE_PYPI)"
-    if [[ "$release_pypi" != "true" && "$release_pypi" != "false" ]]; then
-        echo "RELEASE_PYPI must be \"true\" or \"false\", found '${release_pypi}'." >&2
-        exit 1
-    fi
+    release_pypi="$(just _committed-release-pypi-policy "$tag")"
 
     echo "Pushing main and ${tag} atomically. RELEASE_PYPI=${release_pypi}."
     if ! git push --atomic origin main "$tag"; then
@@ -392,7 +409,11 @@ release-push tag:
         exit 1
     fi
     echo "GitHub Actions will create the release. This command does not wait for it."
-    echo "If PyPI was skipped, run: just publish-pypi ${tag}"
+    if [[ "$release_pypi" == "true" ]]; then
+        echo "If PyPI publication needs a retry, run: just publish-pypi ${tag}"
+    else
+        echo "PyPI publication is disabled by RELEASE_PYPI in the tagged justfile."
+    fi
 
 # Prepare and push a release. GitHub Actions owns artifact publication.
 release level="patch":
@@ -410,13 +431,24 @@ release level="patch":
 publish-pypi tag:
     #!/usr/bin/env bash
     set -euo pipefail
-    just _check-gh
     tag="{{ tag }}"
 
     if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
         echo "Invalid release tag '${tag}'; expected vMAJOR.MINOR.PATCH." >&2
         exit 1
     fi
+    current_release_pypi="$(just _committed-release-pypi-policy HEAD)"
+    if [[ "$current_release_pypi" != "true" ]]; then
+        echo "PyPI publication is disabled by RELEASE_PYPI in the current committed justfile." >&2
+        exit 1
+    fi
+    tag_release_pypi="$(just _committed-release-pypi-policy "$tag")"
+    if [[ "$tag_release_pypi" != "true" ]]; then
+        echo "PyPI publication is disabled by RELEASE_PYPI in tag ${tag}'s committed justfile." >&2
+        exit 1
+    fi
+    just _check-gh
+
     if ! is_draft="$(gh release view "$tag" --json isDraft --jq .isDraft)"; then
         echo "GitHub Release ${tag} does not exist." >&2
         exit 1

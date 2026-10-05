@@ -311,15 +311,20 @@ just release patch
 > pushes `main` and the tag. Use `just release-prepare patch` when you only want
 > the checked local commit and tag.
 
-If a GitHub Release already exists but PyPI was skipped, publish its attached
-wheel and source archive without rebuilding them:
+Manual PyPI publication is available only when both the current committed
+`justfile` and the target tag's committed `justfile` set
+`RELEASE_PYPI := "true"`. If a GitHub Release exists and that policy is true,
+publish its attached wheel and source archive without rebuilding them:
 
 ```bash
 just publish-pypi vMAJOR.MINOR.PATCH
 ```
 
-This recovery command requires an authenticated GitHub CLI. GitHub Actions
-performs the PyPI upload through trusted publishing.
+The command checks both committed policies before GitHub authentication or
+network calls. When either policy is `"false"`, it exits without contacting
+GitHub. The manual workflow applies the same check to the selected workflow ref
+and target tag, and skips before requesting the PyPI environment or OIDC token.
+GitHub Actions performs an allowed PyPI upload through trusted publishing.
 
 
 <br>

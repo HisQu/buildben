@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 
@@ -13,6 +15,24 @@ from buildben_dev.packaging.install_smoke import (
     InstallSnapshot,
     validate_install_snapshot,
 )
+
+
+def _manual_pypi_preflight_script(workflow_path: Path) -> str:
+    """Extract the manual PyPI preflight shell script from a release workflow."""
+    workflow_text = workflow_path.read_text(encoding="utf-8")
+    preflight = workflow_text.split("  manual_pypi_preflight:\n", 1)[1].split(
+        "  publish-existing-release:\n", 1
+    )[0]
+    validation_step = preflight.split(
+        "      - name: Validate workflow-run commit and requested tag\n", 1
+    )[1]
+    script_block = validation_step.split("        run: |\n", 1)[1]
+    script_lines = []
+    for line in script_block.splitlines():
+        if line.strip() and not line.startswith("          "):
+            break
+        script_lines.append(line[10:] if line.startswith("          ") else "")
+    return "\n".join(script_lines).rstrip() + "\n"
 
 
 def sample_changelog(
@@ -115,6 +135,113 @@ def test_release_notes_require_matching_tag_and_version() -> None:
         release_notes.validate_tag_version("v1.2.4", "1.2.3")
 
 
+def test_manual_pypi_preflight_scripts_match_root_and_scaffold() -> None:
+    """Generated projects must run the same preflight as Buildben itself."""
+    repository_root = Path(__file__).resolve().parents[1]
+    root_script = _manual_pypi_preflight_script(
+        repository_root / ".github/workflows/release.yml"
+    )
+    scaffold_script = _manual_pypi_preflight_script(
+        repository_root / "src/buildben/_templates_proj/_github-release.yml"
+    )
+
+    assert root_script == scaffold_script
+    assert '"${ACTIVE_WORKFLOW_SHA}^{commit}"' in root_script
+    assert '"${ACTIVE_WORKFLOW_REF}^{commit}"' not in root_script
+
+
+@pytest.mark.parametrize(
+    ("workflow_policy", "expected_output"),
+    [("false", "publish_pypi=false\n"), ("true", "publish_pypi=true\n")],
+)
+def test_manual_pypi_preflight_uses_workflow_run_commit(
+    tmp_path: Path, workflow_policy: str, expected_output: str
+) -> None:
+    """A moved branch cannot replace the policy committed when the run started."""
+    repository_root = Path(__file__).resolve().parents[1]
+    script = _manual_pypi_preflight_script(
+        repository_root / ".github/workflows/release.yml"
+    )
+    repository = tmp_path / "workflow-repository"
+    repository.mkdir()
+    git_env = os.environ.copy()
+
+    def git(*args: str) -> str:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=repository,
+            env=git_env,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        return result.stdout.strip()
+
+    def write_policy(value: str) -> None:
+        (repository / "justfile").write_text(
+            f'RELEASE_PYPI := "{value}"\n', encoding="utf-8"
+        )
+
+    git("init", "--initial-branch=main")
+    git("config", "user.name", "Buildben Test")
+    git("config", "user.email", "test@example.com")
+    git("config", "commit.gpgsign", "false")
+    git("config", "tag.gpgsign", "false")
+    write_policy(workflow_policy)
+    git("add", "justfile")
+    git("commit", "-m", "Record workflow-run release policy")
+    workflow_sha = git("rev-parse", "HEAD")
+
+    if workflow_policy == "false":
+        git("switch", "-c", "tag-policy")
+        write_policy("true")
+        git("add", "justfile")
+        git("commit", "-m", "Enable target tag release policy")
+        git("tag", "-a", "v1.2.3", "-m", "Release v1.2.3")
+        git("switch", "main")
+        write_policy("true")
+        git("add", "justfile")
+        git("commit", "-m", "Advance branch with release policy enabled")
+    else:
+        git("tag", "-a", "v1.2.3", "-m", "Release v1.2.3")
+
+    remote = tmp_path / "origin.git"
+    subprocess.run(
+        ["git", "init", "--bare", str(remote)],
+        cwd=tmp_path,
+        env=git_env,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    git("remote", "add", "origin", str(remote))
+    git("push", "origin", "refs/tags/v1.2.3")
+    git("tag", "-d", "v1.2.3")
+    git("checkout", "--detach", workflow_sha)
+
+    output_file = tmp_path / "github-output"
+    env = git_env.copy()
+    env.update(
+        {
+            "ACTIVE_WORKFLOW_REF": "refs/heads/main",
+            "ACTIVE_WORKFLOW_SHA": workflow_sha,
+            "GITHUB_OUTPUT": str(output_file),
+            "RELEASE_TAG": "v1.2.3",
+        }
+    )
+    result = subprocess.run(
+        ["bash", "-e", "-c", script],
+        cwd=repository,
+        env=env,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert output_file.read_text(encoding="utf-8") == expected_output
+
+
 def test_release_notes_validate_release_order_and_cli_arguments(tmp_path: Path) -> None:
     """The release helper should reject stale versions and partial tag checks."""
     assert release_notes.latest_release_version(sample_changelog()) == "1.2.3"
@@ -181,3 +308,125 @@ def test_install_smoke_contract_rejects_incomplete_installation(
         validate_install_snapshot(
             replace(valid_snapshot(), **{field: value}), expected_version="1.2.3"
         )
+
+
+@pytest.mark.parametrize(
+    ("current_policy", "tag_policy", "publish_allowed"),
+    [
+        ("false", "false", False),
+        ("false", "true", False),
+        ("true", "false", False),
+        ("true", "true", True),
+    ],
+)
+def test_publish_pypi_uses_committed_policy_before_github(
+    tmp_path: Path,
+    current_policy: str,
+    tag_policy: str,
+    publish_allowed: bool,
+) -> None:
+    """Require committed true policy in both refs before calling GitHub."""
+    source_justfile = Path(__file__).resolve().parents[1] / "justfile"
+    source_text = source_justfile.read_text(encoding="utf-8")
+    assert source_text.count('RELEASE_PYPI := "false"') == 1
+
+    repo = tmp_path / "policy-repository"
+    repo.mkdir()
+    (repo / "justfile").write_text(
+        source_text.replace(
+            'RELEASE_PYPI := "false"',
+            f'RELEASE_PYPI := "{current_policy}"',
+            1,
+        ),
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+
+    def git(*args: str) -> None:
+        subprocess.run(
+            ["git", *args],
+            cwd=repo,
+            env=env,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+
+    git("init", "--initial-branch=main")
+    git("config", "user.name", "Buildben Test")
+    git("config", "user.email", "test@example.com")
+    git("config", "commit.gpgsign", "false")
+    git("config", "tag.gpgsign", "false")
+    git("add", "justfile")
+    git("commit", "-m", "Set current release policy")
+
+    if tag_policy != current_policy:
+        git("switch", "-c", "tag-policy")
+        justfile = repo / "justfile"
+        justfile.write_text(
+            justfile.read_text(encoding="utf-8").replace(
+                f'RELEASE_PYPI := "{current_policy}"',
+                f'RELEASE_PYPI := "{tag_policy}"',
+                1,
+            ),
+            encoding="utf-8",
+        )
+        git("add", "justfile")
+        git("commit", "-m", "Set target tag release policy")
+        git("tag", "-a", "v1.2.3", "-m", "Release v1.2.3")
+        git("switch", "main")
+    else:
+        git("tag", "-a", "v1.2.3", "-m", "Release v1.2.3")
+
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_gh = fake_bin / "gh"
+    fake_gh.write_text(
+        "#!/usr/bin/env bash\n"
+        'printf \'%s\\n\' "$*" >> "$RELEASE_POLICY_GH_LOG"\n'
+        'case "$1:$2" in\n'
+        "  auth:status) exit 0 ;;\n"
+        "  release:view)\n"
+        '    if [[ "$*" == *"--json isDraft"* ]]; then printf \'false\\n\'; '
+        'elif [[ "$*" == *"--json assets"* ]]; then printf \'1\\n\'; '
+        "else exit 90; fi ;;\n"
+        "  workflow:run) exit 0 ;;\n"
+        "  *) exit 91 ;;\n"
+        "esac\n",
+        encoding="utf-8",
+    )
+    fake_gh.chmod(0o755)
+    gh_log = tmp_path / "gh.log"
+    env["PATH"] = os.pathsep.join([str(fake_bin), env.get("PATH", "")])
+    env["RELEASE_POLICY_GH_LOG"] = str(gh_log)
+
+    command = ["just"]
+    if not publish_allowed:
+        command.extend(["--set", "RELEASE_PYPI", "true"])
+    command.extend(["publish-pypi", "v1.2.3"])
+    result = subprocess.run(
+        command,
+        cwd=repo,
+        env=env,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+
+    if not publish_allowed:
+        assert result.returncode != 0
+        expected_ref = (
+            "current committed justfile"
+            if current_policy == "false"
+            else "tag v1.2.3's committed justfile"
+        )
+        assert expected_ref in result.stderr
+        assert not gh_log.exists()
+        return
+
+    assert result.returncode == 0, result.stderr
+    assert gh_log.is_file()
+    assert "auth status" in gh_log.read_text(encoding="utf-8")
+    assert "workflow run release.yml --raw-field release_tag=v1.2.3" in (
+        gh_log.read_text(encoding="utf-8")
+    )
