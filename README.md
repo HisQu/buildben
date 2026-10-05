@@ -323,8 +323,16 @@ just publish-pypi vMAJOR.MINOR.PATCH
 The command checks both committed policies before GitHub authentication or
 network calls. When either policy is `"false"`, it exits without contacting
 GitHub. The manual workflow applies the same check to the selected workflow ref
-and target tag, and skips before requesting the PyPI environment or OIDC token.
-GitHub Actions performs an allowed PyPI upload through trusted publishing.
+and target tag. When both are true, its unprivileged preflight validates the
+Release assets, records their hashes and release/tag/commit identities in a
+manifest, and uploads that exact snapshot. The PyPI job publishes only the
+snapshot identified by the preflight artifact ID.
+
+The preflight detects a tag update or deletion during asset capture. Preventing
+an administrator from changing or deleting the tag while preflight is running
+requires repository tag protection or rulesets. This code does not configure
+or verify those settings. GitHub Actions performs an allowed PyPI upload
+through trusted publishing.
 
 
 <br>

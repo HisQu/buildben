@@ -5,8 +5,8 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
-import re
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -524,7 +524,11 @@ def test_scaffolded_project_uses_dependency_group_template(
     assert 'release-prepare level="patch":' in justfile_text
     assert "release-push tag:" in justfile_text
     assert "publish-pypi tag:" in justfile_text
-    assert 'git push --atomic origin main "$tag"' in justfile_text
+    assert "refs/heads/main:refs/heads/main" in justfile_text
+    assert '"refs/tags/${tag}:refs/tags/${tag}"' in justfile_text
+    assert 'git rev-parse --verify --end-of-options "${tag_ref}^{commit}"' in (
+        justfile_text
+    )
     assert "_committed-release-pypi-policy HEAD" in justfile_text
     assert 'tag_release_pypi="$(just _committed-release-pypi-policy "$tag")"' in (
         justfile_text
@@ -734,10 +738,22 @@ def test_scaffolded_project_includes_release_workflow(
     assert "needs.build.outputs.release_pypi == 'true'" in release_text
     assert release_text.count("if: github.event_name == 'push'") == 3
     assert "if: github.event_name == 'workflow_dispatch'" in release_text
-    assert "gh release download" in release_text
+    assert "group: bube_test_tmp-release" in release_text
+    assert '--title "bube_test_tmp ${release_version}"' in release_text
+    automatic_pypi = release_text.split("  pypi-publish:\n", 1)[1].split(
+        "  manual_pypi_preflight:\n", 1
+    )[0]
+    assert 'normalized_project="${project_name//_/-}"' in automatic_pypi
+    assert '--check-url "https://pypi.org/simple/${normalized_project}/"' in (
+        automatic_pypi
+    )
+    assert (
+        "gh release download"
+        not in release_text.split("  publish-existing-release:\n", 1)[1]
+    )
     assert "--check-url" in release_text
     assert "actions/upload-artifact@v7" in release_text
-    assert release_text.count("actions/download-artifact@v8") == 2
+    assert release_text.count("actions/download-artifact@v8") == 3
 
     manual_preflight = release_text.split("  manual_pypi_preflight:\n", 1)[1].split(
         "  publish-existing-release:\n", 1
@@ -751,8 +767,21 @@ def test_scaffolded_project_includes_release_workflow(
     assert '"${ACTIVE_WORKFLOW_SHA}^{commit}"' in manual_preflight
     assert '"${ACTIVE_WORKFLOW_REF}^{commit}"' not in manual_preflight
     assert 'target_policy="$(read_release_policy' in manual_preflight
-    assert "publish_pypi=false" in manual_preflight
+    assert 'git fetch --no-tags origin "$tag_ref:$tag_ref"' in manual_preflight
+    assert 'git ls-remote --exit-code --refs origin "$tag_ref"' in manual_preflight
+    assert 'gh api "/repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG"' in (
+        manual_preflight
+    )
+    assert 'select(type == "boolean") | tostring' in manual_preflight
+    assert "changed during asset capture" in manual_preflight
+    assert "actions/upload-artifact@v7" in manual_preflight
+    assert "snapshot_ready=false" in manual_preflight
     assert "publish_pypi=true" in manual_preflight
+    assert manual_preflight.index(
+        "Upload validated release snapshot"
+    ) < manual_preflight.index('echo "publish_pypi=true"')
+    assert "steps.upload_snapshot.outcome == 'success'" in manual_preflight
+    assert "steps.upload_snapshot.outputs.artifact-id != ''" in manual_preflight
 
     manual_publish = release_text.split("  publish-existing-release:\n", 1)[1]
     assert "needs: manual_pypi_preflight" in manual_publish
@@ -763,6 +792,12 @@ def test_scaffolded_project_includes_release_workflow(
     assert "uv build" not in manual_publish
     assert "environment: pypi" in manual_publish
     assert "id-token: write" in manual_publish
+    assert "needs.manual_pypi_preflight.outputs.artifact_id != ''" in manual_publish
+    assert "artifact-ids: ${{ needs.manual_pypi_preflight.outputs.artifact_id }}" in (
+        manual_publish
+    )
+    assert "gh " not in manual_publish
+    assert "git " not in manual_publish
 
     development_text = (bube_test_project / "docs" / "Development.md").read_text(
         encoding="utf-8"
@@ -812,7 +847,8 @@ def test_buildben_release_recipe_keeps_checks_visible_and_builds_quiet() -> None
     assert 'release-prepare level="patch":' in recipe
     assert "release-push tag:" in recipe
     assert "publish-pypi tag:" in recipe
-    assert 'git push --atomic origin main "$tag"' in recipe
+    assert "refs/heads/main:refs/heads/main" in recipe
+    assert '"refs/tags/${tag}:refs/tags/${tag}"' in recipe
     assert "PUBLISH_PYPI" not in recipe
     assert 'if [[ "$release_pypi" == "true" ]]; then' in recipe
     assert "PyPI publication is disabled by RELEASE_PYPI" in recipe
@@ -835,9 +871,13 @@ def test_buildben_release_workflow_supports_policy_and_recovery() -> None:
     assert "publish-existing-release:" in workflow
     assert workflow.count("if: github.event_name == 'push'") == 3
     assert "if: github.event_name == 'workflow_dispatch'" in workflow
+    automatic_pypi = workflow.split("  pypi-publish:\n", 1)[1].split(
+        "  manual_pypi_preflight:\n", 1
+    )[0]
+    assert "--check-url https://pypi.org/simple/buildben/" in automatic_pypi
     assert "--check-url https://pypi.org/simple/buildben/" in workflow
     assert "actions/upload-artifact@v7" in workflow
-    assert workflow.count("actions/download-artifact@v8") == 2
+    assert workflow.count("actions/download-artifact@v8") == 3
 
     manual_preflight = workflow.split("  manual_pypi_preflight:\n", 1)[1].split(
         "  publish-existing-release:\n", 1
@@ -851,8 +891,21 @@ def test_buildben_release_workflow_supports_policy_and_recovery() -> None:
     assert '"${ACTIVE_WORKFLOW_SHA}^{commit}"' in manual_preflight
     assert '"${ACTIVE_WORKFLOW_REF}^{commit}"' not in manual_preflight
     assert 'target_policy="$(read_release_policy' in manual_preflight
-    assert "publish_pypi=false" in manual_preflight
+    assert 'git fetch --no-tags origin "$tag_ref:$tag_ref"' in manual_preflight
+    assert 'git ls-remote --exit-code --refs origin "$tag_ref"' in manual_preflight
+    assert 'gh api "/repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG"' in (
+        manual_preflight
+    )
+    assert 'select(type == "boolean") | tostring' in manual_preflight
+    assert "changed during asset capture" in manual_preflight
+    assert "actions/upload-artifact@v7" in manual_preflight
+    assert "snapshot_ready=false" in manual_preflight
     assert "publish_pypi=true" in manual_preflight
+    assert manual_preflight.index(
+        "Upload validated release snapshot"
+    ) < manual_preflight.index('echo "publish_pypi=true"')
+    assert "steps.upload_snapshot.outcome == 'success'" in manual_preflight
+    assert "steps.upload_snapshot.outputs.artifact-id != ''" in manual_preflight
 
     manual_publish = workflow.split("  publish-existing-release:\n", 1)[1]
     assert "needs: manual_pypi_preflight" in manual_publish
@@ -861,7 +914,13 @@ def test_buildben_release_workflow_supports_policy_and_recovery() -> None:
     )
     assert "actions/checkout" not in manual_publish
     assert "uv build" not in manual_publish
-    assert "gh release download" in manual_publish
+    assert "gh release download" not in manual_publish
+    assert "artifact-ids: ${{ needs.manual_pypi_preflight.outputs.artifact_id }}" in (
+        manual_publish
+    )
+    assert "needs.manual_pypi_preflight.outputs.artifact_id != ''" in manual_publish
+    assert "gh " not in manual_publish
+    assert "git " not in manual_publish
     assert "uv publish" in manual_publish
 
     readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(
@@ -994,6 +1053,7 @@ def test_scaffolded_publish_pypi_requires_both_committed_policies(
     )
     fake_gh.chmod(0o755)
     gh_log = tmp_path / "gh.log"
+    gh_log.write_text("", encoding="utf-8")
     env["PATH"] = os.pathsep.join([str(fake_bin), env.get("PATH", "")])
     env["PUBLISH_PYPI_GH_LOG"] = str(gh_log)
 
@@ -1014,7 +1074,7 @@ def test_scaffolded_publish_pypi_requires_both_committed_policies(
     )
     assert disabled.returncode != 0
     assert "current committed justfile" in disabled.stderr
-    assert not gh_log.exists()
+    assert gh_log.read_text(encoding="utf-8") == ""
 
     justfile = proot / "justfile"
     justfile.write_text(
@@ -1027,6 +1087,7 @@ def test_scaffolded_publish_pypi_requires_both_committed_policies(
     )
     _run(["git", "add", "justfile"], cwd=proot, env=env)
     _run(["git", "commit", "-m", "Enable committed PyPI policy"], cwd=proot, env=env)
+    _run(["git", "branch", "v0.1.0", "HEAD"], cwd=proot, env=env)
 
     target_disabled = subprocess.run(
         ["just", "publish-pypi", "v0.1.0"],
@@ -1038,17 +1099,37 @@ def test_scaffolded_publish_pypi_requires_both_committed_policies(
     )
     assert target_disabled.returncode != 0
     assert "tag v0.1.0's committed justfile" in target_disabled.stderr
-    assert not gh_log.exists()
+    assert gh_log.read_text(encoding="utf-8") == ""
+
+    _run(["git", "tag", "-d", "v0.1.0"], cwd=proot, env=env)
+    missing_exact_tag = subprocess.run(
+        ["just", "publish-pypi", "v0.1.0"],
+        cwd=proot,
+        env=env,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    assert missing_exact_tag.returncode != 0
+    assert "Could not resolve exact release tag ref refs/tags/v0.1.0" in (
+        missing_exact_tag.stderr
+    )
+    assert gh_log.read_text(encoding="utf-8") == ""
 
     _run(
-        ["git", "tag", "--force", "-a", "v0.1.0", "-m", "Release v0.1.0"],
+        ["git", "tag", "-a", "v0.1.0", "-m", "Release v0.1.0"],
         cwd=proot,
         env=env,
     )
     _run(["just", "publish-pypi", "v0.1.0"], cwd=proot, env=env)
-    gh_calls = gh_log.read_text(encoding="utf-8")
-    assert "auth status" in gh_calls
-    assert "workflow run release.yml --raw-field release_tag=v0.1.0" in gh_calls
+    gh_calls = gh_log.read_text(encoding="utf-8").splitlines()
+    assert gh_calls == [
+        "auth status",
+        "release view v0.1.0 --json isDraft --jq .isDraft",
+        'release view v0.1.0 --json assets --jq [.assets[].name | select(endswith(".whl"))] | length',
+        'release view v0.1.0 --json assets --jq [.assets[].name | select(endswith(".tar.gz"))] | length',
+        "workflow run release.yml --raw-field release_tag=v0.1.0",
+    ]
 
 
 def _markdown_anchors(text: str) -> set[str]:
@@ -1057,10 +1138,10 @@ def _markdown_anchors(text: str) -> set[str]:
     :param text: Markdown source.
     :return: GitHub-style local anchor names.
     """
-    text = re.sub(r"^```[^\n]*\n.*?^```\s*$", "", text, flags=re.M | re.S)
+    text = re.sub(r"^```[^\n]*\n.*?^```\s*$", "", text, flags=re.MULTILINE | re.DOTALL)
     result = set(re.findall(r'<a\s+id="([^"]+)"', text))
     counts: dict[str, int] = {}
-    for heading in re.findall(r"^#{1,6}\s+(.+)$", text, re.M):
+    for heading in re.findall(r"^#{1,6}\s+(.+)$", text, re.MULTILINE):
         heading = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", heading)
         slug = re.sub(r"[^\w\- ]", "", heading.strip().lower()).replace(" ", "-")
         count = counts.get(slug, 0)
@@ -1127,9 +1208,12 @@ def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> N
     errors: list[str] = []
     for path in paths:
         text = re.sub(
-            r"^```[^\n]*\n.*?^```\s*$", "", path.read_text(), flags=re.M | re.S
+            r"^```[^\n]*\n.*?^```\s*$",
+            "",
+            path.read_text(),
+            flags=re.MULTILINE | re.DOTALL,
         )
-        text = re.sub(r"<!--.*?-->", "", text, flags=re.S)
+        text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
         for label, href in re.findall(r"!?\[([^\]\n]*)\]\(([^\s)]+)\)", text):
             parsed = urlsplit(href)
             if parsed.scheme or parsed.netloc:
@@ -1215,7 +1299,9 @@ def test_generated_documentation_examples(bube_test_project: Path, title: str) -
     examples = (proot / "docs" / "EXAMPLES.md").read_text()
     section = examples.split(f"## {title}\n", 1)[1].split("\n## ", 1)[0]
     files = re.findall(
-        r"<!-- example-file: ([^\n]+) -->\s*```[^\n]*\n(.*?)^```", section, re.M | re.S
+        r"<!-- example-file: ([^\n]+) -->\s*```[^\n]*\n(.*?)^```",
+        section,
+        re.MULTILINE | re.DOTALL,
     )
     assert files
     for name, code in files:

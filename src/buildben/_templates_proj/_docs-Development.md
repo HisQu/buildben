@@ -223,4 +223,13 @@ just publish-pypi vMAJOR.MINOR.PATCH
 
 The command checks policy before GitHub authentication or network calls. A
 false policy exits locally, and the manual workflow skips before requesting
-the PyPI environment or OIDC token.
+the PyPI environment or OIDC token. When both policies are true, the
+unprivileged preflight validates the Release assets, records their hashes and
+release/tag/commit identities in a manifest, and uploads that exact snapshot.
+The PyPI job publishes only the snapshot identified by the preflight artifact
+ID.
+
+The preflight detects a tag update or deletion during asset capture. Preventing
+an administrator from changing or deleting the tag while preflight is running
+requires repository tag protection or rulesets. This code does not configure
+or verify those settings.
