@@ -119,6 +119,8 @@ Analyst-task count: 1 for this review; 7 total through this dispatch. Token coun
 
 ## Analyst-task 08: Buildben corrected follow-up review (approved)
 
+[Paraphrase of Analyst-task 08 review.]
+
 Verdict: approved. Reviewed the complete corrected range `c6bcc9009955bdd785626b584903574126f79ea7..6d495879ec516c30535459cfaeac18cc42ded2ed`, including both commits. The root and project scaffold use `/repos/$GITHUB_REPOSITORY/releases/assets/$asset_id`; tests assert the exact requests and reject the prior route. The approved safeguards remain: exact tag-policy resolution, preflight package hashes and identity manifest, tag recheck, artifact upload before authorization, and privileged download by artifact ID followed by manifest/package verification. Automatic release and PyPI sections are unchanged from the range base.
 
 The Analyst independently ran 62 tests (4 skipped), Ruff, Pyright (zero diagnostics), full-range `git diff --check`, the false local policy check, and a negative mutation check for the old endpoint. No live workflow or publication was exercised. The documented residual risk is that administrators can move/delete the tag after preflight; tag protection is not established by this code change.
@@ -133,6 +135,8 @@ Analyst-task count: 1 for this follow-up; 8 total through this dispatch. Token c
 
 ## Analyst-task 09: Buildben Merge Summary
 
+[Paraphrase of Analyst-task 09 Merge Summary.]
+
 The Merge Summary reports that the approved Worker-task 03 range was integrated without conflicts in merge commit `8c937020a5e1c7776f9d0d7f069a1de571eb7019`. Its two worker commits were authored by `markur4`. The integrated change binds manual PyPI publication to the checked tag snapshot using package hashes and recorded release/tag/commit identities. Post-merge validation passed: 66 tests, Ruff format and lint, Pyright with zero diagnostics, root and rendered-scaffold workflow YAML parsing, `just --list`, `just --evaluate RELEASE_PYPI` returning `false`, and `git diff --check`. SSH signature verification remains unavailable because `gpg.ssh.allowedSignersFile` is unset. Local `main` is ahead of `origin/main`; no push, workflow dispatch, release, or PyPI publication occurred.
 
 Exact Analyst-authored Session-record commit message:
@@ -142,3 +146,51 @@ Merge Worker-task 03: enforce Buildben tag policy and validated PyPI snapshots
 ```
 
 Analyst-task count: 1 for this Merge Summary; 9 total through this dispatch. Token counts unavailable.
+
+## Analyst-task 10: PersoDB full-range code review
+
+Verdict: changes requested
+
+[Paraphrase of Analyst-task 10 review.]
+
+Reviewed the complete frozen range `873f1aae860b3ec1fc4421b64bc5017de4f70817..ac91a530a8b7bce3c9b1124cfa3650c7f08a11f3`, containing commits `e8c247b68518c330390125fc55de3dbde579aefa` and `ac91a530a8b7bce3c9b1124cfa3650c7f08a11f3`, and all eight changed files.
+
+1. **P2: The changelog omits the breaking manual-publication requirement and migration.** `CHANGELOG.md:68` leaves Breaking changes empty. `CHANGELOG.md:92` records the policy change only under Fixed, without identifying affected maintainers or explaining migration. Previously, maintainers could manually publish an existing release while committed policy was false; this range requires committed true policy in both the current/workflow-run commit and target tag. That changes release-tool usage.
+
+   The required `repository-engineering` skill says to “make breaking changes explicit under `### 💥 Breaking changes`” and requires affected users and migration instructions. Canonical Buildben already documents this same requirement under Breaking changes.
+
+   **Required correction:** Add an explicit Breaking entry identifying maintainers who previously used manual publication with false policy. Explain that an intentionally PyPI-enabled release requires committing true before preparing its release tag, using a workflow-run commit and target tag that both contain true, and running the local command from a committed true HEAD. Existing false-policy tags remain ineligible. Keep PersoDB's current flag false. The Fixed entry can retain the enforcement and snapshot details without duplicating the migration.
+
+No additional blocking implementation findings were identified. The review found that exact `refs/tags/<tag>` resolution fails closed for missing tags, non-commit targets, and same-named branches; local false policy stops before GitHub authentication; and manual preflight evaluates the immutable workflow-run SHA and exact tag commit before authorization. Preflight captures and validates only the selected PersoDB wheel and source archive, hashes them, records identities, rechecks the remote tag, and uploads before authorizing publication. The privileged publisher uses the artifact ID, verifies manifest identity, exact files, and hashes, and publishes only the captured packages. PersoDB's package-specific filter excludes installation bundles; automatic jobs, GitHub Release attachments, and installation-bundle jobs are unchanged from the range base. `AGENTS.md`, README, and development guidance prohibit manual publication or retry while committed policy is false.
+
+Independent checks passed: 71 focused release and installer tests; full suite 446 passed, 2 skipped, 62 warnings; Ruff format and lint for changed test files; Pyright zero diagnostics; workflow YAML parsing; full-range `git diff --check`; and `just --evaluate RELEASE_PYPI` returning `false`. Worker-reported checks included the same full suite, all-project Ruff and Pyright, `just --summary`, and clean worktree. No live workflow or publication was performed.
+
+Residual risk: administrators can move or delete the tag after preflight. Publication remains bound to the captured snapshot, but repository protections are needed to preserve tag identity. Repository tag settings and signature trust were not verified.
+
+Integration approval and its commit message are withheld pending the changelog correction and follow-up review.
+
+Analyst-task count: 1 for this review; 10 total through this dispatch. Token counts unavailable.
+
+## Analyst-task 11: PersoDB corrected full-range review
+
+Verdict: approved
+
+[Paraphrase of Analyst-task 11 review.]
+
+Reviewed the complete corrected range `873f1aae860b3ec1fc4421b64bc5017de4f70817..fc26508ccb73a654ab019de9c7ff8fc7e83233be`, containing commits `e8c247b68518c330390125fc55de3dbde579aefa`, `ac91a530a8b7bce3c9b1124cfa3650c7f08a11f3`, and `fc26508ccb73a654ab019de9c7ff8fc7e83233be`.
+
+No blocking findings remain. Analyst-task 10's P2 is resolved at `CHANGELOG.md:70`: the entry appears under Breaking changes, names affected maintainers, and explains the committed true-policy migration for both workflow-run and exact target-tag commits, the local committed-HEAD requirement, and continued ineligibility of false-policy tags. It matches canonical Buildben, while PersoDB's committed default remains false.
+
+The correction changes only `CHANGELOG.md`; the other seven files remain byte-for-byte unchanged from the previously reviewed tip. The prior review findings remain resolved: exact tag resolution fails closed; false policy blocks local and manual publication; preflight checks immutable commit identities; the privileged publisher consumes only the validated artifact-ID snapshot; and ordinary GitHub Releases and installation bundles remain intact.
+
+Independent follow-up checks: 40 release tests passed; changelog parsing returned latest release `0.11.1`; `just --evaluate RELEASE_PYPI` returned `false`; full-range `git diff --check` passed; frozen tip and clean worktree confirmed. The previous independent validation remains applicable: 446 tests passed, 2 skipped, 62 warnings; 71 focused release/installer tests; Ruff, Pyright, and workflow YAML parsing. These broader checks were not rerun for the documentation-only correction.
+
+Residual risk is unchanged: administrators can move/delete a tag after preflight. Publication remains bound to the captured snapshot, but repository protections are needed to preserve tag identity. Repository settings and signature trust remain unverified. No live workflow or publication occurred.
+
+Analyst-authored integration commit message:
+
+```text
+Merge Worker-task 02: enforce PersoDB policy and validated PyPI snapshots
+```
+
+Analyst-task count: 1 for this follow-up review; 11 total through this dispatch. Token counts unavailable.

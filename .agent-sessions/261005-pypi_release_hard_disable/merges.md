@@ -41,3 +41,28 @@ Exact Analyst-authored Session-record commit message, identical to the merge mes
 ```text
 Merge Worker-task 03: enforce Buildben tag policy and validated PyPI snapshots
 ```
+
+## Merge 03: PersoDB Worker-task 02
+
+[Paraphrase of Analyst-task 12 Merge Summary; commit IDs and checks were independently verified from local Git state and post-merge commands.]
+
+- Branch: `worker/261005-pypi_release_hard_disable-02-persodb_policy`.
+- Approved worker range: `873f1aae860b3ec1fc4421b64bc5017de4f70817..fc26508ccb73a654ab019de9c7ff8fc7e83233be`.
+- Worker commits, all authored by `markur4`:
+  - `e8c247b68518c330390125fc55de3dbde579aefa`: enforce committed PyPI policy.
+  - `ac91a530a8b7bce3c9b1124cfa3650c7f08a11f3`: publish only the validated PyPI snapshot.
+  - `fc26508ccb73a654ab019de9c7ff8fc7e83233be`: document the PyPI policy migration.
+- Merge commit and resulting local `main`: `5be08568cdbffddcbfb9292bc4622e2248e71740`, authored by `markur4`; parents are the worker base and approved tip.
+- Merged files: `.github/workflows/release.yml`, `AGENTS.md`, `CHANGELOG.md`, `README.md`, `docs/Development.md`, `justfile`, `tests/test_installers.py`, and `tests/test_release_tooling.py`.
+- Merge outcome: no-fast-forward `ort` merge; no conflicts or conflict-resolution edits.
+- Post-merge checks after `uv sync --locked --all-groups`: pytest passed 446 tests with 2 skipped and 60 warnings; Ruff format check passed (135 files); Ruff lint passed; Pyright reported zero errors, warnings, or informations; release workflow YAML parsed; `just --summary` passed; `just --evaluate RELEASE_PYPI` returned `false`; and `git diff --check origin/main..HEAD` passed.
+- The first pytest/Pyright run used a stale environment containing AppRC 0.27.2 and failed on APIs expected by PersoDB. Locked sync installed AppRC 0.28.0 and the matching Haiu revision; subsequent checks passed. The sync changed no tracked project files.
+- The main checkout retains seven pre-existing dirty entries under `INPUT/` and no other dirty paths. They were preserved.
+- The merge commit has an SSH signature header. Signature trust verification is unavailable because `gpg.ssh.allowedSignersFile` is not configured.
+- No push, workflow dispatch, release, or PyPI publication occurred.
+
+Exact Analyst-authored Session-record commit message, identical to the merge message:
+
+```text
+Merge Worker-task 02: enforce PersoDB policy and validated PyPI snapshots
+```
