@@ -134,7 +134,16 @@ jobs:
     permissions:
       contents: read
     outputs:
-      publish_pypi: ${{ steps.release_policy.outputs.publish_pypi }}
+      publish_pypi: ${{ steps.authorize.outputs.publish_pypi || 'false' }}
+      artifact_id: ${{ steps.upload_snapshot.outputs.artifact-id }}
+      release_id: ${{ steps.release_policy.outputs.release_id }}
+      release_tag: ${{ steps.release_policy.outputs.release_tag }}
+      active_commit_sha: ${{ steps.release_policy.outputs.active_commit_sha }}
+      tag_object_sha: ${{ steps.release_policy.outputs.tag_object_sha }}
+      target_commit_sha: ${{ steps.release_policy.outputs.target_commit_sha }}
+      manifest_sha256: ${{ steps.release_policy.outputs.manifest_sha256 }}
+      wheel_name: ${{ steps.release_policy.outputs.wheel_name }}
+      sdist_name: ${{ steps.release_policy.outputs.sdist_name }}
 
     steps:
       - name: Checkout workflow-run commit
@@ -148,12 +157,19 @@ jobs:
         with:
           just-version: "1.56.0"
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+
       - name: Validate workflow-run commit and requested tag
         id: release_policy
         env:
           ACTIVE_WORKFLOW_SHA: ${{ github.sha }}
           ACTIVE_WORKFLOW_REF: ${{ github.ref }}
           RELEASE_TAG: ${{ inputs.release_tag }}
+          PACKAGE_NAME: {my_project}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -169,12 +185,21 @@ jobs:
             echo "Checked-out commit ${checked_out_commit:-unknown} does not match workflow-run commit ${ACTIVE_WORKFLOW_SHA}." >&2
             exit 1
           fi
-          if ! git fetch --no-tags origin "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"; then
+          tag_ref="refs/tags/$RELEASE_TAG"
+          if ! git fetch --no-tags origin "$tag_ref:$tag_ref"; then
             echo "Could not fetch target tag ${RELEASE_TAG}." >&2
             exit 1
           fi
-          if ! target_commit="$(git rev-parse --verify "${RELEASE_TAG}^{commit}" 2>/dev/null)"; then
-            echo "Target tag ${RELEASE_TAG} does not resolve to a commit." >&2
+          if ! tag_object_sha="$(git rev-parse --verify --end-of-options "$tag_ref" 2>/dev/null)"; then
+            echo "Exact target tag ref ${tag_ref} does not resolve." >&2
+            exit 1
+          fi
+          if ! target_commit="$(git rev-parse --verify --end-of-options "$tag_ref"^{commit} 2>/dev/null)"; then
+            echo "Exact target tag ref ${tag_ref} does not peel to a commit." >&2
+            exit 1
+          fi
+          if [[ ! "$tag_object_sha" =~ ^[0-9a-f]{40,64}$ || ! "$target_commit" =~ ^[0-9a-f]{40,64}$ ]]; then
+            echo "The target tag did not resolve to immutable Git object IDs." >&2
             exit 1
           fi
 
@@ -204,19 +229,135 @@ jobs:
 
           active_policy="$(read_release_policy "$active_commit" "workflow-run commit ${ACTIVE_WORKFLOW_SHA} (ref ${ACTIVE_WORKFLOW_REF})")"
           target_policy="$(read_release_policy "$target_commit" "target tag ${RELEASE_TAG}")"
-          publish_pypi=false
-          if [[ "$active_policy" == "true" && "$target_policy" == "true" ]]; then
-            publish_pypi=true
-          else
+          if [[ "$active_policy" != "true" || "$target_policy" != "true" ]]; then
             echo "Manual PyPI publication is disabled unless RELEASE_PYPI is \"true\" in both committed justfiles."
+            echo "snapshot_ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-          echo "publish_pypi=${publish_pypi}" >> "$GITHUB_OUTPUT"
+
+          release_metadata="$(mktemp)"
+          trap 'rm -f "$release_metadata"' EXIT
+          gh api "/repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > "$release_metadata"
+          release_id="$(jq -er '.id | select(type == "number" and . > 0)' "$release_metadata")"
+          release_tag="$(jq -er '.tag_name | select(type == "string")' "$release_metadata")"
+          is_draft="$(jq -r '.draft | select(type == "boolean") | tostring' "$release_metadata")"
+          if [[ "$release_tag" != "$RELEASE_TAG" || "$is_draft" != "false" ]]; then
+            echo "GitHub Release must be non-draft and identify exact tag $RELEASE_TAG." >&2
+            exit 1
+          fi
+          version="$(cut -c 2- <<< "$RELEASE_TAG")"
+          wheel_count="$(jq '[.assets[].name | select(endswith(".whl"))] | length' "$release_metadata")"
+          sdist_count="$(jq '[.assets[].name | select(endswith(".tar.gz"))] | length' "$release_metadata")"
+          if [[ "$wheel_count" != "1" || "$sdist_count" != "1" ]]; then
+            echo "GitHub Release $RELEASE_TAG must contain exactly one wheel and one source archive." >&2
+            exit 1
+          fi
+          wheel_name="$(jq -er '[.assets[].name | select(endswith(".whl"))][0]' "$release_metadata")"
+          sdist_name="$(jq -er '[.assets[].name | select(endswith(".tar.gz"))][0]' "$release_metadata")"
+          if [[ "$wheel_name" != "$PACKAGE_NAME-$version-"*.whl || "$sdist_name" != "$PACKAGE_NAME-$version.tar.gz" || "$wheel_name" == */* || "$wheel_name" == *$'\n'* || "$wheel_name" == *$'\r'* ]]; then
+            echo "Release asset filenames do not match tag $RELEASE_TAG." >&2
+            exit 1
+          fi
+          wheel_asset_id="$(jq -er --arg name "$wheel_name" '.assets[] | select(.name == $name) | .id | select(type == "number" and . > 0)' "$release_metadata")"
+          sdist_asset_id="$(jq -er --arg name "$sdist_name" '.assets[] | select(.name == $name) | .id | select(type == "number" and . > 0)' "$release_metadata")"
+
+          snapshot_dir="manual-pypi-snapshot"
+          mkdir "$snapshot_dir"
+          gh api "/repos/$GITHUB_REPOSITORY/releases/$release_id/assets/$wheel_asset_id" --header "Accept: application/octet-stream" > "$snapshot_dir/$wheel_name"
+          gh api "/repos/$GITHUB_REPOSITORY/releases/$release_id/assets/$sdist_asset_id" --header "Accept: application/octet-stream" > "$snapshot_dir/$sdist_name"
+          expected_files="$(printf '%s\n%s' "$sdist_name" "$wheel_name" | LC_ALL=C sort)"
+          actual_files="$(find "$snapshot_dir" -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort)"
+          if [[ "$actual_files" != "$expected_files" || ! -f "$snapshot_dir/$wheel_name" || -L "$snapshot_dir/$wheel_name" || ! -f "$snapshot_dir/$sdist_name" || -L "$snapshot_dir/$sdist_name" ]]; then
+            echo "Downloaded release files do not match the selected wheel and source archive." >&2
+            exit 1
+          fi
+          uvx --from twine twine check "$snapshot_dir/$wheel_name" "$snapshot_dir/$sdist_name"
+
+          python3 - "$snapshot_dir/manifest.json" "$release_id" "$RELEASE_TAG" "$active_commit" "$tag_object_sha" "$target_commit" "$wheel_name" "$sdist_name" <<'PY'
+          import hashlib
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          manifest_path, release_id, tag, active_sha, tag_object_sha, target_sha, wheel_name, sdist_name = sys.argv[1:]
+          snapshot_dir = Path(manifest_path).parent
+          packages = []
+          for filename in (wheel_name, sdist_name):
+              digest = hashlib.sha256((snapshot_dir / filename).read_bytes()).hexdigest()
+              packages.append({"filename": filename, "sha256": digest})
+          manifest = {
+              "schema_version": 1,
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "release_id": int(release_id),
+              "release_tag": tag,
+              "workflow_run_commit_sha": active_sha,
+              "tag_object_sha": tag_object_sha,
+              "tag_commit_sha": target_sha,
+              "packages": packages,
+          }
+          Path(manifest_path).write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+
+          if ! final_remote_tag="$(git ls-remote --exit-code --refs origin "$tag_ref")"; then
+            echo "Exact remote tag ref $tag_ref disappeared during asset capture." >&2
+            exit 1
+          fi
+          if [[ "$final_remote_tag" != "$tag_object_sha"$'\t'"$tag_ref" ]]; then
+            echo "Exact remote tag ref $tag_ref changed during asset capture." >&2
+            exit 1
+          fi
+
+          manifest_sha256="$(sha256sum "$snapshot_dir/manifest.json" | cut -d ' ' -f 1)"
+          {
+            echo "release_id=$release_id"
+            echo "release_tag=$RELEASE_TAG"
+            echo "active_commit_sha=$active_commit"
+            echo "tag_object_sha=$tag_object_sha"
+            echo "target_commit_sha=$target_commit"
+            echo "manifest_sha256=$manifest_sha256"
+            echo "wheel_name=$wheel_name"
+            echo "sdist_name=$sdist_name"
+            echo "snapshot_ready=true"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload validated release snapshot
+        id: upload_snapshot
+        if: steps.release_policy.outputs.snapshot_ready == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: manual-pypi-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            manual-pypi-snapshot/manifest.json
+            manual-pypi-snapshot/${{ steps.release_policy.outputs.wheel_name }}
+            manual-pypi-snapshot/${{ steps.release_policy.outputs.sdist_name }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Authorize publication after snapshot upload
+        id: authorize
+        if: >-
+          steps.release_policy.outputs.snapshot_ready == 'true' &&
+          steps.upload_snapshot.outcome == 'success' &&
+          steps.upload_snapshot.outputs.artifact-id != ''
+        shell: bash
+        env:
+          ARTIFACT_ID: ${{ steps.upload_snapshot.outputs.artifact-id }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$ARTIFACT_ID" ]]; then
+            echo "Validated release snapshot has no artifact ID." >&2
+            exit 1
+          fi
+          echo "publish_pypi=true" >> "$GITHUB_OUTPUT"
 
   publish-existing-release:
     name: Publish existing GitHub Release to PyPI
     if: >-
       github.event_name == 'workflow_dispatch' &&
-      needs.manual_pypi_preflight.outputs.publish_pypi == 'true'
+      needs.manual_pypi_preflight.result == 'success' &&
+      needs.manual_pypi_preflight.outputs.publish_pypi == 'true' &&
+      needs.manual_pypi_preflight.outputs.artifact_id != ''
     needs: manual_pypi_preflight
     runs-on: ubuntu-latest
     environment: pypi
@@ -230,51 +371,76 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Download and validate GitHub Release artifacts
+      - name: Download the preflight snapshot by artifact ID
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ needs.manual_pypi_preflight.outputs.artifact_id }}
+          path: manual-pypi-snapshot
+
+      - name: Verify the preflight manifest and package hashes
         env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+          EXPECTED_RELEASE_ID: ${{ needs.manual_pypi_preflight.outputs.release_id }}
+          EXPECTED_RELEASE_TAG: ${{ needs.manual_pypi_preflight.outputs.release_tag }}
+          EXPECTED_ACTIVE_COMMIT_SHA: ${{ needs.manual_pypi_preflight.outputs.active_commit_sha }}
+          EXPECTED_TAG_OBJECT_SHA: ${{ needs.manual_pypi_preflight.outputs.tag_object_sha }}
+          EXPECTED_TARGET_COMMIT_SHA: ${{ needs.manual_pypi_preflight.outputs.target_commit_sha }}
+          EXPECTED_MANIFEST_SHA256: ${{ needs.manual_pypi_preflight.outputs.manifest_sha256 }}
+          EXPECTED_WHEEL_NAME: ${{ needs.manual_pypi_preflight.outputs.wheel_name }}
+          EXPECTED_SDIST_NAME: ${{ needs.manual_pypi_preflight.outputs.sdist_name }}
         shell: bash
         run: |
-          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-            echo "Invalid release tag '${RELEASE_TAG}'; expected vMAJOR.MINOR.PATCH." >&2
-            exit 1
-          fi
-          if ! is_draft="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)"; then
-            echo "GitHub Release ${RELEASE_TAG} does not exist." >&2
-            exit 1
-          fi
-          if [[ "$is_draft" == "true" ]]; then
-            echo "GitHub Release ${RELEASE_TAG} is still a draft." >&2
-            exit 1
-          fi
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
 
-          mkdir dist
-          gh release download "$RELEASE_TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --dir dist \
-            --pattern '*.whl' \
-            --pattern '*.tar.gz'
-
-          shopt -s nullglob
-          wheels=(dist/*.whl)
-          sdists=(dist/*.tar.gz)
-          version="${RELEASE_TAG#v}"
-          if [[ "${#wheels[@]}" -ne 1 || "${#sdists[@]}" -ne 1 ]]; then
-            echo "Expected exactly one wheel and one source archive on ${RELEASE_TAG}." >&2
-            exit 1
-          fi
-          if [[ "$(basename "${wheels[0]}")" != {my_project}-${version}-*.whl ]]; then
-            echo "The wheel filename does not match ${RELEASE_TAG}: ${wheels[0]}." >&2
-            exit 1
-          fi
-          if [[ "$(basename "${sdists[0]}")" != "{my_project}-${version}.tar.gz" ]]; then
-            echo "The source archive filename does not match ${RELEASE_TAG}: ${sdists[0]}." >&2
-            exit 1
-          fi
-          uv run --with twine --no-project -- twine check "${wheels[0]}" "${sdists[0]}"
+          snapshot_dir = Path("manual-pypi-snapshot")
+          manifest_path = snapshot_dir / "manifest.json"
+          wheel_name = os.environ["EXPECTED_WHEEL_NAME"]
+          sdist_name = os.environ["EXPECTED_SDIST_NAME"]
+          expected_names = sorted(("manifest.json", wheel_name, sdist_name))
+          entries = sorted(path.name for path in snapshot_dir.iterdir())
+          if entries != expected_names:
+              raise SystemExit("Preflight artifact contains missing or unexpected files.")
+          for filename in expected_names:
+              path = snapshot_dir / filename
+              if not path.is_file() or path.is_symlink():
+                  raise SystemExit(f"Preflight artifact entry is not a regular file: {filename}")
+          manifest_bytes = manifest_path.read_bytes()
+          manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
+          if manifest_sha256 != os.environ["EXPECTED_MANIFEST_SHA256"]:
+              raise SystemExit("Preflight manifest hash does not match the recorded output.")
+          manifest = json.loads(manifest_bytes)
+          expected_identity = {
+              "schema_version": 1,
+              "repository": os.environ["EXPECTED_REPOSITORY"],
+              "release_id": int(os.environ["EXPECTED_RELEASE_ID"]),
+              "release_tag": os.environ["EXPECTED_RELEASE_TAG"],
+              "workflow_run_commit_sha": os.environ["EXPECTED_ACTIVE_COMMIT_SHA"],
+              "tag_object_sha": os.environ["EXPECTED_TAG_OBJECT_SHA"],
+              "tag_commit_sha": os.environ["EXPECTED_TARGET_COMMIT_SHA"],
+          }
+          for key, value in expected_identity.items():
+              if manifest.get(key) != value:
+                  raise SystemExit(f"Preflight manifest identity mismatch for {key}.")
+          expected_packages = {wheel_name, sdist_name}
+          packages = manifest.get("packages")
+          if not isinstance(packages, list) or {item.get("filename") for item in packages if isinstance(item, dict)} != expected_packages or len(packages) != 2:
+              raise SystemExit("Preflight manifest package set does not match the expected release files.")
+          for package in packages:
+              filename = package["filename"]
+              digest = hashlib.sha256((snapshot_dir / filename).read_bytes()).hexdigest()
+              if package.get("sha256") != digest:
+                  raise SystemExit(f"Preflight package hash mismatch for {filename}.")
+          PY
 
       - name: Publish existing artifacts to PyPI
+        env:
+          WHEEL_NAME: ${{ needs.manual_pypi_preflight.outputs.wheel_name }}
+          SDIST_NAME: ${{ needs.manual_pypi_preflight.outputs.sdist_name }}
         shell: bash
         run: |
           project_name="{my_project}"
@@ -283,4 +449,5 @@ jobs:
           uv publish \
             --trusted-publishing always \
             --check-url "https://pypi.org/simple/${normalized_project}/" \
-            dist/*
+            "manual-pypi-snapshot/$WHEEL_NAME" \
+            "manual-pypi-snapshot/$SDIST_NAME"

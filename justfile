@@ -57,18 +57,35 @@ _committed-release-pypi-policy ref:
     #!/usr/bin/env bash
     set -euo pipefail
     ref="{{ ref }}"
+    if [[ "$ref" == "HEAD" ]]; then
+        policy_commit="$(git rev-parse --verify --end-of-options 'HEAD^{commit}')"
+    else
+        tag_ref="refs/tags/${ref}"
+        if ! git check-ref-format "$tag_ref" >/dev/null; then
+            echo "Invalid exact release tag ref ${tag_ref}." >&2
+            exit 1
+        fi
+        if ! policy_commit="$(git rev-parse --verify --end-of-options "${tag_ref}^{commit}" 2>/dev/null)"; then
+            echo "Could not resolve exact release tag ref ${tag_ref} to a commit." >&2
+            exit 1
+        fi
+    fi
+    if [[ ! "$policy_commit" =~ ^[0-9a-f]{40,64}$ ]]; then
+        echo "Resolved release policy target is not an immutable commit SHA." >&2
+        exit 1
+    fi
     committed_justfile="$(mktemp)"
     trap 'rm -f "$committed_justfile"' EXIT
-    if ! git show "${ref}:justfile" > "$committed_justfile"; then
-        echo "Could not read justfile from commit ${ref}." >&2
+    if ! git show "${policy_commit}:justfile" > "$committed_justfile"; then
+        echo "Could not read justfile from commit ${policy_commit}." >&2
         exit 1
     fi
     if ! release_pypi="$(just --no-dotenv --justfile "$committed_justfile" --evaluate RELEASE_PYPI)"; then
-        echo "Could not evaluate RELEASE_PYPI in the committed justfile at ${ref}." >&2
+        echo "Could not evaluate RELEASE_PYPI in the committed justfile at ${policy_commit}." >&2
         exit 1
     fi
     if [[ "$release_pypi" != "true" && "$release_pypi" != "false" ]]; then
-        echo "RELEASE_PYPI must be \"true\" or \"false\" in the committed justfile at ${ref}, found '${release_pypi}'." >&2
+        echo "RELEASE_PYPI must be \"true\" or \"false\" in the committed justfile at ${policy_commit}, found '${release_pypi}'." >&2
         exit 1
     fi
     printf '%s\n' "$release_pypi"
@@ -392,18 +409,18 @@ release-push tag:
         echo "Release pushes must run from the main branch." >&2
         exit 1
     fi
-    if ! git cat-file -e "${tag}^{tag}" 2>/dev/null; then
+    if ! git cat-file -e "refs/tags/${tag}^{tag}" 2>/dev/null; then
         echo "Annotated local tag ${tag} does not exist." >&2
         exit 1
     fi
-    if [[ "$(git rev-list -n 1 "$tag")" != "$(git rev-parse HEAD)" ]]; then
+    if [[ "$(git rev-list -n 1 "refs/tags/${tag}")" != "$(git rev-parse --verify --end-of-options 'HEAD^{commit}')" ]]; then
         echo "Tag ${tag} does not point to the current main commit." >&2
         exit 1
     fi
     release_pypi="$(just _committed-release-pypi-policy "$tag")"
 
     echo "Pushing main and ${tag} atomically. RELEASE_PYPI=${release_pypi}."
-    if ! git push --atomic origin main "$tag"; then
+    if ! git push --atomic origin refs/heads/main:refs/heads/main "refs/tags/${tag}:refs/tags/${tag}"; then
         echo "The remote push failed. The release remains prepared locally." >&2
         echo "Retry with: just release-push ${tag}" >&2
         exit 1
