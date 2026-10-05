@@ -263,8 +263,8 @@ jobs:
 
           snapshot_dir="manual-pypi-snapshot"
           mkdir "$snapshot_dir"
-          gh api "/repos/$GITHUB_REPOSITORY/releases/$release_id/assets/$wheel_asset_id" --header "Accept: application/octet-stream" > "$snapshot_dir/$wheel_name"
-          gh api "/repos/$GITHUB_REPOSITORY/releases/$release_id/assets/$sdist_asset_id" --header "Accept: application/octet-stream" > "$snapshot_dir/$sdist_name"
+          gh api "/repos/$GITHUB_REPOSITORY/releases/assets/$wheel_asset_id" --header "Accept: application/octet-stream" > "$snapshot_dir/$wheel_name"
+          gh api "/repos/$GITHUB_REPOSITORY/releases/assets/$sdist_asset_id" --header "Accept: application/octet-stream" > "$snapshot_dir/$sdist_name"
           expected_files="$(printf '%s\n%s' "$sdist_name" "$wheel_name" | LC_ALL=C sort)"
           actual_files="$(find "$snapshot_dir" -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort)"
           if [[ "$actual_files" != "$expected_files" || ! -f "$snapshot_dir/$wheel_name" || -L "$snapshot_dir/$wheel_name" || ! -f "$snapshot_dir/$sdist_name" || -L "$snapshot_dir/$sdist_name" ]]; then

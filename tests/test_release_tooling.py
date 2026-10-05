@@ -284,10 +284,10 @@ case "$1:$2" in
     endpoint="$2"
     if [[ "$endpoint" == */releases/tags/* ]]; then
       cat "$MANUAL_RELEASE_JSON"
-    elif [[ "$endpoint" == */assets/101 ]]; then
+    elif [[ "$endpoint" == "/repos/buildben/example/releases/assets/101" ]]; then
       if [[ -n "$MOVE_TAG_OID" ]]; then git --git-dir "$REMOTE_GIT_DIR" update-ref refs/tags/v1.2.3 "$MOVE_TAG_OID"; fi
       cat "$MANUAL_WHEEL"
-    elif [[ "$endpoint" == */assets/102 ]]; then
+    elif [[ "$endpoint" == "/repos/buildben/example/releases/assets/102" ]]; then
       if [[ -n "$MOVE_TAG_OID" ]]; then git --git-dir "$REMOTE_GIT_DIR" update-ref refs/tags/v1.2.3 "$MOVE_TAG_OID"; fi
       cat "$MANUAL_SDIST"
     else
@@ -412,8 +412,15 @@ exit 0
     calls = gh_log.read_text(encoding="utf-8").splitlines()
     assert len(calls) == 3
     assert calls[0].startswith("api /repos/buildben/example/releases/tags/v1.2.3")
-    assert any("releases/42/assets/101" in call for call in calls)
-    assert any("releases/42/assets/102" in call for call in calls)
+    assert calls[1] == (
+        "api /repos/buildben/example/releases/assets/101 --header "
+        "Accept: application/octet-stream"
+    )
+    assert calls[2] == (
+        "api /repos/buildben/example/releases/assets/102 --header "
+        "Accept: application/octet-stream"
+    )
+    assert all("/releases/42/assets/" not in call for call in calls)
     assert "twine check manual-pypi-snapshot/" in uvx_log.read_text(encoding="utf-8")
 
     import hashlib
