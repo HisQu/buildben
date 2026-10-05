@@ -25,6 +25,221 @@ default:
     @just --list
 
 # ---------------------------------------------------------------
+# Optional Git worktree workflows
+# ---------------------------------------------------------------
+
+# Create a linked checkout from a frozen commit and sync its own environment.
+# Pass recipe values as arguments instead of inserting them into shell source.
+[positional-arguments]
+worktree-create branch destination base:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    branch="$1"
+    destination_input="$2"
+    base="$3"
+
+    if ! git check-ref-format "refs/heads/${branch}" >/dev/null 2>&1; then
+        echo "Invalid Git branch name." >&2
+        exit 2
+    fi
+    branch_ref="refs/heads/${branch}"
+    if git show-ref --verify --quiet "$branch_ref"; then
+        echo "That local branch already exists." >&2
+        exit 2
+    else
+        show_ref_status=$?
+        if [[ "$show_ref_status" -ne 1 ]]; then
+            echo "Could not check whether the branch exists." >&2
+            exit "$show_ref_status"
+        fi
+    fi
+
+    if ! base_commit="$(git rev-parse --verify --end-of-options "${base}^{commit}" 2>/dev/null)"; then
+        echo "Base must resolve to a Git commit." >&2
+        exit 2
+    fi
+    if [[ ! "$base_commit" =~ ^[0-9a-f]{40,64}$ ]]; then
+        echo "Resolved base is not an immutable Git commit SHA." >&2
+        exit 2
+    fi
+
+    if [[ -z "$destination_input" || "$destination_input" == *$'\n'* || "$destination_input" == *$'\r'* ]]; then
+        echo "Destination must be a non-empty path without line breaks." >&2
+        exit 2
+    fi
+    project_root="$(git rev-parse --show-toplevel)"
+    project_root="$(cd -- "$project_root" && pwd -P)"
+    case "$destination_input" in
+        /*) requested_path="$destination_input" ;;
+        *) requested_path="$project_root/$destination_input" ;;
+    esac
+    destination_name="$(basename "$requested_path")"
+    destination_parent="$(dirname "$requested_path")"
+    if [[ "$destination_name" == "." || "$destination_name" == ".." || "$destination_name" == "/" ]]; then
+        echo "Destination must name a new directory." >&2
+        exit 2
+    fi
+    if [[ ! -d "$destination_parent" ]]; then
+        echo "Destination parent directory must already exist." >&2
+        exit 2
+    fi
+    destination_parent="$(cd -- "$destination_parent" && pwd -P)"
+    if [[ "$destination_parent" == "/" ]]; then
+        destination_path="/$destination_name"
+    else
+        destination_path="$destination_parent/$destination_name"
+    fi
+    if [[ -e "$destination_path" || -L "$destination_path" ]]; then
+        echo "Destination already exists." >&2
+        exit 2
+    fi
+
+    while IFS= read -r -d '' record; do
+        case "$record" in
+            "worktree "*)
+                existing_path="${record#worktree }"
+                if [[ -d "$existing_path" ]]; then
+                    existing_path="$(cd -- "$existing_path" && pwd -P)"
+                    if [[ "$destination_path" == "$existing_path" || "$destination_path" == "$existing_path/"* ]]; then
+                        echo "Destination must be outside every existing Git worktree." >&2
+                        exit 2
+                    fi
+                fi
+                ;;
+        esac
+    done < <(git worktree list --porcelain -z)
+
+    if ! git worktree add -b "$branch" -- "$destination_path" "$base_commit"; then
+        echo "Could not create the Git worktree." >&2
+        exit 1
+    fi
+    echo "Created worktree at $destination_path from $base_commit."
+
+    if (
+        cd -- "$destination_path"
+        export UV_PROJECT_ENVIRONMENT="$destination_path/.venv"
+        uv sync --locked --all-extras --all-groups
+    ); then
+        echo "Dependencies synced in $destination_path/.venv."
+    else
+        sync_status=$?
+        printf 'Dependency setup failed; retained worktree for inspection: %s\n' "$destination_path" >&2
+        exit "$sync_status"
+    fi
+
+# Remove one selected linked checkout after checking its state and merge status.
+# Pass recipe values as arguments instead of inserting them into shell source.
+[positional-arguments]
+worktree-remove destination delete_branch="false":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    destination_input="$1"
+    delete_branch="${2:-false}"
+    if [[ "$delete_branch" != "true" && "$delete_branch" != "false" ]]; then
+        echo "delete_branch must be true or false." >&2
+        exit 2
+    fi
+    if [[ -z "$destination_input" || "$destination_input" == *$'\n'* || "$destination_input" == *$'\r'* ]]; then
+        echo "Destination must be a non-empty path without line breaks." >&2
+        exit 2
+    fi
+    project_root="$(git rev-parse --show-toplevel)"
+    project_root="$(cd -- "$project_root" && pwd -P)"
+    case "$destination_input" in
+        /*) requested_path="$destination_input" ;;
+        *) requested_path="$project_root/$destination_input" ;;
+    esac
+    if [[ ! -d "$requested_path" ]]; then
+        echo "Destination must be an existing Git worktree directory." >&2
+        exit 2
+    fi
+    destination_path="$(cd -- "$requested_path" && pwd -P)"
+    current_worktree="$(cd -- "$(git rev-parse --show-toplevel)" && pwd -P)"
+
+    main_worktree=""
+    selected_worktree=""
+    selected_branch_ref=""
+    entry_path=""
+    entry_branch_ref=""
+    worktree_count=0
+    record_worktree() {
+        if [[ -z "$entry_path" ]]; then
+            return
+        fi
+        worktree_count=$((worktree_count + 1))
+        if [[ -d "$entry_path" ]]; then
+            entry_real="$(cd -- "$entry_path" && pwd -P)"
+        else
+            entry_real="$entry_path"
+        fi
+        if [[ "$worktree_count" -eq 1 ]]; then
+            main_worktree="$entry_real"
+        fi
+        if [[ "$entry_real" == "$destination_path" ]]; then
+            selected_worktree="$entry_path"
+            selected_branch_ref="$entry_branch_ref"
+        fi
+    }
+    while IFS= read -r -d '' record; do
+        case "$record" in
+            "worktree "*) entry_path="${record#worktree }" ;;
+            "branch "*) entry_branch_ref="${record#branch }" ;;
+            "")
+                record_worktree
+                entry_path=""
+                entry_branch_ref=""
+                ;;
+        esac
+    done < <(git worktree list --porcelain -z)
+    record_worktree
+
+    if [[ -z "$selected_worktree" ]]; then
+        echo "Destination is not a registered Git worktree." >&2
+        exit 2
+    fi
+    if [[ "$destination_path" == "$main_worktree" ]]; then
+        echo "Refusing to remove the main worktree." >&2
+        exit 2
+    fi
+    if [[ "$destination_path" == "$current_worktree" ]]; then
+        echo "Refusing to remove the current worktree." >&2
+        exit 2
+    fi
+    if [[ -z "$selected_branch_ref" || "$selected_branch_ref" != refs/heads/* ]]; then
+        echo "Refusing to remove a detached worktree without a branch to verify." >&2
+        exit 2
+    fi
+    if [[ "$selected_branch_ref" == "refs/heads/main" ]]; then
+        echo "Refusing to remove the main branch worktree." >&2
+        exit 2
+    fi
+
+    worktree_status="$(git -C "$selected_worktree" status --porcelain --untracked-files=all)"
+    if [[ -n "$worktree_status" ]]; then
+        echo "Refusing to remove a dirty worktree; commit or remove its changes first." >&2
+        exit 2
+    fi
+    if ! main_commit="$(git rev-parse --verify --end-of-options 'refs/heads/main^{commit}' 2>/dev/null)"; then
+        echo "Cannot verify the branch because local main does not resolve to a commit." >&2
+        exit 2
+    fi
+    if ! git merge-base --is-ancestor "$selected_branch_ref" "$main_commit"; then
+        echo "Refusing to remove a branch that is not merged into local main." >&2
+        exit 2
+    fi
+
+    selected_branch="${selected_branch_ref#refs/heads/}"
+    git worktree remove -- "$selected_worktree"
+    if [[ "$delete_branch" == "true" ]]; then
+        git branch -d -- "$selected_branch"
+        echo "Removed worktree and its merged branch $selected_branch."
+    else
+        echo "Removed worktree and kept branch $selected_branch."
+    fi
+
+# ---------------------------------------------------------------
 # Internal guards (kept private so they don't clutter `just --list`)
 # ---------------------------------------------------------------
 [private]

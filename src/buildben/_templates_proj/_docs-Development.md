@@ -4,6 +4,7 @@
 
 - [Work in the project](#work-in-the-project)
   - [Maintainer environment](#maintainer-environment)
+  - [Use Git worktrees](#use-git-worktrees)
   - [Repository routing](#repository-routing)
   - [Before editing](#before-editing)
 - [Document the project](#document-the-project)
@@ -39,6 +40,47 @@ commented `rag` extra in `pyproject.toml`, these commands install it:
 ```shell
 python -m pip install -e ".[rag]"
 python -m pip install -e ".[rag]" --group dev
+```
+
+## Use Git worktrees
+
+The optional `worktree-create` recipe makes a separate checkout from a Git
+branch, tag, or commit and installs its locked dependencies into that checkout's
+`.venv`. Run `just lock`, then commit `uv.lock` and `pylock.toml` on the base
+branch first. This workflow needs `uv`, while the normal project install paths
+above do not.
+
+Run the command from the project repository. The recipe adds the new checkout
+without changing your shell's directory. The destination's parent directory
+must exist, and the destination itself must be new. Relative destinations are
+resolved from the project root:
+
+```shell
+just worktree-create feature/parser "../parser trial" main
+cd "../parser trial"
+```
+
+The branch must be a valid local name that does not already exist. The recipe
+validates the destination, resolves the selected base to a commit before
+creating the worktree, then runs
+`uv sync --locked --all-extras --all-groups` inside it. The sync command sets
+`UV_PROJECT_ENVIRONMENT` to the new worktree's `.venv`, regardless of an
+inherited value. If dependency setup fails, the recipe keeps the worktree and
+prints its path so you can inspect it.
+
+Run removal from another worktree, such as the main checkout, after the
+selected branch has been merged into local `main` and the checkout is clean:
+
+```shell
+just worktree-remove "../parser trial"
+```
+
+The recipe refuses the current or main worktree, a dirty worktree, a detached
+branch, or a branch that is not merged into local `main`. By default it keeps
+the associated branch. To delete only that merged branch, pass `true`:
+
+```shell
+just worktree-remove "../parser trial" true
 ```
 
 ## Repository routing

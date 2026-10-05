@@ -58,6 +58,9 @@ This project follows Semantic Versioning.
 
 ### ➕ Added
 
+- Generated projects include optional `just worktree-create` and
+  `just worktree-remove` recipes for isolated, locked development checkouts.
+
 <br>
 
 ### 💔 Changed
