@@ -20,3 +20,24 @@ Exact Analyst-authored Session-record commit message, identical to the merge mes
 ```text
 fix(release): enforce committed PyPI policy (Worker-task 01: buildben_policy)
 ```
+
+## Merge 02: Buildben Worker-task 03
+
+- Branch: `worker/261005-pypi_release_hard_disable-03-buildben_tag_refs`.
+- Covered worker range: `c6bcc9009955bdd785626b584903574126f79ea7..6d495879ec516c30535459cfaeac18cc42ded2ed`.
+- Worker commits, both authored by `markur4`:
+  - `72631abc18206e5c2de51ae2983b1d478c98593c`: bind manual PyPI publication to the checked tag snapshot.
+  - `6d495879ec516c30535459cfaeac18cc42ded2ed`: use the documented GitHub asset-download endpoint.
+- Merge commit: `8c937020a5e1c7776f9d0d7f069a1de571eb7019`, authored by `markur4`.
+- Resulting local `main` immediately after integration: `8c937020a5e1c7776f9d0d7f069a1de571eb7019`.
+- Changes: manual PyPI publication now uses a validated package snapshot associated with the exact tag and commit; root Buildben and project scaffold include matching workflow, helper, tests, and documentation changes.
+- Merge outcome: `ort` strategy; no conflicts or conflict-resolution edits; both approved worker commits integrated without additional code edits.
+- Checks on merged `main`: 66 tests passed; Ruff formatting and lint passed; Pyright reported zero diagnostics; root and rendered scaffold workflow YAML parsed; `just --list`, `just --evaluate RELEASE_PYPI` (`false`), and `git diff --check` passed.
+- Signing: merge commit contains an SSH signature header. Local signature verification is unavailable because `gpg.ssh.allowedSignersFile` is not configured.
+- Local `main` is ahead of `origin/main`; no push, workflow dispatch, release, or PyPI publication occurred.
+
+Exact Analyst-authored Session-record commit message, identical to the merge message:
+
+```text
+Merge Worker-task 03: enforce Buildben tag policy and validated PyPI snapshots
+```

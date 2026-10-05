@@ -21,6 +21,7 @@
    1. [05.10.2026 Change-pass: PyPI hard disable](#05102026-change-pass-pypi_hard_disable)
       1. [Worker-task 01: Buildben policy](#worker-task-01-buildben_policy)
       2. [Worker-task 02: PersoDB policy](#worker-task-02-persodb_policy)
+      3. [Worker-task 03: Buildben tag and snapshot policy](#worker-task-03-buildben_tag_refs)
 
 <br>
 
@@ -64,10 +65,17 @@
 - [12:59:23] [Orchestrator] Validated local `main` against fetched remote `main`; both remain at base `256db32`. Integrating approved Buildben source change with SSH signing ([decision](261005-pypi_release_hard_disable/decisions.md#L51)).
 - [13:05:45] [Analyst] Merge Summary confirms Buildben commits `211f385` and `d546a58` integrated without conflict in `0cc308e`; post-merge checks passed and no push or PyPI action occurred ([merge](261005-pypi_release_hard_disable/merges.md#L3)).
 - [13:05:45] [Orchestrator] Recorded Buildben integration and replaced the local absolute worktree path with a labeled redaction. Starting Worker-task 02 from PersoDB `main` at `873f1aa`, using the merged Buildben scaffold as source of truth; preserving existing PersoDB `INPUT/` changes and the separate scaffold checkout ([decision](261005-pypi_release_hard_disable/decisions.md#L1)).
+- [14:45:44] [Orchestrator] Recorded Analyst-task 05's PersoDB review and Analyst-task 06's immutable-snapshot design; the current Worker-task 02 follow-up is adapting that design to canonical Buildben while preserving PersoDB's installation-bundle path ([analyses](261005-pypi_release_hard_disable/analyses.md#L102), [decision](261005-pypi_release_hard_disable/decisions.md#L89)).
+- [14:45:44] [Orchestrator] Integrated approved Buildben Worker-task 03 as merge `8c93702`. It binds manual PyPI publication to an exact tag and a validated package snapshot; no push or publication occurred ([merge](261005-pypi_release_hard_disable/merges.md#L24)).
 
 ### Worker-task 02: persodb_policy
 
 - [13:05:45] [Orchestrator] Dispatching PersoDB policy parity after completing the canonical Buildben change. The task will retain PersoDB-specific names and assets, test both disabled and enabled behavior, and make no release or publication attempt ([scope](261005-pypi_release_hard_disable/decisions.md#L55)).
+- [14:45:44] [Orchestrator] Asked the existing worker to continue from its frozen PersoDB commit, apply canonical Buildben main's validated-snapshot design, and retain PersoDB bundle behavior. Worker reports design comparison in progress with no blocker or file edits yet ([decision](261005-pypi_release_hard_disable/decisions.md#L89)).
+
+### Worker-task 03: buildben_tag_refs
+
+- [14:45:44] [Orchestrator] Recorded completed reviews and integration for the canonical Buildben tag-bound snapshot change. The full range was reviewed after correcting the GitHub asset-download endpoint; the approved change is integrated locally, with post-merge checks passing and no push or release action ([analyses](261005-pypi_release_hard_disable/analyses.md#L133), [decision](261005-pypi_release_hard_disable/decisions.md#L71), [merge](261005-pypi_release_hard_disable/merges.md#L24)).
 
 <br>
 

@@ -59,3 +59,33 @@ The Merge Summary Analyst confirmed that commits `211f385` and `d546a58` from th
 ## Worker-task 02 scope: PersoDB policy
 
 Apply the merged Buildben scaffold behavior to PersoDB from a task-specific worktree based on `873f1aae860b3ec1fc4421b64bc5017de4f70817`. Retain PersoDB-specific package and release details. Leave the root checkout's `INPUT/` changes and the separate `buildben-scaffold` checkout untouched. Required Analyst review precedes integration. Do not push, dispatch releases, or publish to PyPI.
+
+## Analyst-task 05: PersoDB review disposition
+
+The verdict is `changes requested`. Exact tag refs must be resolved without same-named branch fallback, and the privileged publisher must use the exact package bytes validated by preflight. The complete findings are recorded in `analyses.md`; revise the existing worker branch and obtain review of the full corrected range before integration.
+
+## Analyst-task 06: snapshot design decision
+
+Use an unprivileged preflight to validate and hash the exact wheel and source archive for the immutable target tag, record their identities in a manifest, recheck the tag, and upload the package snapshot. Authorize the PyPI job only after upload succeeds; that job downloads by artifact ID and verifies the manifest before publication. Preserve PersoDB bundle-generation behavior. Tag protection remains an external repository control.
+
+## Worker-task 03 handoff: Buildben canonical snapshot policy
+
+- Branch: `worker/261005-pypi_release_hard_disable-03-buildben_tag_refs`.
+- Base: `c6bcc9009955bdd785626b584903574126f79ea7`.
+- Commits: `72631abc18206e5c2de51ae2983b1d478c98593c` and `6d495879ec516c30535459cfaeac18cc42ded2ed`, both authored by `markur4`.
+- Full range: `c6bcc9009955bdd785626b584903574126f79ea7..6d495879ec516c30535459cfaeac18cc42ded2ed`.
+- Analyst-task 07 requested a correction to the asset download endpoint. The follow-up changed root and scaffold to the documented `/repos/$GITHUB_REPOSITORY/releases/assets/$asset_id` endpoint and tests now assert the exact requests.
+- Analyst-task 08 approved the corrected full range. Full review and validation details are recorded in `analyses.md`.
+- Analyst-authored integration message: `Merge Worker-task 03: enforce Buildben tag policy and validated PyPI snapshots`.
+
+## Analyst-task 08 verdict and integration decision
+
+The full corrected Worker-task 03 range is approved. Local `main` was verified at its expected base and the approved range was integrated with SSH signing using the Analyst's exact message. Do not push, dispatch a release, or publish to PyPI.
+
+## Analyst-task 09: Buildben Merge Summary
+
+The Merge Summary confirmed merge commit `8c937020a5e1c7776f9d0d7f069a1de571eb7019`, no conflicts or extra code edits, and passing post-merge checks. The factual record and exact Session-record commit message are in `analyses.md` and `merges.md`.
+
+## Worker-task 02 follow-up: PersoDB parity with canonical Buildben
+
+Continue the existing PersoDB Worker-task 02 branch from its frozen signed commit `e8c247b68518c330390125fc55de3dbde579aefa`; do not rewrite that commit. Port the approved canonical Buildben tag-bound snapshot pattern from local Buildben main while retaining PersoDB-specific behavior, especially installation-bundle artifacts and disabled PyPI policy. Keep exact tag resolution fail-closed, bind preflight to the immutable target-tag commit, and ensure the privileged publisher consumes only the verified artifact snapshot. Do not touch the PersoDB root checkout's unrelated `INPUT/` files. Obtain Analyst review of the complete corrected range before integration. No push, release dispatch, or PyPI publication is authorized.

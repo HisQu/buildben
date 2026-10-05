@@ -98,3 +98,47 @@ fix(release): enforce committed PyPI policy (Worker-task 01: buildben_policy)
 ```
 
 Analyst-task count: 1 for this follow-up; 3 total through this dispatch. Token counts unavailable.
+
+## Analyst-task 05: PersoDB code review (changes requested)
+
+[Paraphrase of the Analyst report.] The full PersoDB change range has two blockers. **P1:** an unqualified Git/tag name can resolve to a same-named branch if the exact tag is false or missing, so policy checks must use exact `refs/tags/<tag>` refs and fail closed. **P2:** manual preflight checks a policy value, but the privileged publisher later resolves mutable Release metadata and downloads mutable assets; publication must consume the exact bytes validated by preflight. Preserve release-bundle behavior while fixing both. Do not integrate until the corrected full range is reviewed.
+
+Analyst-task count: 1 for this review; 5 total through this dispatch. Token counts unavailable.
+
+## Analyst-task 06: immutable release-snapshot design
+
+[Paraphrase of the Analyst report.] Bind the workflow to the exact tag commit. In an unprivileged preflight, validate the expected wheel and source archive, calculate hashes, record release/tag/commit identities in a manifest, recheck the tag, then upload the validated package snapshot as an Actions artifact. Only authorize the privileged publisher after artifact upload succeeds. The publisher must download by artifact ID and verify the manifest and exact package set before publishing those captured files. Repository tag protection is still needed to prevent a later administrator move from changing the meaning of the tag; this is a residual repository setting, not a code guarantee.
+
+Analyst-task count: 1 for this design analysis; 6 total through this dispatch. Token counts unavailable.
+
+## Analyst-task 07: Buildben endpoint follow-up review (changes requested)
+
+[Paraphrase of the Analyst report.] Reviewed the complete Buildben Worker-task 03 range. The documented GitHub release-asset download endpoint was constructed incorrectly as `/releases/$release_id/assets/$asset_id`; use `/repos/$GITHUB_REPOSITORY/releases/assets/$asset_id`. Strengthen the mock and assertions to require the exact endpoint and both snapshot downloads. Do not integrate until this is corrected and the full range is reviewed again.
+
+Analyst-task count: 1 for this review; 7 total through this dispatch. Token counts unavailable.
+
+## Analyst-task 08: Buildben corrected follow-up review (approved)
+
+Verdict: approved. Reviewed the complete corrected range `c6bcc9009955bdd785626b584903574126f79ea7..6d495879ec516c30535459cfaeac18cc42ded2ed`, including both commits. The root and project scaffold use `/repos/$GITHUB_REPOSITORY/releases/assets/$asset_id`; tests assert the exact requests and reject the prior route. The approved safeguards remain: exact tag-policy resolution, preflight package hashes and identity manifest, tag recheck, artifact upload before authorization, and privileged download by artifact ID followed by manifest/package verification. Automatic release and PyPI sections are unchanged from the range base.
+
+The Analyst independently ran 62 tests (4 skipped), Ruff, Pyright (zero diagnostics), full-range `git diff --check`, the false local policy check, and a negative mutation check for the old endpoint. No live workflow or publication was exercised. The documented residual risk is that administrators can move/delete the tag after preflight; tag protection is not established by this code change.
+
+Analyst-authored integration message, to use verbatim:
+
+```text
+Merge Worker-task 03: enforce Buildben tag policy and validated PyPI snapshots
+```
+
+Analyst-task count: 1 for this follow-up; 8 total through this dispatch. Token counts unavailable.
+
+## Analyst-task 09: Buildben Merge Summary
+
+The Merge Summary reports that the approved Worker-task 03 range was integrated without conflicts in merge commit `8c937020a5e1c7776f9d0d7f069a1de571eb7019`. Its two worker commits were authored by `markur4`. The integrated change binds manual PyPI publication to the checked tag snapshot using package hashes and recorded release/tag/commit identities. Post-merge validation passed: 66 tests, Ruff format and lint, Pyright with zero diagnostics, root and rendered-scaffold workflow YAML parsing, `just --list`, `just --evaluate RELEASE_PYPI` returning `false`, and `git diff --check`. SSH signature verification remains unavailable because `gpg.ssh.allowedSignersFile` is unset. Local `main` is ahead of `origin/main`; no push, workflow dispatch, release, or PyPI publication occurred.
+
+Exact Analyst-authored Session-record commit message:
+
+```text
+Merge Worker-task 03: enforce Buildben tag policy and validated PyPI snapshots
+```
+
+Analyst-task count: 1 for this Merge Summary; 9 total through this dispatch. Token counts unavailable.
