@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 
@@ -181,3 +183,125 @@ def test_install_smoke_contract_rejects_incomplete_installation(
         validate_install_snapshot(
             replace(valid_snapshot(), **{field: value}), expected_version="1.2.3"
         )
+
+
+@pytest.mark.parametrize(
+    ("current_policy", "tag_policy", "publish_allowed"),
+    [
+        ("false", "false", False),
+        ("false", "true", False),
+        ("true", "false", False),
+        ("true", "true", True),
+    ],
+)
+def test_publish_pypi_uses_committed_policy_before_github(
+    tmp_path: Path,
+    current_policy: str,
+    tag_policy: str,
+    publish_allowed: bool,
+) -> None:
+    """Require committed true policy in both refs before calling GitHub."""
+    source_justfile = Path(__file__).resolve().parents[1] / "justfile"
+    source_text = source_justfile.read_text(encoding="utf-8")
+    assert source_text.count('RELEASE_PYPI := "false"') == 1
+
+    repo = tmp_path / "policy-repository"
+    repo.mkdir()
+    (repo / "justfile").write_text(
+        source_text.replace(
+            'RELEASE_PYPI := "false"',
+            f'RELEASE_PYPI := "{current_policy}"',
+            1,
+        ),
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+
+    def git(*args: str) -> None:
+        subprocess.run(
+            ["git", *args],
+            cwd=repo,
+            env=env,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+
+    git("init", "--initial-branch=main")
+    git("config", "user.name", "Buildben Test")
+    git("config", "user.email", "test@example.com")
+    git("config", "commit.gpgsign", "false")
+    git("config", "tag.gpgsign", "false")
+    git("add", "justfile")
+    git("commit", "-m", "Set current release policy")
+
+    if tag_policy != current_policy:
+        git("switch", "-c", "tag-policy")
+        justfile = repo / "justfile"
+        justfile.write_text(
+            justfile.read_text(encoding="utf-8").replace(
+                f'RELEASE_PYPI := "{current_policy}"',
+                f'RELEASE_PYPI := "{tag_policy}"',
+                1,
+            ),
+            encoding="utf-8",
+        )
+        git("add", "justfile")
+        git("commit", "-m", "Set target tag release policy")
+        git("tag", "-a", "v1.2.3", "-m", "Release v1.2.3")
+        git("switch", "main")
+    else:
+        git("tag", "-a", "v1.2.3", "-m", "Release v1.2.3")
+
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_gh = fake_bin / "gh"
+    fake_gh.write_text(
+        "#!/usr/bin/env bash\n"
+        'printf \'%s\\n\' "$*" >> "$RELEASE_POLICY_GH_LOG"\n'
+        'case "$1:$2" in\n'
+        "  auth:status) exit 0 ;;\n"
+        "  release:view)\n"
+        '    if [[ "$*" == *"--json isDraft"* ]]; then printf \'false\\n\'; '
+        'elif [[ "$*" == *"--json assets"* ]]; then printf \'1\\n\'; '
+        "else exit 90; fi ;;\n"
+        "  workflow:run) exit 0 ;;\n"
+        "  *) exit 91 ;;\n"
+        "esac\n",
+        encoding="utf-8",
+    )
+    fake_gh.chmod(0o755)
+    gh_log = tmp_path / "gh.log"
+    env["PATH"] = os.pathsep.join([str(fake_bin), env.get("PATH", "")])
+    env["RELEASE_POLICY_GH_LOG"] = str(gh_log)
+
+    command = ["just"]
+    if not publish_allowed:
+        command.extend(["--set", "RELEASE_PYPI", "true"])
+    command.extend(["publish-pypi", "v1.2.3"])
+    result = subprocess.run(
+        command,
+        cwd=repo,
+        env=env,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+
+    if not publish_allowed:
+        assert result.returncode != 0
+        expected_ref = (
+            "current committed justfile"
+            if current_policy == "false"
+            else "tag v1.2.3's committed justfile"
+        )
+        assert expected_ref in result.stderr
+        assert not gh_log.exists()
+        return
+
+    assert result.returncode == 0, result.stderr
+    assert gh_log.is_file()
+    assert "auth status" in gh_log.read_text(encoding="utf-8")
+    assert "workflow run release.yml --raw-field release_tag=v1.2.3" in (
+        gh_log.read_text(encoding="utf-8")
+    )

@@ -47,6 +47,12 @@ This project follows Semantic Versioning.
 
 ### 💥 Breaking changes
 
+- Breaking: Manual PyPI publication now requires `RELEASE_PYPI := "true"` in
+  both the current committed `justfile` and the target tag's committed
+  `justfile`. Affected: maintainers who used the manual command or workflow
+  while either policy was false. Migration: commit `"true"` before preparing
+  a release intended for PyPI, then use an active workflow ref and target tag
+  that both contain that committed setting.
 
 <br>
 

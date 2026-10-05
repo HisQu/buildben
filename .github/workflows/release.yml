@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing non-draft GitHub Release tag to publish to PyPI
+        description: Existing non-draft GitHub Release; PyPI must be enabled in workflow ref and tag
         required: true
         type: string
 
@@ -135,9 +135,92 @@ jobs:
             --check-url https://pypi.org/simple/buildben/ \
             dist/*
 
+  manual_pypi_preflight:
+    name: Check manual PyPI release policy
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      publish_pypi: ${{ steps.release_policy.outputs.publish_pypi }}
+
+    steps:
+      - name: Checkout active workflow ref
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Install just
+        uses: extractions/setup-just@v4
+        with:
+          just-version: "1.56.0"
+
+      - name: Validate active workflow ref and requested tag
+        id: release_policy
+        env:
+          ACTIVE_WORKFLOW_REF: ${{ github.ref }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Invalid release tag '${RELEASE_TAG}'; expected vMAJOR.MINOR.PATCH." >&2
+            exit 1
+          fi
+          if ! active_commit="$(git rev-parse --verify "${ACTIVE_WORKFLOW_REF}^{commit}" 2>/dev/null)"; then
+            echo "Active workflow ref ${ACTIVE_WORKFLOW_REF} does not resolve to a commit." >&2
+            exit 1
+          fi
+          if ! git fetch --no-tags origin "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"; then
+            echo "Could not fetch target tag ${RELEASE_TAG}." >&2
+            exit 1
+          fi
+          if ! target_commit="$(git rev-parse --verify "${RELEASE_TAG}^{commit}" 2>/dev/null)"; then
+            echo "Target tag ${RELEASE_TAG} does not resolve to a commit." >&2
+            exit 1
+          fi
+
+          read_release_policy() {
+            local commit="$1"
+            local ref_name="$2"
+            local policy_file
+            local release_pypi
+            policy_file="$(mktemp)"
+            if ! git show "${commit}:justfile" > "$policy_file"; then
+              rm -f "$policy_file"
+              echo "Could not read justfile from ${ref_name}." >&2
+              return 1
+            fi
+            if ! release_pypi="$(just --no-dotenv --justfile "$policy_file" --evaluate RELEASE_PYPI)"; then
+              rm -f "$policy_file"
+              echo "Could not evaluate RELEASE_PYPI from ${ref_name}." >&2
+              return 1
+            fi
+            rm -f "$policy_file"
+            if [[ "$release_pypi" != "true" && "$release_pypi" != "false" ]]; then
+              echo "RELEASE_PYPI must be \"true\" or \"false\" in ${ref_name}, found '${release_pypi}'." >&2
+              return 1
+            fi
+            printf '%s\n' "$release_pypi"
+          }
+
+          active_policy="$(read_release_policy "$active_commit" "active workflow ref ${ACTIVE_WORKFLOW_REF}")"
+          target_policy="$(read_release_policy "$target_commit" "target tag ${RELEASE_TAG}")"
+          publish_pypi=false
+          if [[ "$active_policy" == "true" && "$target_policy" == "true" ]]; then
+            publish_pypi=true
+          else
+            echo "Manual PyPI publication is disabled unless RELEASE_PYPI is \"true\" in both committed justfiles."
+          fi
+          echo "publish_pypi=${publish_pypi}" >> "$GITHUB_OUTPUT"
+
   publish-existing-release:
     name: Publish existing GitHub Release to PyPI
-    if: github.event_name == 'workflow_dispatch'
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      needs.manual_pypi_preflight.outputs.publish_pypi == 'true'
+    needs: manual_pypi_preflight
     runs-on: ubuntu-latest
     environment: pypi
     permissions:

@@ -525,6 +525,13 @@ def test_scaffolded_project_uses_dependency_group_template(
     assert "release-push tag:" in justfile_text
     assert "publish-pypi tag:" in justfile_text
     assert 'git push --atomic origin main "$tag"' in justfile_text
+    assert "_committed-release-pypi-policy HEAD" in justfile_text
+    assert 'tag_release_pypi="$(just _committed-release-pypi-policy "$tag")"' in (
+        justfile_text
+    )
+    assert "If PyPI was skipped, run:" not in justfile_text
+    assert 'if [[ "$release_pypi" == "true" ]]; then' in justfile_text
+    assert "PyPI publication is disabled by RELEASE_PYPI" in justfile_text
     assert "--all-extras --all-groups" in justfile_text
 
     readme_text = (proot / "README.md").read_text(encoding="utf-8")
@@ -719,6 +726,7 @@ def test_scaffolded_project_includes_release_workflow(
     assert "github-release" in release_text
     assert "workflow_dispatch:" in release_text
     assert "release_tag:" in release_text
+    assert "PyPI must be enabled in workflow ref and tag" in release_text
     assert "just --evaluate RELEASE_PYPI" in release_text
     assert "PUBLISH_PYPI" not in release_text
     assert "trusted-publishing" in release_text
@@ -731,7 +739,23 @@ def test_scaffolded_project_includes_release_workflow(
     assert "actions/upload-artifact@v7" in release_text
     assert release_text.count("actions/download-artifact@v8") == 2
 
+    manual_preflight = release_text.split("  manual_pypi_preflight:\n", 1)[1].split(
+        "  publish-existing-release:\n", 1
+    )[0]
+    assert "permissions:\n      contents: read" in manual_preflight
+    assert "environment: pypi" not in manual_preflight
+    assert "id-token: write" not in manual_preflight
+    assert "ref: ${{ github.ref }}" in manual_preflight
+    assert "ACTIVE_WORKFLOW_REF: ${{ github.ref }}" in manual_preflight
+    assert 'target_policy="$(read_release_policy' in manual_preflight
+    assert "publish_pypi=false" in manual_preflight
+    assert "publish_pypi=true" in manual_preflight
+
     manual_publish = release_text.split("  publish-existing-release:\n", 1)[1]
+    assert "needs: manual_pypi_preflight" in manual_publish
+    assert "needs.manual_pypi_preflight.outputs.publish_pypi == 'true'" in (
+        manual_publish
+    )
     assert "actions/checkout" not in manual_publish
     assert "uv build" not in manual_publish
     assert "environment: pypi" in manual_publish
@@ -744,6 +768,11 @@ def test_scaffolded_project_includes_release_workflow(
     assert 'RELEASE_PYPI := "true"' in development_text
     assert "just release-prepare patch" in development_text
     assert "just release-push vMAJOR.MINOR.PATCH" in development_text
+    assert "Manual publication and retries require" in development_text
+    assert "target tag's committed" in development_text
+    assert development_text.index("If both policies are true") < development_text.index(
+        "just publish-pypi vMAJOR.MINOR.PATCH"
+    )
     assert "just publish-pypi vMAJOR.MINOR.PATCH" in development_text
     assert "PUBLISH_PYPI" not in development_text
     assert "just lock" in development_text
@@ -782,6 +811,8 @@ def test_buildben_release_recipe_keeps_checks_visible_and_builds_quiet() -> None
     assert "publish-pypi tag:" in recipe
     assert 'git push --atomic origin main "$tag"' in recipe
     assert "PUBLISH_PYPI" not in recipe
+    assert 'if [[ "$release_pypi" == "true" ]]; then' in recipe
+    assert "PyPI publication is disabled by RELEASE_PYPI" in recipe
 
 
 def test_buildben_release_workflow_supports_policy_and_recovery() -> None:
@@ -794,6 +825,7 @@ def test_buildben_release_workflow_supports_policy_and_recovery() -> None:
     ).read_text(encoding="utf-8")
 
     assert "workflow_dispatch:" in workflow
+    assert "PyPI must be enabled in workflow ref and tag" in workflow
     assert "just --evaluate RELEASE_PYPI" in workflow
     assert "needs.build.outputs.release_pypi == 'true'" in workflow
     assert "PUBLISH_PYPI" not in workflow
@@ -804,11 +836,36 @@ def test_buildben_release_workflow_supports_policy_and_recovery() -> None:
     assert "actions/upload-artifact@v7" in workflow
     assert workflow.count("actions/download-artifact@v8") == 2
 
+    manual_preflight = workflow.split("  manual_pypi_preflight:\n", 1)[1].split(
+        "  publish-existing-release:\n", 1
+    )[0]
+    assert "permissions:\n      contents: read" in manual_preflight
+    assert "environment: pypi" not in manual_preflight
+    assert "id-token: write" not in manual_preflight
+    assert "ref: ${{ github.ref }}" in manual_preflight
+    assert "ACTIVE_WORKFLOW_REF: ${{ github.ref }}" in manual_preflight
+    assert 'target_policy="$(read_release_policy' in manual_preflight
+    assert "publish_pypi=false" in manual_preflight
+    assert "publish_pypi=true" in manual_preflight
+
     manual_publish = workflow.split("  publish-existing-release:\n", 1)[1]
+    assert "needs: manual_pypi_preflight" in manual_publish
+    assert "needs.manual_pypi_preflight.outputs.publish_pypi == 'true'" in (
+        manual_publish
+    )
     assert "actions/checkout" not in manual_publish
     assert "uv build" not in manual_publish
     assert "gh release download" in manual_publish
     assert "uv publish" in manual_publish
+
+    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(
+        encoding="utf-8"
+    )
+    assert readme.index(
+        "Manual PyPI publication is available only when"
+    ) < readme.index("just publish-pypi vMAJOR.MINOR.PATCH")
+    assert "both the current committed" in readme
+    assert "target tag's committed" in readme
 
 
 def test_buildben_ci_installs_just_for_release_recipe_tests() -> None:
@@ -870,7 +927,16 @@ def test_scaffolded_release_push_updates_main_and_tag_together(
     assert missing_tag.returncode != 0
     assert "Annotated local tag v0.1.1 does not exist" in missing_tag.stderr
 
-    _run(["just", "release-push", "v0.1.0"], cwd=proot, env=env)
+    release_push = subprocess.run(
+        ["just", "--set", "RELEASE_PYPI", "true", "release-push", "v0.1.0"],
+        cwd=proot,
+        env=env,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    assert "PyPI publication is disabled by RELEASE_PYPI" in release_push.stdout
+    assert "publish-pypi" not in release_push.stdout
     _run(
         ["git", "--git-dir", str(remote), "show-ref", "--verify", "refs/heads/main"],
         cwd=tmp_path,
@@ -881,6 +947,102 @@ def test_scaffolded_release_push_updates_main_and_tag_together(
         cwd=tmp_path,
         env=env,
     )
+
+
+def test_scaffolded_publish_pypi_requires_both_committed_policies(
+    bube_test_project: Path,
+    tmp_path: Path,
+) -> None:
+    """Reject false committed policies before GitHub and preserve true publishing."""
+    proot = bube_test_project
+    env = _project_env(proot)
+    _run(["git", "init", "--initial-branch", "main"], cwd=proot, env=env)
+    _run(["git", "config", "user.email", "test@example.com"], cwd=proot, env=env)
+    _run(["git", "config", "user.name", "Buildben Test"], cwd=proot, env=env)
+    _run(["git", "config", "commit.gpgsign", "false"], cwd=proot, env=env)
+    _run(["git", "config", "tag.gpgsign", "false"], cwd=proot, env=env)
+    _run(["git", "add", "."], cwd=proot, env=env)
+    _run(
+        ["git", "commit", "-m", "Prepared release with PyPI disabled"],
+        cwd=proot,
+        env=env,
+    )
+    _run(["git", "tag", "-a", "v0.1.0", "-m", "Release v0.1.0"], cwd=proot, env=env)
+
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_gh = fake_bin / "gh"
+    fake_gh.write_text(
+        "#!/usr/bin/env bash\n"
+        'printf \'%s\\n\' "$*" >> "$PUBLISH_PYPI_GH_LOG"\n'
+        'case "$1:$2" in\n'
+        "  auth:status) exit 0 ;;\n"
+        "  release:view)\n"
+        '    if [[ "$*" == *"--json isDraft"* ]]; then printf \'false\\n\'; '
+        'elif [[ "$*" == *"--json assets"* ]]; then printf \'1\\n\'; '
+        "else exit 90; fi ;;\n"
+        "  workflow:run) exit 0 ;;\n"
+        "  *) exit 91 ;;\n"
+        "esac\n",
+        encoding="utf-8",
+    )
+    fake_gh.chmod(0o755)
+    gh_log = tmp_path / "gh.log"
+    env["PATH"] = os.pathsep.join([str(fake_bin), env.get("PATH", "")])
+    env["PUBLISH_PYPI_GH_LOG"] = str(gh_log)
+
+    disabled = subprocess.run(
+        [
+            "just",
+            "--set",
+            "RELEASE_PYPI",
+            "true",
+            "publish-pypi",
+            "v0.1.0",
+        ],
+        cwd=proot,
+        env=env,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    assert disabled.returncode != 0
+    assert "current committed justfile" in disabled.stderr
+    assert not gh_log.exists()
+
+    justfile = proot / "justfile"
+    justfile.write_text(
+        justfile.read_text(encoding="utf-8").replace(
+            'RELEASE_PYPI := "false"',
+            'RELEASE_PYPI := "true"',
+            1,
+        ),
+        encoding="utf-8",
+    )
+    _run(["git", "add", "justfile"], cwd=proot, env=env)
+    _run(["git", "commit", "-m", "Enable committed PyPI policy"], cwd=proot, env=env)
+
+    target_disabled = subprocess.run(
+        ["just", "publish-pypi", "v0.1.0"],
+        cwd=proot,
+        env=env,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    assert target_disabled.returncode != 0
+    assert "tag v0.1.0's committed justfile" in target_disabled.stderr
+    assert not gh_log.exists()
+
+    _run(
+        ["git", "tag", "--force", "-a", "v0.1.0", "-m", "Release v0.1.0"],
+        cwd=proot,
+        env=env,
+    )
+    _run(["just", "publish-pypi", "v0.1.0"], cwd=proot, env=env)
+    gh_calls = gh_log.read_text(encoding="utf-8")
+    assert "auth status" in gh_calls
+    assert "workflow run release.yml --raw-field release_tag=v0.1.0" in gh_calls
 
 
 def _markdown_anchors(text: str) -> set[str]:
