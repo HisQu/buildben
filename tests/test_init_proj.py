@@ -745,8 +745,11 @@ def test_scaffolded_project_includes_release_workflow(
     assert "permissions:\n      contents: read" in manual_preflight
     assert "environment: pypi" not in manual_preflight
     assert "id-token: write" not in manual_preflight
-    assert "ref: ${{ github.ref }}" in manual_preflight
+    assert "ref: ${{ github.sha }}" in manual_preflight
+    assert "ACTIVE_WORKFLOW_SHA: ${{ github.sha }}" in manual_preflight
     assert "ACTIVE_WORKFLOW_REF: ${{ github.ref }}" in manual_preflight
+    assert '"${ACTIVE_WORKFLOW_SHA}^{commit}"' in manual_preflight
+    assert '"${ACTIVE_WORKFLOW_REF}^{commit}"' not in manual_preflight
     assert 'target_policy="$(read_release_policy' in manual_preflight
     assert "publish_pypi=false" in manual_preflight
     assert "publish_pypi=true" in manual_preflight
@@ -842,8 +845,11 @@ def test_buildben_release_workflow_supports_policy_and_recovery() -> None:
     assert "permissions:\n      contents: read" in manual_preflight
     assert "environment: pypi" not in manual_preflight
     assert "id-token: write" not in manual_preflight
-    assert "ref: ${{ github.ref }}" in manual_preflight
+    assert "ref: ${{ github.sha }}" in manual_preflight
+    assert "ACTIVE_WORKFLOW_SHA: ${{ github.sha }}" in manual_preflight
     assert "ACTIVE_WORKFLOW_REF: ${{ github.ref }}" in manual_preflight
+    assert '"${ACTIVE_WORKFLOW_SHA}^{commit}"' in manual_preflight
+    assert '"${ACTIVE_WORKFLOW_REF}^{commit}"' not in manual_preflight
     assert 'target_policy="$(read_release_policy' in manual_preflight
     assert "publish_pypi=false" in manual_preflight
     assert "publish_pypi=true" in manual_preflight

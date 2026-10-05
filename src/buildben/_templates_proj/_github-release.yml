@@ -137,10 +137,10 @@ jobs:
       publish_pypi: ${{ steps.release_policy.outputs.publish_pypi }}
 
     steps:
-      - name: Checkout active workflow ref
+      - name: Checkout workflow-run commit
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Install just
@@ -148,9 +148,10 @@ jobs:
         with:
           just-version: "1.56.0"
 
-      - name: Validate active workflow ref and requested tag
+      - name: Validate workflow-run commit and requested tag
         id: release_policy
         env:
+          ACTIVE_WORKFLOW_SHA: ${{ github.sha }}
           ACTIVE_WORKFLOW_REF: ${{ github.ref }}
           RELEASE_TAG: ${{ inputs.release_tag }}
         shell: bash
@@ -160,8 +161,12 @@ jobs:
             echo "Invalid release tag '${RELEASE_TAG}'; expected vMAJOR.MINOR.PATCH." >&2
             exit 1
           fi
-          if ! active_commit="$(git rev-parse --verify "${ACTIVE_WORKFLOW_REF}^{commit}" 2>/dev/null)"; then
-            echo "Active workflow ref ${ACTIVE_WORKFLOW_REF} does not resolve to a commit." >&2
+          if ! active_commit="$(git rev-parse --verify "${ACTIVE_WORKFLOW_SHA}^{commit}" 2>/dev/null)"; then
+            echo "Workflow-run commit ${ACTIVE_WORKFLOW_SHA} does not resolve to a commit." >&2
+            exit 1
+          fi
+          if ! checked_out_commit="$(git rev-parse --verify HEAD 2>/dev/null)" || [[ "$active_commit" != "$checked_out_commit" ]]; then
+            echo "Checked-out commit ${checked_out_commit:-unknown} does not match workflow-run commit ${ACTIVE_WORKFLOW_SHA}." >&2
             exit 1
           fi
           if ! git fetch --no-tags origin "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"; then
@@ -197,7 +202,7 @@ jobs:
             printf '%s\n' "$release_pypi"
           }
 
-          active_policy="$(read_release_policy "$active_commit" "active workflow ref ${ACTIVE_WORKFLOW_REF}")"
+          active_policy="$(read_release_policy "$active_commit" "workflow-run commit ${ACTIVE_WORKFLOW_SHA} (ref ${ACTIVE_WORKFLOW_REF})")"
           target_policy="$(read_release_policy "$target_commit" "target tag ${RELEASE_TAG}")"
           publish_pypi=false
           if [[ "$active_policy" == "true" && "$target_policy" == "true" ]]; then
