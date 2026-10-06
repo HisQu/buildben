@@ -39,7 +39,7 @@ worktree-create branch destination base:
     destination_input="$2"
     base="$3"
 
-    if ! git check-ref-format "refs/heads/${branch}" >/dev/null 2>&1; then
+    if ! git check-ref-format --branch "$branch" >/dev/null 2>&1 || ! git check-ref-format "refs/heads/${branch}" >/dev/null 2>&1; then
         echo "Invalid Git branch name." >&2
         exit 2
     fi
@@ -164,6 +164,7 @@ worktree-remove destination delete_branch="false":
     entry_path=""
     entry_branch_ref=""
     worktree_count=0
+    nested_worktree=false
     record_worktree() {
         if [[ -z "$entry_path" ]]; then
             return
@@ -173,6 +174,9 @@ worktree-remove destination delete_branch="false":
             entry_real="$(cd -- "$entry_path" && pwd -P)"
         else
             entry_real="$entry_path"
+        fi
+        if [[ "$entry_real" != "$destination_path" && ( "$entry_real" == "$destination_path/"* || "$destination_path" == "$entry_real/"* ) ]]; then
+            nested_worktree=true
         fi
         if [[ "$worktree_count" -eq 1 ]]; then
             main_worktree="$entry_real"
@@ -205,6 +209,10 @@ worktree-remove destination delete_branch="false":
     fi
     if [[ "$destination_path" == "$current_worktree" ]]; then
         echo "Refusing to remove the current worktree." >&2
+        exit 2
+    fi
+    if [[ "$nested_worktree" == "true" ]]; then
+        echo "Refusing to remove nested Git worktrees." >&2
         exit 2
     fi
     if [[ -z "$selected_branch_ref" || "$selected_branch_ref" != refs/heads/* ]]; then

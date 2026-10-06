@@ -803,6 +803,82 @@ def test_scaffolded_worktree_remove_refuses_main_dirty_and_unmerged_checkouts(
     assert _git_output(destination, "branch", "--show-current") == "feature/unmerged"
 
 
+def test_scaffolded_worktree_create_rejects_option_like_branch(
+    bube_test_project: Path,
+    tmp_path: Path,
+) -> None:
+    """Validate local branch syntax before invoking worktree creation."""
+    project_root = bube_test_project
+    _initialize_worktree_test_repo(project_root)
+    env, _uv_log = _worktree_recipe_env(project_root, tmp_path)
+    destination = tmp_path / "invalid branch checkout"
+
+    result = _run_just_recipe(
+        project_root, env, "worktree-create", "-invalid", str(destination), "main"
+    )
+
+    assert result.returncode == 2
+    assert "Invalid Git branch name." in result.stderr
+    assert not destination.exists()
+
+
+def test_scaffolded_worktree_remove_refuses_current_and_nested_checkouts(
+    bube_test_project: Path,
+    tmp_path: Path,
+) -> None:
+    """Protect the calling checkout and registered worktrees nested in each other."""
+    project_root = bube_test_project
+    _initialize_worktree_test_repo(project_root)
+    env, _uv_log = _worktree_recipe_env(project_root, tmp_path)
+    destination = tmp_path / "outer checkout"
+    _run(
+        ["git", "worktree", "add", "-b", "feature/outer", str(destination), "main"],
+        cwd=project_root,
+        env=env,
+    )
+    current_result = _run_just_recipe(destination, env, "worktree-remove", ".")
+    assert current_result.returncode == 2
+    assert "current worktree" in current_result.stderr
+    assert destination.is_dir()
+
+    nested = destination / "nested checkout"
+    _run(
+        ["git", "worktree", "add", "-b", "feature/nested", str(nested), "main"],
+        cwd=project_root,
+        env=env,
+    )
+    # > Ignored nested files leave the outer checkout clean, exercising the guard.
+    _run(
+        [
+            "git",
+            "-C",
+            str(destination),
+            "config",
+            "core.excludesFile",
+            str(tmp_path / "nested-ignore"),
+        ],
+        cwd=project_root,
+        env=env,
+    )
+    (tmp_path / "nested-ignore").write_text("nested checkout/\n", encoding="utf-8")
+    assert _git_output(destination, "status", "--porcelain") == ""
+
+    for selected in (destination, nested):
+        result = _run_just_recipe(
+            project_root, env, "worktree-remove", str(selected), "true"
+        )
+        assert result.returncode == 2
+        assert "nested Git worktrees" in result.stderr
+        assert destination.is_dir()
+        assert nested.is_dir()
+        assert _git_output(
+            project_root, "show-ref", "--verify", "refs/heads/feature/outer"
+        )
+        assert _git_output(
+            project_root, "show-ref", "--verify", "refs/heads/feature/nested"
+        )
+
+
 def test_scaffolded_worktree_remove_deletes_only_an_explicitly_selected_branch(
     bube_test_project: Path,
     tmp_path: Path,

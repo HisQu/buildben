@@ -75,9 +75,10 @@ selected branch has been merged into local `main` and the checkout is clean:
 just worktree-remove "../parser trial"
 ```
 
-The recipe refuses the current or main worktree, a dirty worktree, a detached
-branch, or a branch that is not merged into local `main`. By default it keeps
-the associated branch. To delete only that merged branch, pass `true`:
+The recipe refuses the current or main worktree, worktrees nested inside each
+other, a dirty worktree, a detached branch, or a branch that is not merged into
+local `main`. By default it keeps the associated branch. To delete only that
+merged branch, pass `true`:
 
 ```shell
 just worktree-remove "../parser trial" true
