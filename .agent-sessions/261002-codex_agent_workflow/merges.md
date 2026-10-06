@@ -13,7 +13,7 @@
 - **Resulting main SHA:** f70f5eeb63a96b37e7dd3b6dab375eaf29198f4b.
 - **Parents:** 26b52435ac11f54dd55fe8319e996cae076efc95 and 3f2bc9b5ee92629e27c576e2b2a12b76169113b0.
 - **Outcome:** Signed no-fast-forward merge completed without conflicts; resulting tree matched reviewed source.
-- **Checks:** [Paraphrase of worker and Reviewer reports:] nine focused checks, Ruff, Just parsing, new recipe block formatting, and diff checks passed. Whole-template formatting failed on existing baseline.
+- **Checks:** [Paraphrase of Coder and Reviewer reports:] Coder reported seven focused mocked uv cases; Reviewer reported nine focused checks, Ruff, Just parsing, new recipe block formatting, and diff checks passed. Whole-template formatting failed on the existing baseline.
 - **Review and decision:** [review_01], [decision_01].
 - **Reviewer-authored merge message:**
   feat(buildben): integrate generated worktree recipes
