@@ -106,6 +106,94 @@ def _assert_release_banner(recipe: str) -> None:
     assert banner in recipe
 
 
+def _git_output(project_root: Path, *args: str) -> str:
+    """Run Git in a temporary scaffold project and return standard output.
+
+    :param project_root: Git repository root.
+    :param args: Git command arguments after ``git``.
+    :return: Stripped standard output.
+    """
+    result = subprocess.run(
+        ["git", *args],
+        cwd=project_root,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    return result.stdout.strip()
+
+
+def _initialize_worktree_test_repo(project_root: Path) -> str:
+    """Commit a generated project on ``main`` for worktree recipe checks.
+
+    :param project_root: Generated project root.
+    :return: Initial commit SHA.
+    """
+    env = _project_env(project_root)
+    for args in (
+        ["git", "init", "--initial-branch=main"],
+        ["git", "config", "user.name", "Buildben scaffold test"],
+        ["git", "config", "user.email", "buildben-test@example.invalid"],
+        ["git", "add", "--all"],
+        ["git", "commit", "-m", "Initialize generated project"],
+    ):
+        _run(args, cwd=project_root, env=env)
+    return _git_output(project_root, "rev-parse", "HEAD")
+
+
+def _worktree_recipe_env(
+    project_root: Path,
+    tmp_path: Path,
+    *,
+    uv_status: int = 0,
+) -> tuple[dict[str, str], Path]:
+    """Mock the optional uv sync through Bash's startup hook without PATH edits.
+
+    :param project_root: Generated project root.
+    :param tmp_path: Temporary directory for the call log and hook.
+    :param uv_status: Status returned by the mocked uv command.
+    :return: Recipe environment and uv call log path.
+    """
+    bash_env = tmp_path / "worktree-test-bash-env"
+    bash_env.write_text(
+        "uv() {\n"
+        '  printf \'%s\\n\' "$PWD" "${UV_PROJECT_ENVIRONMENT-}" "$*" >> "$WORKTREE_TEST_UV_LOG"\n'
+        '  return "${WORKTREE_TEST_UV_STATUS:-0}"\n'
+        "}\n",
+        encoding="utf-8",
+    )
+    log_path = tmp_path / "worktree-test-uv.log"
+    env = _project_env(project_root)
+    env["BASH_ENV"] = str(bash_env)
+    env["WORKTREE_TEST_UV_LOG"] = str(log_path)
+    env["WORKTREE_TEST_UV_STATUS"] = str(uv_status)
+    env["UV_PROJECT_ENVIRONMENT"] = str(tmp_path / "other-checkout" / ".venv")
+    return env, log_path
+
+
+def _run_just_recipe(
+    project_root: Path,
+    env: dict[str, str],
+    *args: str,
+) -> subprocess.CompletedProcess[str]:
+    """Run a generated just recipe and retain its output for assertions.
+
+    :param project_root: Generated project root.
+    :param env: Child-process environment.
+    :param args: Recipe name followed by its arguments.
+    :return: Captured just process result.
+    """
+    return subprocess.run(
+        ["just", "--no-dotenv", "--justfile", str(project_root / "justfile"), *args],
+        cwd=project_root,
+        env=env,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+
+
 @pytest.fixture()
 def bube_test_project(
     tmp_path: Path,
@@ -512,6 +600,10 @@ def test_scaffolded_project_uses_dependency_group_template(
     assert "uv sync --check --all-extras --all-groups" in justfile_text
     assert "uv lock" in justfile_text
     assert "_check-clean-worktree" in justfile_text
+    assert "worktree-create branch destination base:" in justfile_text
+    assert 'worktree-remove destination delete_branch="false":' in justfile_text
+    assert "uv sync --locked --all-extras --all-groups" in justfile_text
+    assert 'UV_PROJECT_ENVIRONMENT="$destination_path/.venv"' in justfile_text
     assert "release-check:" in justfile_text
     assert "_release-artifact-check" in justfile_text
     assert "uv build --python 3.12 --no-sources --no-build-logs" in justfile_text
@@ -544,6 +636,10 @@ def test_scaffolded_project_uses_dependency_group_template(
     assert 'python -m pip install -e ".[rag]"' in development_text
     assert 'python -m pip install -e "." --group dev' in readme_text
     assert 'python -m pip install -e ".[rag]" --group dev' in development_text
+    assert "just worktree-create feature/parser" in development_text
+    assert 'just worktree-remove "../parser trial" true' in development_text
+    assert "the normal project install paths" in development_text
+    assert "above do not" in development_text
     assert "bube_test_tmp version" in readme_text
     assert "bube_test_tmp diagnose" in readme_text
     assert "bube_test_tmp config setup --yes --storage-root" in readme_text
@@ -552,6 +648,305 @@ def test_scaffolded_project_uses_dependency_group_template(
         'bube_test_tmp config set app.message "Hello local storage" --scope storage'
         in readme_text
     )
+
+
+def test_scaffolded_worktree_create_handles_spaces_and_overrides_inherited_uv_env(
+    bube_test_project: Path,
+    tmp_path: Path,
+) -> None:
+    """Create the worktree and sync uv into its own environment directory."""
+    project_root = bube_test_project
+    main_commit = _initialize_worktree_test_repo(project_root)
+    env, uv_log = _worktree_recipe_env(project_root, tmp_path)
+    inherited_environment = env["UV_PROJECT_ENVIRONMENT"]
+    destination_parent = tmp_path / "worktree destinations"
+    destination_parent.mkdir()
+    destination = destination_parent / "parser trial"
+
+    result = _run_just_recipe(
+        project_root,
+        env,
+        "worktree-create",
+        "feature/parser",
+        str(destination),
+        "main",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _git_output(destination, "rev-parse", "HEAD") == main_commit
+    assert _git_output(destination, "branch", "--show-current") == "feature/parser"
+    assert uv_log.read_text(encoding="utf-8").splitlines() == [
+        str(destination),
+        str(destination / ".venv"),
+        "sync --locked --all-extras --all-groups",
+    ]
+    assert env["UV_PROJECT_ENVIRONMENT"] == inherited_environment
+    assert _git_output(project_root, "status", "--porcelain") == ""
+
+
+def test_scaffolded_worktree_create_retains_checkout_when_uv_sync_fails(
+    bube_test_project: Path,
+    tmp_path: Path,
+) -> None:
+    """Keep a created worktree available when dependency setup returns an error."""
+    project_root = bube_test_project
+    _initialize_worktree_test_repo(project_root)
+    env, _uv_log = _worktree_recipe_env(project_root, tmp_path, uv_status=23)
+    destination = tmp_path / "retained worktree"
+
+    result = _run_just_recipe(
+        project_root,
+        env,
+        "worktree-create",
+        "feature/needs-inspection",
+        str(destination),
+        "main",
+    )
+
+    assert result.returncode == 23
+    assert f"retained worktree for inspection: {destination}" in result.stderr
+    assert destination.is_dir()
+    assert (
+        _git_output(destination, "branch", "--show-current")
+        == "feature/needs-inspection"
+    )
+
+
+def test_scaffolded_worktree_create_rejects_shell_text_as_a_branch(
+    bube_test_project: Path,
+    tmp_path: Path,
+) -> None:
+    """Reject invalid branch text without evaluating it as shell code."""
+    project_root = bube_test_project
+    _initialize_worktree_test_repo(project_root)
+    env, _uv_log = _worktree_recipe_env(project_root, tmp_path)
+    marker = tmp_path / "shell-injection-marker"
+    destination = tmp_path / "should-not-exist"
+
+    result = _run_just_recipe(
+        project_root,
+        env,
+        "worktree-create",
+        f"feature/$(touch {marker})",
+        str(destination),
+        "main",
+    )
+
+    assert result.returncode != 0
+    assert "Invalid Git branch name." in result.stderr
+    assert not marker.exists()
+    assert not destination.exists()
+
+    nested_destination = project_root / "nested worktree"
+    path_result = _run_just_recipe(
+        project_root,
+        env,
+        "worktree-create",
+        "feature/nested",
+        str(nested_destination),
+        "main",
+    )
+
+    assert path_result.returncode != 0
+    assert "outside every existing Git worktree" in path_result.stderr
+    assert not nested_destination.exists()
+
+
+def test_scaffolded_worktree_remove_refuses_main_dirty_and_unmerged_checkouts(
+    bube_test_project: Path,
+    tmp_path: Path,
+) -> None:
+    """Refuse cleanup when it could discard the main, dirty, or unmerged worktree."""
+    project_root = bube_test_project
+    _initialize_worktree_test_repo(project_root)
+    env, _uv_log = _worktree_recipe_env(project_root, tmp_path)
+
+    main_result = _run_just_recipe(project_root, env, "worktree-remove", ".")
+    assert main_result.returncode != 0
+    assert "main worktree" in main_result.stderr
+
+    destination = tmp_path / "feature checkout"
+    created = _run_just_recipe(
+        project_root,
+        env,
+        "worktree-create",
+        "feature/unmerged",
+        str(destination),
+        "main",
+    )
+    assert created.returncode == 0, created.stdout + created.stderr
+
+    (destination / "untracked.txt").write_text("keep me\n", encoding="utf-8")
+    dirty_result = _run_just_recipe(
+        project_root,
+        env,
+        "worktree-remove",
+        str(destination),
+    )
+    assert dirty_result.returncode != 0
+    assert "dirty worktree" in dirty_result.stderr
+    assert destination.is_dir()
+
+    (destination / "untracked.txt").unlink()
+    (destination / "feature.txt").write_text("branch-only change\n", encoding="utf-8")
+    _run(["git", "add", "feature.txt"], cwd=destination, env=env)
+    _run(["git", "commit", "-m", "Add branch-only change"], cwd=destination, env=env)
+    unmerged_result = _run_just_recipe(
+        project_root,
+        env,
+        "worktree-remove",
+        str(destination),
+    )
+    assert unmerged_result.returncode != 0
+    assert "not merged into local main" in unmerged_result.stderr
+    assert destination.is_dir()
+    assert _git_output(destination, "branch", "--show-current") == "feature/unmerged"
+
+
+def test_scaffolded_worktree_create_rejects_option_like_branch(
+    bube_test_project: Path,
+    tmp_path: Path,
+) -> None:
+    """Validate local branch syntax before invoking worktree creation."""
+    project_root = bube_test_project
+    _initialize_worktree_test_repo(project_root)
+    env, _uv_log = _worktree_recipe_env(project_root, tmp_path)
+    destination = tmp_path / "invalid branch checkout"
+
+    result = _run_just_recipe(
+        project_root, env, "worktree-create", "-invalid", str(destination), "main"
+    )
+
+    assert result.returncode == 2
+    assert "Invalid Git branch name." in result.stderr
+    assert not destination.exists()
+
+
+def test_scaffolded_worktree_remove_refuses_current_and_nested_checkouts(
+    bube_test_project: Path,
+    tmp_path: Path,
+) -> None:
+    """Protect the calling checkout and registered worktrees nested in each other."""
+    project_root = bube_test_project
+    _initialize_worktree_test_repo(project_root)
+    env, _uv_log = _worktree_recipe_env(project_root, tmp_path)
+    destination = tmp_path / "outer checkout"
+    _run(
+        ["git", "worktree", "add", "-b", "feature/outer", str(destination), "main"],
+        cwd=project_root,
+        env=env,
+    )
+    current_result = _run_just_recipe(destination, env, "worktree-remove", ".")
+    assert current_result.returncode == 2
+    assert "current worktree" in current_result.stderr
+    assert destination.is_dir()
+
+    nested = destination / "nested checkout"
+    _run(
+        ["git", "worktree", "add", "-b", "feature/nested", str(nested), "main"],
+        cwd=project_root,
+        env=env,
+    )
+    # > Ignored nested files leave the outer checkout clean, exercising the guard.
+    _run(
+        [
+            "git",
+            "-C",
+            str(destination),
+            "config",
+            "core.excludesFile",
+            str(tmp_path / "nested-ignore"),
+        ],
+        cwd=project_root,
+        env=env,
+    )
+    (tmp_path / "nested-ignore").write_text("nested checkout/\n", encoding="utf-8")
+    assert _git_output(destination, "status", "--porcelain") == ""
+
+    for selected in (destination, nested):
+        result = _run_just_recipe(
+            project_root, env, "worktree-remove", str(selected), "true"
+        )
+        assert result.returncode == 2
+        assert "nested Git worktrees" in result.stderr
+        assert destination.is_dir()
+        assert nested.is_dir()
+        assert _git_output(
+            project_root, "show-ref", "--verify", "refs/heads/feature/outer"
+        )
+        assert _git_output(
+            project_root, "show-ref", "--verify", "refs/heads/feature/nested"
+        )
+
+
+def test_scaffolded_worktree_remove_deletes_only_an_explicitly_selected_branch(
+    bube_test_project: Path,
+    tmp_path: Path,
+) -> None:
+    """Keep branches by default and delete only the selected branch on request."""
+    project_root = bube_test_project
+    _initialize_worktree_test_repo(project_root)
+    env, _uv_log = _worktree_recipe_env(project_root, tmp_path)
+    _run(["git", "branch", "feature/unrelated"], cwd=project_root, env=env)
+
+    retained_destination = tmp_path / "retained branch checkout"
+    created = _run_just_recipe(
+        project_root,
+        env,
+        "worktree-create",
+        "feature/retained",
+        str(retained_destination),
+        "main",
+    )
+    assert created.returncode == 0, created.stdout + created.stderr
+    removed = _run_just_recipe(
+        project_root,
+        env,
+        "worktree-remove",
+        str(retained_destination),
+    )
+    assert removed.returncode == 0, removed.stdout + removed.stderr
+    assert not retained_destination.exists()
+    assert _git_output(
+        project_root, "show-ref", "--verify", "refs/heads/feature/retained"
+    )
+
+    deleted_destination = tmp_path / "deleted branch checkout"
+    created = _run_just_recipe(
+        project_root,
+        env,
+        "worktree-create",
+        "feature/selected-for-deletion",
+        str(deleted_destination),
+        "main",
+    )
+    assert created.returncode == 0, created.stdout + created.stderr
+    removed = _run_just_recipe(
+        project_root,
+        env,
+        "worktree-remove",
+        str(deleted_destination),
+        "true",
+    )
+    assert removed.returncode == 0, removed.stdout + removed.stderr
+    assert not deleted_destination.exists()
+    assert _git_output(
+        project_root, "show-ref", "--verify", "refs/heads/feature/unrelated"
+    )
+    remaining_branch = subprocess.run(
+        [
+            "git",
+            "show-ref",
+            "--verify",
+            "--quiet",
+            "refs/heads/feature/selected-for-deletion",
+        ],
+        cwd=project_root,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    assert remaining_branch.returncode == 1
 
 
 def test_scaffolded_project_includes_project_changelog(
