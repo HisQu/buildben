@@ -1,9 +1,13 @@
-# Decisions and handoffs
+# Decisions
 
-## Worker-task 05 handoff
+## [06.10.2026 time unknown] Decision 01: authorize Worker-task 05
+[ticker_decision_01]: ../261002-codex_agent_workflow.md#worker-task-05-buildben-worktree-recipes
+[merge_01]: merges.md?plain=1#L3
+[handoff_01]: analyses.md?plain=1#L3
+[review_01]: analyses.md?plain=1#L16
 
-Authorized Worker-task 05 added optional locked worktree setup and guarded cleanup while leaving branch deletion explicit. Coder commit: `65e107840aed4efe65b22384dadc32bd762ed315`. Reviewer correction commit: `3f2bc9b5ee92629e27c576e2b2a12b76169113b0`. Both commits were authored by `markur4`; the reviewed range is `26b52435ac11f54dd55fe8319e996cae076efc95..3f2bc9b5ee92629e27c576e2b2a12b76169113b0`.
-
-[Paraphrase of worker-reported checks:] nine focused mocked uv worktree cases, Ruff, Just parsing, new recipe block formatting, and diff checks passed. Whole-template formatting fails on the existing baseline; the new recipe block is formatted.
-
-See [the ticker entry](../261002-codex_agent_workflow.md#worker-task-05-buildben-worktree-recipes).
+- **Owner:** PLANNER.
+- **Ticker event:** [time unknown | PLANNER | Dispatch] ([ticker_decision_01]).
+- **Choice:** [Paraphrase of Planner assignment:] authorized optional locked worktree setup and guarded cleanup while keeping branch deletion explicit.
+- **Effect:** Worker-task 05 proceeded; integration facts are recorded in [Merge 01][merge_01].
+- **Evidence:** [handoff_01], [review_01].
