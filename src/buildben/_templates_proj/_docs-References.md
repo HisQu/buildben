@@ -76,27 +76,33 @@ before starting its installer.
 | `install-windows.cmd` | Windows entry point, including double-click support. |
 | `install-windows.ps1` | Windows installer implementation. |
 | `prepare-powershell-windows.cmd` | Handles RemoteSigned policy and downloaded-file marks for the Windows entry point. |
+| `install-macos.command` | macOS double-click wrapper that forwards to the Bash installer. |
 
-Both installers accept these modes:
+Both installers use the public release bootstrap for the ordinary installation.
+Until the first thin release payload is published, use the explicit developer
+modes below; the new release payload is upcoming and is not available from
+published releases yet.
 
 | Option | Effect |
 | --- | --- |
-| `--git` | Install the `main` branch from Git. |
+| *(no mode)* | Install the latest published non-prerelease release when its thin payload is available. |
+| `--git` | Install the `main` branch from Git. Use this during the paused-release interval. |
 | `--dev [PATH]` | Run `uv sync` in an existing cloned repository; `PATH` defaults to the current directory. |
-| `--wheel [PATH]` | Install from a local wheel and wheelhouse. Without `PATH`, exactly one matching application wheel must be beside the installer or in its `wheels` directory. |
-| `--version VERSION` | Install a Git tag, adding a leading `v` when needed. |
+| `--version VERSION` | Select a release version, adding a leading `v` when needed. |
 | `--uv PATH` | Use a specific uv executable. |
 | `--yes` | Skip the installer confirmation. |
 | `--skip-config` | Skip `{my_project} config setup` after installation. |
 | `--help` | Print the supported options. |
 
-With no mode, the installer selects a local wheel only when it finds exactly
-one matching application wheel. In every other case it selects Git. Wheel mode
-is offline: it requires local uv, an existing Python 3.12 or 3.13 interpreter,
-and a wheelhouse containing the application and its dependencies. It disables
-package indexes, Python downloads, and source builds. Git and development modes
-can install uv 0.12.18 permanently in the user's directory if no uv
-executable is available.
+The released installer consumes a thin platform archive containing the
+application wheel, release manifest, and lock-derived runtime requirement and
+constraint exports. It installs the verified wheel with `uv tool install`,
+resolving runtime dependencies online under those locked constraints. It does
+not download or install a wheelhouse. An old published release without the
+thin payload cannot be installed through the release bootstrap; use `--git` or
+`--dev [PATH]` until a new payload is published. The generated release workflow
+has one normal full CI gate for the exact tagged commit; release preparation
+does not rerun that full gate locally.
 
 ## Storage commands
 

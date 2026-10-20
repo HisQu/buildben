@@ -25,23 +25,23 @@ name. Replace demonstration paths with your chosen directories for actual use.
 
 ## One-line install
 
-The one-line installer works after the GitHub repository has been pushed. It
-installs from the `main` branch. Have GitHub CLI `gh` and Git installed and
-authenticated for this repository. If uv is missing, the installer asks before
-it installs the pinned uv version in the user's directory. The
-[installer reference](References.md#installer-reference) describes the modes
-and options.
+The public bootstrap downloads the installer directly from GitHub and does not
+require GitHub CLI. The new thin release payload has not yet been published, so
+select the explicit `--git` mode to install from `main`, or `--dev [PATH]` to
+synchronize a cloned checkout. `--git` requires Git. If uv is missing, the
+installer bootstraps it in the user's directory. See the
+[installer reference](References.md#installer-reference) for available modes.
 
 ### For Linux & macOS
 
 ```shell
-installer="$(gh api repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-linux-macos.sh -H 'Accept: application/vnd.github.raw+json')" && test -n "$installer" && bash -c "$installer"
+installer="$(curl -fsSL https://raw.githubusercontent.com/<github_username>/<my_project>/main/src/<my_project>_dev/distribution/install-linux-macos.sh)" && test -n "$installer" && bash -c "$installer" -- --git
 ```
 
 ### For Windows
 
 ```powershell
-if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'GitHub CLI gh is required.' }; $installer = gh api repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-windows.ps1 -H 'Accept: application/vnd.github.raw+json'; if ($LASTEXITCODE -ne 0 -or $null -eq $installer -or @($installer).Count -eq 0 -or [string]::IsNullOrWhiteSpace(($installer -join "`n"))) { throw 'Could not download the installer.' }; Invoke-Expression ($installer -join "`n")
+$url = 'https://raw.githubusercontent.com/<github_username>/<my_project>/main/src/<my_project>_dev/distribution/install-windows.ps1'; $installer = Invoke-RestMethod -Uri $url; if ($null -eq $installer -or [string]::IsNullOrWhiteSpace(($installer -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($installer -join "`n"))) --git
 ```
 
 After installation, the installer runs `{my_project} config setup`, which guides

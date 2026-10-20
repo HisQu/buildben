@@ -107,22 +107,23 @@ Use Python 3.12 or newer.
 
 ### One-line install
 
-These commands work only after this repository has been pushed to GitHub. They
-fetch the installer through GitHub CLI `gh`; the installer downloads the
-project from `main`. Have `gh` and Git installed. For a private repository, both
-must already have access. If uv is missing, the installer asks before it
-installs the pinned uv version under your user directory.
+The public bootstrap downloads the installer directly from GitHub and does not
+require GitHub CLI. Until a new release publishes the thin installer payload,
+use the explicit `--git` developer mode to install from `main`, or `--dev [PATH]`
+to synchronize a cloned checkout. `--git` requires Git. If uv is missing, the
+installer bootstraps it in the user's directory. The
+[installer reference](docs/References.md#installer-reference) lists all modes.
 
 #### For Linux & macOS
 
 ```shell
-installer="$(gh api repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-linux-macos.sh -H 'Accept: application/vnd.github.raw+json')" && test -n "$installer" && bash -c "$installer"
+installer="$(curl -fsSL https://raw.githubusercontent.com/<github_username>/<my_project>/main/src/<my_project>_dev/distribution/install-linux-macos.sh)" && test -n "$installer" && bash -c "$installer" -- --git
 ```
 
 #### For Windows
 
 ```powershell
-if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'GitHub CLI gh is required.' }; $installer = gh api repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-windows.ps1 -H 'Accept: application/vnd.github.raw+json'; if ($LASTEXITCODE -ne 0 -or $null -eq $installer -or @($installer).Count -eq 0 -or [string]::IsNullOrWhiteSpace(($installer -join "`n"))) { throw 'Could not download the installer.' }; Invoke-Expression ($installer -join "`n")
+$url = 'https://raw.githubusercontent.com/<github_username>/<my_project>/main/src/<my_project>_dev/distribution/install-windows.ps1'; $installer = Invoke-RestMethod -Uri $url; if ($null -eq $installer -or [string]::IsNullOrWhiteSpace(($installer -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($installer -join "`n"))) --git
 ```
 
 After installation, the installer runs `{my_project} config setup`, which guides
@@ -157,20 +158,24 @@ py -m venv .venv
 ```
 
 uv is optional. Run `uv sync` if you use it. The root install scripts also
-accept `--dev` to sync a cloned repository; if uv is missing, they ask before
-installing the pinned version. The
+accept `--dev` to sync a cloned repository. If uv is missing, the installer
+bootstraps it; released installation will use the new thin payload once one is
+published. Until then, use `--git` or `--dev` rather than expecting a legacy
+release to contain that payload. The
 [installation guide](docs/How-To-User-Guides.md#one-line-install) covers both
 workflows.
 
 <!--
-Future agents: Keep this installation-bundle placeholder in the README. Do not
-remove the comment. Activate the section only after this repository has a
-working bundle production process that creates and tests the complete files.
+Future agents: Keep this installation-bundle placeholder in the README until a
+new thin release payload has actually been published. The build workflow being
+able to create assets does not mean published releases contain them.
 
 ### Installation bundle
 
-Describe bundle contents, supported platforms, and installation commands here
-only after bundle production creates and tests the complete files.
+Upcoming: future release assets will contain a thin platform archive with the
+application wheel and lock-derived runtime exports. Until those assets are
+published, use the explicit `--git` installer mode or `--dev [PATH]` for a
+cloned repository. See the [installer reference](docs/References.md#installer-reference).
 -->
 
 ### Remove an installation

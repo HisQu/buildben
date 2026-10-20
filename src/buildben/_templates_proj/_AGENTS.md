@@ -52,13 +52,12 @@
 
 ## Installation rules
 - Keep the root README concise and installation-first. Under `Installation`, put the H3 heading `One-line install` before `Install from a cloned repository`. Under each, label platform commands with `For Linux & macOS` and `For Windows` headings.
-- The one-line install works only after the GitHub repository has been pushed. Fetch scripts with authenticated `gh api` so private repositories work when existing credentials allow it. Require GitHub CLI `gh` and Git access, and do not add an authentication tutorial.
-- Make a failed or empty installer fetch stop before execution. Bash examples must guard `bash -c` with a successful, nonempty `gh api` command substitution; PowerShell examples must check `$LASTEXITCODE` and reject empty content before `Invoke-Expression`.
-- The cloned-repository instructions use `python -m venv` and `python -m pip install -e .`. They must work without uv. Mention uv only as an optional workflow.
-- Keep the future installation-bundle section in the README as an HTML comment. Do not remove or activate it until this repository has a bundle production process that creates and tests the complete files.
-- Do not claim installation bundles are available before that process exists, and do not add generic upgrade warnings.
-- Keep installer implementation in `src/<my_project>_dev/distribution`. Root `install-linux-macos.sh` and `install-windows.cmd` files are thin shortcuts. Update the canonical scripts and their shortcuts together when paths or options change.
-- The installers support the one-line Git install, cloned-repository `--dev`, and local wheel modes. Wheel mode must use local uv and local files only, with Python downloads, package index access, and source builds disabled. Do not make it bootstrap uv or access the network.
+- The public one-line bootstrap fetches scripts from GitHub with curl on Unix or PowerShell on Windows and does not require GitHub CLI. Git is required only for the explicit `--git` mode; do not add an authentication tutorial.
+- Stop on a failed or empty installer fetch before executing any response. Unix examples must guard execution on a successful, nonempty curl response; PowerShell examples must reject failed or empty downloads before running the downloaded script.
+- The public bootstrap uses GitHub to fetch release assets without GitHub CLI. Until the first new thin payload is published, keep explicit `--git` and `--dev [PATH]` instructions available; do not imply legacy published releases contain the new payload.
+- Describe thin archives as the application wheel plus lock-derived runtime requirement and constraint exports. Runtime dependencies resolve online under those constraints; do not describe release installation as offline or wheelhouse-based.
+- Normal release workflows reuse one successful full CI run for the exact commit. `just release-check` remains an explicit full local rehearsal, while `release-prepare` runs only fast release validation/build steps.
+- Keep the generated README's installation-bundle placeholder commented until a thin payload is actually published. Do not claim new assets are available merely because the workflow can produce them.
 
 ## Verification
 - Review the diff for duplicate helpers, naming drift, unnecessary abstractions, and regressions.

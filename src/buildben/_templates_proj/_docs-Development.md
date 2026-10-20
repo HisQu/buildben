@@ -212,13 +212,16 @@ git commit -m "Lock project dependencies"
 The CI and release workflows use `uv sync --locked`, so they intentionally
 fail when the committed lock no longer matches `pyproject.toml`.
 
-Run the local rehearsal first:
+`just release-check` is the explicit full local rehearsal. The normal
+`release-prepare` path performs fast release validation, updates the locked
+version/export files, builds the wheel and sdist, and validates them; it does
+not run the full rehearsal or browser suite.
 
 ```bash
 just release-check
 ```
 
-Run the release:
+Run normal release preparation and push:
 
 ```bash
 just release patch
@@ -229,11 +232,18 @@ just release patch
 > pushes `main` and the tag. It returns after the push without waiting for
 > GitHub Actions.
 
-GitHub Actions runs CI, validates wheel and sdist installs on Python 3.12 and
-3.13, and creates the GitHub Release with the changelog section as its notes.
-The automatic tag workflow publishes the validated artifacts to PyPI when the
-tagged `justfile` contains:
+The tag workflow reuses one successful full `ci.yml` run for the exact tagged
+commit rather than running a second full test matrix. It prepares thin
+platform archives from the committed lock's runtime exports, validates the
+wheel and sdist, and publishes release assets only after the required build
+and platform installation checks pass. The public bootstrap consumes those
+assets once a new release payload has been published. Existing published
+releases do not yet contain this payload, so during the paused-release
+interval users should install from Git with `--git` or synchronize a checkout
+with `--dev [PATH]`; do not direct users to install from a legacy release.
 
+PyPI publication remains independently controlled by the tagged `justfile`
+setting:
 ```just
 RELEASE_PYPI := "true"
 ```
