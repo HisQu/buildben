@@ -88,13 +88,13 @@ package-dir = { "" = "src" }          # < Root package lives in src/
 where = ["src"]                       # < Scan only src/ for packages
 # namespaces = true                     # < Implicit namespace packages ok
 
-# === Include data *inside* the package =======
 [tool.setuptools.package-data]
 "buildben" = [
-    "**/*.sh",         # src/buildben/**/*.sh/
-    "_templates_proj/**/*",  # src/buildben/templates/**/*
-    "_templates_experim/**/*",  # src/buildben/templates/**/*
-    ]
+    "**/*.sh",
+    "_templates_proj/**/*",
+    "_templates_experim/**/*",
+]
+"buildben_dev.distribution" = ["*.sh", "*.cmd", "*.ps1", "*.command"]
 
 # =====================================================================
 # === Terminal entry points
