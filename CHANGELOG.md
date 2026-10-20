@@ -80,6 +80,19 @@ This project follows Semantic Versioning.
 
 <br>
 
+
+### ⚠️ Deprecated
+
+<br>
+
+### 🗑️ Removed
+
+<br>
+
+### 🔨 Fixed
+
+<br>
+
 ---
 
 <br>
