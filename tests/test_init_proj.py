@@ -12,7 +12,6 @@ import subprocess
 import sys
 import tomllib
 import xml.etree.ElementTree as ET
-import zipfile
 from collections.abc import Generator
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -62,48 +61,6 @@ def _project_env(project_root: Path) -> dict[str, str]:
     env["PYTHONPATH"] = os.pathsep.join(src_paths)
     env["BUBE_TEST_TMP_APPRC_DIR"] = str(project_root / ".test-config")
     return env
-
-
-def _fake_uv_script(tmp_path: Path) -> Path:
-    """Write a uv stand-in that records commands without accessing the network.
-
-    :param tmp_path: Temporary directory that owns the fake executable.
-    :return: Executable path for the generated installer.
-    """
-    fake_uv = tmp_path / "fake-uv"
-    fake_uv.write_text(
-        "#!/bin/sh\n"
-        'printf \'%s\\n\' "$*" >> "$INSTALLER_TEST_UV_LOG"\n'
-        "if [ \"${1:-}\" = --version ]; then printf 'uv fake\\n'; fi\n"
-        'if [ "${1:-}" = python ] && [ "${2:-}" = find ]; then\n'
-        "  printf '%s\\n' \"$INSTALLER_TEST_PYTHON\"\n"
-        "fi\n",
-        encoding="utf-8",
-    )
-    fake_uv.chmod(0o755)
-    return fake_uv
-
-
-def _assert_release_banner(recipe: str) -> None:
-    """Protect the established visual treatment of prepared releases.
-
-    :param recipe: Complete justfile text.
-    :return: None.
-    """
-    banner = '''    echo "================================================================="
-    echo "✅  RELEASE ${tag} PREPARED LOCALLY"
-    echo "================================================================="
-    echo
-    echo "Nothing has been uploaded."
-    echo
-    echo "NEXT COMMAND, THIS STARTS THE RELEASE:"
-    echo
-    echo "  just release-push ${tag}"
-    echo
-    echo "GitHub will run CI, validate wheel and sdist artifacts, and create"
-    echo "the GitHub Release. PyPI follows RELEASE_PYPI in the tagged justfile."
-    echo "================================================================="'''
-    assert banner in recipe
 
 
 def _git_output(project_root: Path, *args: str) -> str:
@@ -237,226 +194,41 @@ def test_scaffolded_project_runs_pytest(bube_test_project: Path) -> None:
     _run([sys.executable, "-m", "pytest", "-q"], cwd=proot, env=_project_env(proot))
 
 
-def test_scaffolded_project_includes_installers(bube_test_project: Path) -> None:
-    """Assert generated installer paths, project values, and README rules."""
-    proot = bube_test_project
-    distribution = proot / "src" / "bube_test_tmp_dev" / "distribution"
-    bash_installer = distribution / "install-linux-macos.sh"
-    powershell_installer = distribution / "install-windows.ps1"
-    windows_entrypoint = distribution / "install-windows.cmd"
-    preflight = distribution / "prepare-powershell-windows.cmd"
-
-    for path in (bash_installer, powershell_installer, windows_entrypoint, preflight):
-        assert path.is_file(), path
-
-    bash_text = bash_installer.read_text(encoding="utf-8")
-    powershell_text = powershell_installer.read_text(encoding="utf-8")
-    root_bash = (proot / "install-linux-macos.sh").read_text(encoding="utf-8")
-    root_windows = (proot / "install-windows.cmd").read_text(encoding="utf-8")
-    windows_text = windows_entrypoint.read_text(encoding="utf-8")
-    preflight_text = preflight.read_text(encoding="utf-8")
-    for text in (
-        bash_text,
-        powershell_text,
-        windows_text,
-        preflight_text,
-        root_bash,
-        root_windows,
-    ):
-        assert "<my_project>" not in text
-        assert "<github_username>" not in text
-        assert "<MY_PROJECT>" not in text
-
-    assert "https://github.com/github-user/bube_test_tmp.git" in bash_text
-    assert "https://github.com/github-user/bube_test_tmp.git" in powershell_text
-
-    for text in (bash_text, powershell_text):
-        assert "--no-python-downloads" in text
-        assert "--offline" in text
-        assert "--no-index" in text
-        assert "--no-build" in text
-
-    assert "uv sync" in bash_text
-    assert "uv sync" in powershell_text
-    assert 'UV_VERSION="0.12.18"' in bash_text
-    assert '$UvVersion = "0.12.18"' in powershell_text
-    assert "RemoteSigned" in preflight_text
-
-    assert "src/bube_test_tmp_dev/distribution/install-linux-macos.sh" in root_bash
-    assert "src\\bube_test_tmp_dev\\distribution\\install-windows.cmd" in root_windows
-
-    readme = (proot / "README.md").read_text(encoding="utf-8")
-    assert "# `bube_test_tmp`: A Template" in readme
-    assert "[![uv]" in readme
-    assert "Graphical Abstract goes here:" in readme
-    assert "## Table of contents" in readme
-    assert "[One-line install](#one-line-install)" in readme
-    assert (
-        "[Install from a cloned repository](#install-from-a-cloned-repository)"
-        in readme
-    )
-    assert "[Remove an installation](#remove-an-installation)" in readme
-    assert "<my_project>" not in readme
-    assert "<github_username>" not in readme
-    assert "### One-line install" in readme
-    assert "### Install from a cloned repository" in readme
-    assert readme.index("### One-line install") < readme.index(
-        "### Install from a cloned repository"
-    )
-    assert readme.count("#### For Linux & macOS") == 2
-    assert readme.count("#### For Windows") == 2
-    assert "only after this repository has been pushed" in readme
-    assert "gh api repos/github-user/bube_test_tmp/contents/" in readme
-    assert '&& test -n "$installer" && bash -c "$installer"' in readme
-    assert "$LASTEXITCODE -ne 0" in readme
-    assert "$null -eq $installer" in readme
-    assert "[string]::IsNullOrWhiteSpace" in readme
-    assert "Get-Command gh -ErrorAction SilentlyContinue" in readme
-    assert (
-        "After installation, the installer runs `bube_test_tmp config setup`, "
-        "which guides\nyou through initial configuration."
-    ) in readme
-    assert "python -m venv .venv" in readme
-    assert "python -m pip install -e ." in readme
-    assert "does not\nrequire uv" in readme
-    assert r"& '.\.venv\Scripts\python.exe'" in readme
-    assert r"& '.\.venv\Scripts\bube_test_tmp.exe' config setup" in readme
-    assert "config setup" in readme
-    assert "uv tool uninstall bube_test_tmp" in readme
-    assert "python -m pip uninstall bube_test_tmp" in readme
-    assert "rm -f ~/.local/bin/uv ~/.local/bin/uvx ~/.local/bin/uvw" in readme
-    assert "Remove-Item -ErrorAction SilentlyContinue" in readme
-    assert '"$HOME\\.local\\bin\\uv.exe"' in readme
-    assert "uv self uninstall" not in readme
-    assert (
-        "https://docs.astral.sh/uv/getting-started/installation/#uninstallation"
-        in readme
-    )
-    assert "Future agents: Keep this installation-bundle placeholder" in readme
-    active_readme = re.sub(r"<!--.*?-->", "", readme, flags=re.DOTALL)
-    assert "### Installation bundle" not in active_readme
-    assert readme.index("### Install from a cloned repository") < readme.index(
-        "### Installation bundle"
-    )
-    assert readme.index("### Installation bundle") < readme.index("## Usage")
-
-
-@pytest.mark.skipif(
-    shutil.which("bash") is None, reason="Bash is required for installer smoke tests."
-)
-def test_scaffolded_bash_installer_dev_mode_uses_existing_uv(
+def test_scaffolded_release_modules_run_without_buildben_installed(
     bube_test_project: Path,
-    tmp_path: Path,
 ) -> None:
-    """Exercise checkout sync with a fake uv executable and no downloads."""
-    proot = bube_test_project
-    installer = (
-        proot / "src" / "bube_test_tmp_dev" / "distribution" / "install-linux-macos.sh"
-    )
-    log = tmp_path / "uv-commands.txt"
-    fake_uv = _fake_uv_script(tmp_path)
-    env = _project_env(proot)
-    env["INSTALLER_TEST_UV_LOG"] = str(log)
-    env["INSTALLER_TEST_PYTHON"] = sys.executable
+    """Run generated release CLIs without site-packages or BuildBen on PYTHONPATH."""
+    project_root = bube_test_project
+    package = "bube_test_tmp_dev"
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(project_root / "src")
 
-    _run(
+    commands = [
         [
-            "bash",
-            str(installer),
-            "--dev",
-            str(proot),
-            "--uv",
-            str(fake_uv),
-            "--yes",
-            "--skip-config",
+            sys.executable,
+            "-S",
+            "-m",
+            f"{package}.packaging.installation_bundle",
+            "--help",
         ],
-        cwd=proot,
-        env=env,
-    )
-
-    assert log.read_text(encoding="utf-8").splitlines() == ["--version", "sync"]
-
-
-@pytest.mark.skipif(
-    shutil.which("bash") is None, reason="Bash is required for installer smoke tests."
-)
-def test_scaffolded_bash_installer_defaults_to_git_without_one_wheel(
-    bube_test_project: Path,
-    tmp_path: Path,
-) -> None:
-    """Assert multiple local wheels fall back to the online Git installation."""
-    proot = bube_test_project
-    distribution = proot / "src" / "bube_test_tmp_dev" / "distribution"
-    installer = distribution / "install-linux-macos.sh"
-    (distribution / "bube_test_tmp-0.1.0-py3-none-any.whl").touch()
-    (distribution / "bube_test_tmp-0.2.0-py3-none-any.whl").touch()
-
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    fake_git = fake_bin / "git"
-    git_log = tmp_path / "git-commands.txt"
-    fake_git.write_text(
-        '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$INSTALLER_TEST_GIT_LOG"\n',
-        encoding="utf-8",
-    )
-    fake_git.chmod(0o755)
-    uv_log = tmp_path / "uv-commands.txt"
-    fake_uv = _fake_uv_script(tmp_path)
-    env = _project_env(proot)
-    env["PATH"] = os.pathsep.join((str(fake_bin), env.get("PATH") or os.defpath))
-    env["INSTALLER_TEST_GIT_LOG"] = str(git_log)
-    env["INSTALLER_TEST_UV_LOG"] = str(uv_log)
-    env["INSTALLER_TEST_PYTHON"] = sys.executable
-
-    _run(
-        ["bash", str(installer), "--uv", str(fake_uv), "--yes", "--skip-config"],
-        cwd=proot,
-        env=env,
-    )
-
-    assert git_log.read_text(encoding="utf-8").splitlines() == [
-        "ls-remote --exit-code https://github.com/github-user/bube_test_tmp.git main"
+        [sys.executable, "-S", "-m", f"{package}.packaging.release_assets", "--help"],
+        [
+            sys.executable,
+            "-S",
+            str(project_root / "src" / package / "distribution" / "install_release.py"),
+            "--help",
+        ],
     ]
-    assert uv_log.read_text(encoding="utf-8").splitlines() == [
-        "--version",
-        "tool install --force --refresh git+https://github.com/github-user/bube_test_tmp.git@main",
-        "tool update-shell",
-    ]
-
-
-@pytest.mark.skipif(
-    shutil.which("bash") is None, reason="Bash is required for installer smoke tests."
-)
-def test_scaffolded_bash_installer_defaults_to_offline_single_wheel(
-    bube_test_project: Path,
-    tmp_path: Path,
-) -> None:
-    """Assert one local wheel selects uv's no-network installation flags."""
-    proot = bube_test_project
-    distribution = proot / "src" / "bube_test_tmp_dev" / "distribution"
-    installer = distribution / "install-linux-macos.sh"
-    (distribution / "bube_test_tmp-0.1.0-py3-none-any.whl").touch()
-    log = tmp_path / "uv-commands.txt"
-    fake_uv = _fake_uv_script(tmp_path)
-    env = _project_env(proot)
-    env["INSTALLER_TEST_UV_LOG"] = str(log)
-    env["INSTALLER_TEST_PYTHON"] = sys.executable
-
-    _run(
-        ["bash", str(installer), "--uv", str(fake_uv), "--yes", "--skip-config"],
-        cwd=proot,
-        env=env,
-    )
-
-    calls = log.read_text(encoding="utf-8").splitlines()
-    assert calls[0] == "--version"
-    install_call = next(call for call in calls if call.startswith("tool install "))
-    assert "--offline" in install_call
-    assert "--no-index" in install_call
-    assert "--no-python-downloads" in install_call
-    assert "--no-build" in install_call
-    assert "--find-links" in install_call
-    assert calls[-1] == "tool update-shell"
+    for command in commands:
+        result = subprocess.run(
+            command,
+            cwd=project_root,
+            env=env,
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
 
 
 def _runtime_command(project_root: Path, *arguments: str) -> str:
@@ -604,32 +376,6 @@ def test_scaffolded_project_uses_dependency_group_template(
     assert 'worktree-remove destination delete_branch="false":' in justfile_text
     assert "uv sync --locked --all-extras --all-groups" in justfile_text
     assert 'UV_PROJECT_ENVIRONMENT="$destination_path/.venv"' in justfile_text
-    assert "release-check:" in justfile_text
-    assert "_release-artifact-check" in justfile_text
-    assert "uv build --python 3.12 --no-sources --no-build-logs" in justfile_text
-    assert 'twine check "$wheel" "$sdist"' in justfile_text
-    assert "uv version --bump" in justfile_text
-    assert 'RELEASE_PYPI := "false"' in justfile_text
-    assert "PUBLISH_PYPI" not in justfile_text
-    assert "uv publish --token" not in justfile_text
-    _assert_release_banner(justfile_text)
-    assert 'release-prepare level="patch":' in justfile_text
-    assert "release-push tag:" in justfile_text
-    assert "publish-pypi tag:" in justfile_text
-    assert "refs/heads/main:refs/heads/main" in justfile_text
-    assert '"refs/tags/${tag}:refs/tags/${tag}"' in justfile_text
-    assert 'git rev-parse --verify --end-of-options "${tag_ref}^{commit}"' in (
-        justfile_text
-    )
-    assert "_committed-release-pypi-policy HEAD" in justfile_text
-    assert 'tag_release_pypi="$(just _committed-release-pypi-policy "$tag")"' in (
-        justfile_text
-    )
-    assert "If PyPI was skipped, run:" not in justfile_text
-    assert 'if [[ "$release_pypi" == "true" ]]; then' in justfile_text
-    assert "PyPI publication is disabled by RELEASE_PYPI" in justfile_text
-    assert "--all-extras --all-groups" in justfile_text
-
     readme_text = (proot / "README.md").read_text(encoding="utf-8")
     assert 'python -m pip install -e "."' in readme_text
     development_text = (proot / "docs" / "Development.md").read_text(encoding="utf-8")
@@ -1098,249 +844,6 @@ def test_scaffolded_project_has_apprc_config_package(
     assert "config.catalog" not in agents_text
 
 
-def test_scaffolded_project_includes_release_workflow(
-    bube_test_project: Path,
-) -> None:
-    """Assert generated repositories receive the active release contract."""
-    ci = bube_test_project / ".github" / "workflows" / "ci.yml"
-    release = bube_test_project / ".github" / "workflows" / "release.yml"
-    release_notes = (
-        bube_test_project
-        / "src"
-        / "bube_test_tmp_dev"
-        / "packaging"
-        / "release_notes.py"
-    )
-    smoke = release_notes.with_name("install_smoke.py")
-    starter_test = bube_test_project / "tests" / "test_bube_test_tmp_package.py"
-
-    for path in (ci, release, release_notes, smoke, starter_test):
-        assert path.is_file(), path
-
-    assert "workflow_call" in ci.read_text(encoding="utf-8")
-    assert "uv sync --locked --all-extras --all-groups" in ci.read_text(
-        encoding="utf-8"
-    )
-    release_text = release.read_text(encoding="utf-8")
-    assert "github-release" in release_text
-    assert "workflow_dispatch:" in release_text
-    assert "release_tag:" in release_text
-    assert "PyPI must be enabled in workflow ref and tag" in release_text
-    assert "just --evaluate RELEASE_PYPI" in release_text
-    assert "PUBLISH_PYPI" not in release_text
-    assert "trusted-publishing" in release_text
-    assert "publish-existing-release:" in release_text
-    assert "needs.build.outputs.release_pypi == 'true'" in release_text
-    assert release_text.count("if: github.event_name == 'push'") == 3
-    assert "if: github.event_name == 'workflow_dispatch'" in release_text
-    assert "group: bube_test_tmp-release" in release_text
-    assert '--title "bube_test_tmp ${release_version}"' in release_text
-    automatic_pypi = release_text.split("  pypi-publish:\n", 1)[1].split(
-        "  manual_pypi_preflight:\n", 1
-    )[0]
-    assert 'normalized_project="${project_name//_/-}"' in automatic_pypi
-    assert '--check-url "https://pypi.org/simple/${normalized_project}/"' in (
-        automatic_pypi
-    )
-    assert (
-        "gh release download"
-        not in release_text.split("  publish-existing-release:\n", 1)[1]
-    )
-    assert "--check-url" in release_text
-    assert "actions/upload-artifact@v7" in release_text
-    assert release_text.count("actions/download-artifact@v8") == 3
-
-    manual_preflight = release_text.split("  manual_pypi_preflight:\n", 1)[1].split(
-        "  publish-existing-release:\n", 1
-    )[0]
-    assert "permissions:\n      contents: read" in manual_preflight
-    assert "environment: pypi" not in manual_preflight
-    assert "id-token: write" not in manual_preflight
-    assert "ref: ${{ github.sha }}" in manual_preflight
-    assert "ACTIVE_WORKFLOW_SHA: ${{ github.sha }}" in manual_preflight
-    assert "ACTIVE_WORKFLOW_REF: ${{ github.ref }}" in manual_preflight
-    assert '"${ACTIVE_WORKFLOW_SHA}^{commit}"' in manual_preflight
-    assert '"${ACTIVE_WORKFLOW_REF}^{commit}"' not in manual_preflight
-    assert 'target_policy="$(read_release_policy' in manual_preflight
-    assert 'git fetch --no-tags origin "$tag_ref:$tag_ref"' in manual_preflight
-    assert 'git ls-remote --exit-code --refs origin "$tag_ref"' in manual_preflight
-    assert 'gh api "/repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG"' in (
-        manual_preflight
-    )
-    assert 'select(type == "boolean") | tostring' in manual_preflight
-    assert "changed during asset capture" in manual_preflight
-    assert "actions/upload-artifact@v7" in manual_preflight
-    assert "snapshot_ready=false" in manual_preflight
-    assert "publish_pypi=true" in manual_preflight
-    assert manual_preflight.index(
-        "Upload validated release snapshot"
-    ) < manual_preflight.index('echo "publish_pypi=true"')
-    assert "steps.upload_snapshot.outcome == 'success'" in manual_preflight
-    assert "steps.upload_snapshot.outputs.artifact-id != ''" in manual_preflight
-
-    manual_publish = release_text.split("  publish-existing-release:\n", 1)[1]
-    assert "needs: manual_pypi_preflight" in manual_publish
-    assert "needs.manual_pypi_preflight.outputs.publish_pypi == 'true'" in (
-        manual_publish
-    )
-    assert "actions/checkout" not in manual_publish
-    assert "uv build" not in manual_publish
-    assert "environment: pypi" in manual_publish
-    assert "id-token: write" in manual_publish
-    assert "needs.manual_pypi_preflight.outputs.artifact_id != ''" in manual_publish
-    assert "artifact-ids: ${{ needs.manual_pypi_preflight.outputs.artifact_id }}" in (
-        manual_publish
-    )
-    assert "gh " not in manual_publish
-    assert "git " not in manual_publish
-
-    development_text = (bube_test_project / "docs" / "Development.md").read_text(
-        encoding="utf-8"
-    )
-    assert "just release-check" in development_text
-    assert 'RELEASE_PYPI := "true"' in development_text
-    assert "just release-prepare patch" in development_text
-    assert "just release-push vMAJOR.MINOR.PATCH" in development_text
-    assert "Manual publication and retries require" in development_text
-    assert "target tag's committed" in development_text
-    assert development_text.index("If both policies are true") < development_text.index(
-        "just publish-pypi vMAJOR.MINOR.PATCH"
-    )
-    assert "just publish-pypi vMAJOR.MINOR.PATCH" in development_text
-    assert "PUBLISH_PYPI" not in development_text
-    assert "just lock" in development_text
-
-    release_notes_output = bube_test_project / "release-notes.md"
-    _run(
-        [
-            sys.executable,
-            str(release_notes),
-            "0.1.0",
-            "--output",
-            str(release_notes_output),
-        ],
-        cwd=bube_test_project,
-        env=_project_env(bube_test_project),
-    )
-    assert release_notes_output.read_text(encoding="utf-8").startswith("## ➕ Added")
-    smoke_text = smoke.read_text(encoding="utf-8")
-    assert "InstallSnapshot" in smoke_text
-    assert "validate_install_snapshot" in smoke_text
-
-
-def test_buildben_release_recipe_keeps_checks_visible_and_builds_quiet() -> None:
-    """Assert the local release recipe retains useful status and safety output."""
-    recipe = (Path(__file__).resolve().parents[1] / "justfile").read_text(
-        encoding="utf-8"
-    )
-
-    assert "uv build --python 3.12 --no-sources --no-build-logs" in recipe
-    assert "Python {{version}}: checks passed." in recipe
-    assert "Version commit succeeded, but tag creation failed." in recipe
-    _assert_release_banner(recipe)
-    assert 'RELEASE_PYPI := "false"' in recipe
-    assert 'release-prepare level="patch":' in recipe
-    assert "release-push tag:" in recipe
-    assert "publish-pypi tag:" in recipe
-    assert "refs/heads/main:refs/heads/main" in recipe
-    assert '"refs/tags/${tag}:refs/tags/${tag}"' in recipe
-    assert "PUBLISH_PYPI" not in recipe
-    assert 'if [[ "$release_pypi" == "true" ]]; then' in recipe
-    assert "PyPI publication is disabled by RELEASE_PYPI" in recipe
-
-
-def test_buildben_release_workflow_supports_policy_and_recovery() -> None:
-    """Check the repository workflow against the current release contract.
-
-    :return: None.
-    """
-    workflow = (
-        Path(__file__).resolve().parents[1] / ".github" / "workflows" / "release.yml"
-    ).read_text(encoding="utf-8")
-
-    assert "workflow_dispatch:" in workflow
-    assert "PyPI must be enabled in workflow ref and tag" in workflow
-    assert "just --evaluate RELEASE_PYPI" in workflow
-    assert "needs.build.outputs.release_pypi == 'true'" in workflow
-    assert "PUBLISH_PYPI" not in workflow
-    assert "publish-existing-release:" in workflow
-    assert workflow.count("if: github.event_name == 'push'") == 3
-    assert "if: github.event_name == 'workflow_dispatch'" in workflow
-    automatic_pypi = workflow.split("  pypi-publish:\n", 1)[1].split(
-        "  manual_pypi_preflight:\n", 1
-    )[0]
-    assert "--check-url https://pypi.org/simple/buildben/" in automatic_pypi
-    assert "--check-url https://pypi.org/simple/buildben/" in workflow
-    assert "actions/upload-artifact@v7" in workflow
-    assert workflow.count("actions/download-artifact@v8") == 3
-
-    manual_preflight = workflow.split("  manual_pypi_preflight:\n", 1)[1].split(
-        "  publish-existing-release:\n", 1
-    )[0]
-    assert "permissions:\n      contents: read" in manual_preflight
-    assert "environment: pypi" not in manual_preflight
-    assert "id-token: write" not in manual_preflight
-    assert "ref: ${{ github.sha }}" in manual_preflight
-    assert "ACTIVE_WORKFLOW_SHA: ${{ github.sha }}" in manual_preflight
-    assert "ACTIVE_WORKFLOW_REF: ${{ github.ref }}" in manual_preflight
-    assert '"${ACTIVE_WORKFLOW_SHA}^{commit}"' in manual_preflight
-    assert '"${ACTIVE_WORKFLOW_REF}^{commit}"' not in manual_preflight
-    assert 'target_policy="$(read_release_policy' in manual_preflight
-    assert 'git fetch --no-tags origin "$tag_ref:$tag_ref"' in manual_preflight
-    assert 'git ls-remote --exit-code --refs origin "$tag_ref"' in manual_preflight
-    assert 'gh api "/repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG"' in (
-        manual_preflight
-    )
-    assert 'select(type == "boolean") | tostring' in manual_preflight
-    assert "changed during asset capture" in manual_preflight
-    assert "actions/upload-artifact@v7" in manual_preflight
-    assert "snapshot_ready=false" in manual_preflight
-    assert "publish_pypi=true" in manual_preflight
-    assert manual_preflight.index(
-        "Upload validated release snapshot"
-    ) < manual_preflight.index('echo "publish_pypi=true"')
-    assert "steps.upload_snapshot.outcome == 'success'" in manual_preflight
-    assert "steps.upload_snapshot.outputs.artifact-id != ''" in manual_preflight
-
-    manual_publish = workflow.split("  publish-existing-release:\n", 1)[1]
-    assert "needs: manual_pypi_preflight" in manual_publish
-    assert "needs.manual_pypi_preflight.outputs.publish_pypi == 'true'" in (
-        manual_publish
-    )
-    assert "actions/checkout" not in manual_publish
-    assert "uv build" not in manual_publish
-    assert "gh release download" not in manual_publish
-    assert "artifact-ids: ${{ needs.manual_pypi_preflight.outputs.artifact_id }}" in (
-        manual_publish
-    )
-    assert "needs.manual_pypi_preflight.outputs.artifact_id != ''" in manual_publish
-    assert "gh " not in manual_publish
-    assert "git " not in manual_publish
-    assert "uv publish" in manual_publish
-
-    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(
-        encoding="utf-8"
-    )
-    assert readme.index(
-        "Manual PyPI publication is available only when"
-    ) < readme.index("just publish-pypi vMAJOR.MINOR.PATCH")
-    assert "both the current committed" in readme
-    assert "target tag's committed" in readme
-
-
-def test_buildben_ci_installs_just_for_release_recipe_tests() -> None:
-    """Require the command used by release integration tests in CI.
-
-    :return: None.
-    """
-    workflow = (
-        Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ci.yml"
-    ).read_text(encoding="utf-8")
-
-    assert "extractions/setup-just@v4" in workflow
-    assert 'just-version: "1.56.0"' in workflow
-
-
 def test_scaffolded_release_push_updates_main_and_tag_together(
     bube_test_project: Path,
     tmp_path: Path,
@@ -1556,36 +1059,6 @@ def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> N
         "Development.md": "Development",
     }
     docs = bube_test_project / "docs"
-    how_to = (docs / "How-To-User-Guides.md").read_text(encoding="utf-8")
-    assert "[One-line install](#one-line-install)" in how_to
-    assert (
-        "[Install from a cloned repository](#install-from-a-cloned-repository)"
-        in how_to
-    )
-    assert "[Remove an installation](#remove-an-installation)" in how_to
-    assert "## One-line install" in how_to
-    assert "## Install from a cloned repository" in how_to
-    assert how_to.index("## One-line install") < how_to.index(
-        "## Install from a cloned repository"
-    )
-    assert how_to.count("### For Linux & macOS") == 2
-    assert how_to.count("### For Windows") == 2
-    assert "gh api repos/github-user/bube_test_tmp/contents/" in how_to
-    assert '&& test -n "$installer" && bash -c "$installer"' in how_to
-    assert "Get-Command gh -ErrorAction SilentlyContinue" in how_to
-    assert "$LASTEXITCODE -ne 0" in how_to
-    assert "$null -eq $installer" in how_to
-    assert "[string]::IsNullOrWhiteSpace" in how_to
-    assert "Invoke-Expression" in how_to
-    assert (
-        "After installation, the installer runs `bube_test_tmp config setup`, "
-        "which guides\nyou through initial configuration."
-    ) in how_to
-    assert "does not require uv" in how_to
-    assert "uv tool uninstall bube_test_tmp" in how_to
-    assert "rm -f ~/.local/bin/uv ~/.local/bin/uvx ~/.local/bin/uvw" in how_to
-    assert "Remove-Item -ErrorAction SilentlyContinue" in how_to
-    assert "uv self uninstall" not in how_to
     references = (docs / "References.md").read_text(encoding="utf-8")
     assert "How-To-User-Guides.md#install-from-a-cloned-repository" in references
     assert (bube_test_project / "tests" / "test_documentation.py").is_file()
@@ -1768,43 +1241,6 @@ def test_scaffolded_project_builds_without_missing_readme_warning(
 
     assert "README.md' cannot be found" not in combined_output
     assert "standard file not found" not in combined_output
-
-
-def test_buildben_wheel_includes_all_template_assets(tmp_path: Path) -> None:
-    """Assert installed wheels contain every scaffold template kind."""
-    repo_root = Path(__file__).resolve().parents[1]
-    _run(
-        ["uv", "build", "--out-dir", str(tmp_path), "--no-sources"],
-        cwd=repo_root,
-        env=os.environ.copy(),
-    )
-
-    wheel_path = next(tmp_path.glob("*.whl"))
-    with zipfile.ZipFile(wheel_path) as wheel:
-        names = set(wheel.namelist())
-
-    assert "buildben/_templates_experim/_REPORT.md" in names
-    assert "buildben/_templates_experim/_paths.env" in names
-    assert "buildben/_templates_experim/_run.py.tmpl" in names
-    assert "buildben/_templates_proj/_CHANGELOG.md" in names
-    assert "buildben/_templates_proj/_TODO.md" in names
-    assert "buildben/_templates_proj/_assets-flowchart.IGNORE.mmd" in names
-    assert "buildben/_templates_proj/_assets-classdiagram.IGNORE.mmd" in names
-    assert "buildben/_templates_proj/_src-cli-app.py.tmpl" in names
-    assert "buildben/_templates_proj/_tests-test_documentation.py.tmpl" in names
-    assert "buildben/_templates_proj/_github-release.yml" in names
-    assert "buildben/_templates_proj/_src-dev-packaging-release_notes.py.tmpl" in names
-    assert (
-        "buildben/_templates_proj/_src-dev-distribution-install-linux-macos.sh" in names
-    )
-    assert "buildben/_templates_proj/_src-dev-distribution-install-windows.ps1" in names
-    assert "buildben/_templates_proj/_src-dev-distribution-install-windows.cmd" in names
-    assert (
-        "buildben/_templates_proj/_src-dev-distribution-prepare-powershell-windows.cmd"
-        in names
-    )
-    assert "buildben/_templates_proj/_install-linux-macos.sh" in names
-    assert "buildben/_templates_proj/_install-windows.cmd" in names
 
 
 def test_experiment_scaffold_is_minimal_and_runnable(

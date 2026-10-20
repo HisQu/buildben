@@ -119,10 +119,11 @@ where = ["src"]                       # < Scan only src/ for packages
 # === Include non-py files *inside* the package =======
 [tool.setuptools.package-data]
 "*" = [
-    "config/apprc.defaults.env",   # src/<my_project>/config/apprc.defaults.env
-    "data/**/*.xlsx",         # src/<my_project>/data/
-    "images/**/*.{png,jpg}",  # src/<my_project>/images/
-    ]
+    "config/apprc.defaults.env",
+    "data/**/*.xlsx",
+    "images/**/*.{png,jpg}",
+]
+"<my_project>_dev.distribution" = ["*.sh", "*.cmd", "*.ps1", "*.command"]
 
 # === Include data *outside* the package (e.g. top-level docs/) ====
 # > Installs into <sys.prefix>/share/<my_project>

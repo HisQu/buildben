@@ -188,8 +188,29 @@ def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path
         / f"{name}_dev"
         / "distribution"
         / "prepare-powershell-windows.cmd",
+        "_src-dev-packaging-installation_bundle.py.tmpl": project_root
+        / "src"
+        / f"{name}_dev"
+        / "packaging"
+        / "installation_bundle.py",
+        "_src-dev-packaging-release_assets.py.tmpl": project_root
+        / "src"
+        / f"{name}_dev"
+        / "packaging"
+        / "release_assets.py",
+        "_src-dev-distribution-install_release.py.tmpl": project_root
+        / "src"
+        / f"{name}_dev"
+        / "distribution"
+        / "install_release.py",
+        "_src-dev-distribution-install-macos.command": project_root
+        / "src"
+        / f"{name}_dev"
+        / "distribution"
+        / "install-macos.command",
         "_install-linux-macos.sh": project_root / "install-linux-macos.sh",
         "_install-windows.cmd": project_root / "install-windows.cmd",
+        "_install-macos.command": project_root / "install-macos.command",
         "_tests-test_package.py.tmpl": project_root
         / "tests"
         / f"test_{name}_package.py",
@@ -224,6 +245,7 @@ def _project_placeholders(name: str, github_user: str) -> dict[str, str]:
     """
     scaffold_date = dt.date.today().isoformat()
     pascal_name = _pascal_project_name(name)
+    distribution = name.replace("_", "-")
     return {
         "<my_project>": name,
         "{my_project}": name,
@@ -247,6 +269,8 @@ def _project_placeholders(name: str, github_user: str) -> dict[str, str]:
         "{scaffold_date}": scaffold_date,
         "<initial_version>": "0.1.0",
         "{initial_version}": "0.1.0",
+        "<distribution_name>": distribution,
+        "<configure_app>": "true",
     }
 
 

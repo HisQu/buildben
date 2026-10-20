@@ -1,0 +1,1003 @@
+"""Stage and publish validated Buildben release assets through GitHub."""
+# > Run this CLI from the checked project root so prepare reads its pyproject.toml.
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import subprocess
+import sys
+import time
+import tomllib
+import zipfile
+from dataclasses import dataclass
+from pathlib import Path, PurePosixPath
+from typing import Protocol, TypedDict, cast
+
+from .release_notes import validate_tag_version
+
+SHA_RE = re.compile(r"^[0-9a-f]{40,64}$")
+DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
+VERSION_RE = re.compile(r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$")
+PLATFORMS = ("windows-x86_64", "linux-x86_64", "macos-arm64")
+COMMON_NAMES = (
+    "runtime-requirements.txt",
+    "runtime-constraints.txt",
+    "release-manifest.json",
+    "release-notes.md",
+    "install-linux-macos.sh",
+    "install-windows.ps1",
+    "install_release.py",
+)
+
+
+class ReleaseError(RuntimeError):
+    """Raised when release identity, payload, or remote state is invalid."""
+
+
+class Api(Protocol):
+    """Minimal GitHub API boundary used by the publisher and stateful tests."""
+
+    def request(
+        self,
+        method: str,
+        endpoint: str,
+        *,
+        data: bytes | None = None,
+        headers: tuple[str, ...] = (),
+    ) -> bytes: ...
+    def watch_ci(self, repository: str, run_id: int) -> int: ...
+
+
+@dataclass(frozen=True, slots=True)
+class Identity:
+    """Immutable tag identity required by every mutating operation."""
+
+    repository: str
+    tag: str
+    commit: str
+
+
+class FileRecord(TypedDict):
+    filename: str
+    sha256: str
+
+
+class ReleaseManifest(TypedDict):
+    schema_version: int
+    project: str
+    version: str
+    tag: str
+    repository: str
+    commit_sha: str
+    python_requires: str
+    application_wheel: FileRecord
+    source_archive: FileRecord
+    runtime_lock: FileRecord
+    runtime_constraints: FileRecord
+    platforms: dict[str, str]
+    archive_members: dict[str, list[str]]
+
+
+class GitHubApi:
+    """Run authenticated GitHub requests through the user's ``gh`` client."""
+
+    def request(
+        self,
+        method: str,
+        endpoint: str,
+        *,
+        data: bytes | None = None,
+        headers: tuple[str, ...] = (),
+    ) -> bytes:
+        command = ["gh", "api", "--method", method.upper()]
+        for header in headers:
+            command.extend(("--header", header))
+        if data is not None:
+            command.extend(("--input", "-"))
+        command.append(endpoint)
+        result = subprocess.run(
+            command,
+            input=data,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if result.returncode:
+            detail = result.stderr.decode("utf-8", errors="replace").strip()
+            raise ReleaseError(f"GitHub API request failed: {detail}")
+        return result.stdout
+
+    def watch_ci(self, repository: str, run_id: int) -> int:
+        result = subprocess.run(
+            ["gh", "run", "watch", str(run_id), "--exit-status", "--repo", repository],
+            check=False,
+        )
+        return result.returncode
+
+
+def _json(
+    api: Api, method: str, endpoint: str, payload: object | None = None
+) -> object:
+    body = (
+        None if payload is None else json.dumps(payload, separators=(",", ":")).encode()
+    )
+    raw = api.request(method, endpoint, data=body)
+    try:
+        return json.loads(raw) if raw else {}
+    except json.JSONDecodeError as exc:
+        raise ReleaseError(f"GitHub returned invalid JSON for {endpoint}") from exc
+
+
+def _repository(value: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", value):
+        raise ReleaseError("Repository must be OWNER/REPO.")
+    return value
+
+
+def _tag(value: str) -> str:
+    if not re.fullmatch(
+        r"v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", value
+    ):
+        raise ReleaseError("Tag must be vMAJOR.MINOR.PATCH.")
+    return value
+
+
+def _sha(value: str) -> str:
+    if not SHA_RE.fullmatch(value):
+        raise ReleaseError("Commit must be a full immutable Git commit SHA.")
+    return value
+
+
+def _endpoint(repository: str, suffix: str) -> str:
+    return f"/repos/{_repository(repository)}/{suffix.lstrip('/')}"
+
+
+def _tag_commit(api: Api, identity: Identity) -> str:
+    """Resolve the exact remote tag ref and peel annotated tags to a commit."""
+    ref = _json(
+        api, "GET", _endpoint(identity.repository, f"git/ref/tags/{identity.tag}")
+    )
+    if not isinstance(ref, dict) or not isinstance(ref.get("object"), dict):
+        raise ReleaseError(f"Remote tag {identity.tag} has no Git object.")
+    obj = ref["object"]
+    object_type, object_sha = obj.get("type"), obj.get("sha")
+    if not isinstance(object_sha, str) or not SHA_RE.fullmatch(object_sha):
+        raise ReleaseError(f"Remote tag {identity.tag} has an invalid object SHA.")
+    if object_type == "tag":
+        annotated = _json(
+            api, "GET", _endpoint(identity.repository, f"git/tags/{object_sha}")
+        )
+        if not isinstance(annotated, dict) or not isinstance(
+            annotated.get("object"), dict
+        ):
+            raise ReleaseError(f"Annotated tag {identity.tag} cannot be peeled.")
+        peeled = annotated["object"]
+        if peeled.get("type") != "commit":
+            raise ReleaseError(
+                f"Remote tag {identity.tag} does not peel directly to a commit."
+            )
+        commit = peeled.get("sha")
+    elif object_type == "commit":
+        commit = object_sha
+    else:
+        raise ReleaseError(f"Remote tag {identity.tag} does not identify a commit.")
+    if not isinstance(commit, str) or not SHA_RE.fullmatch(commit):
+        raise ReleaseError(
+            f"Remote tag {identity.tag} has an invalid peeled commit SHA."
+        )
+    if commit != identity.commit:
+        raise ReleaseError(
+            f"Remote tag {identity.tag} points to {commit}, not {identity.commit}."
+        )
+    return commit
+
+
+def _release(api: Api, identity: Identity) -> dict[str, object]:
+    result = _json(
+        api, "GET", _endpoint(identity.repository, f"releases/tags/{identity.tag}")
+    )
+    if not isinstance(result, dict):
+        raise ReleaseError(f"GitHub release for {identity.tag} is malformed.")
+    if result.get("tag_name") != identity.tag:
+        raise ReleaseError(
+            f"GitHub release does not identify exact tag {identity.tag}."
+        )
+    if result.get("draft") is not True:
+        raise ReleaseError(
+            f"Release {identity.tag} is published; refusing to mutate it."
+        )
+    if result.get("target_commitish") != identity.commit:
+        raise ReleaseError(f"Draft {identity.tag} has an inconsistent target commit.")
+    if result.get("prerelease") is not False:
+        raise ReleaseError(f"Draft {identity.tag} is marked as a prerelease.")
+    return result
+
+
+def _release_id(release: dict[str, object]) -> int:
+    value = release.get("id")
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise ReleaseError("Draft release has an invalid identifier.")
+    return value
+
+
+def _assets(release: dict[str, object]) -> dict[str, dict[str, object]]:
+    value = release.get("assets")
+    if not isinstance(value, list):
+        raise ReleaseError("Draft release has a malformed asset list.")
+    result: dict[str, dict[str, object]] = {}
+    for item in value:
+        if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+            raise ReleaseError("Draft release contains a malformed asset.")
+        name = item["name"]
+        if name in result:
+            raise ReleaseError(f"Draft contains duplicate asset {name}.")
+        result[name] = item
+    return result
+
+
+def _manifest_record(value: object, identity: Identity) -> ReleaseManifest:
+    """Validate manifest structure and release identity without reading assets."""
+    expected_keys = {
+        "schema_version",
+        "project",
+        "version",
+        "tag",
+        "repository",
+        "commit_sha",
+        "python_requires",
+        "application_wheel",
+        "source_archive",
+        "runtime_lock",
+        "runtime_constraints",
+        "platforms",
+        "archive_members",
+    }
+    if (
+        not isinstance(value, dict)
+        or set(value) != expected_keys
+        or type(value.get("schema_version")) is not int
+        or value["schema_version"] != 1
+    ):
+        raise ReleaseError("Release manifest has unsupported schema or fields.")
+    project, version = value.get("project"), value.get("version")
+    if not isinstance(project, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", project):
+        raise ReleaseError("Manifest project name is invalid.")
+    if not isinstance(version, str) or not VERSION_RE.fullmatch(version):
+        raise ReleaseError("Manifest version is invalid.")
+    if value.get("tag") != identity.tag or identity.tag != f"v{version}":
+        raise ReleaseError("Manifest tag and version are inconsistent.")
+    if (
+        value.get("repository") != identity.repository
+        or value.get("commit_sha") != identity.commit
+    ):
+        raise ReleaseError("Manifest repository or checked commit is inconsistent.")
+    if (
+        not isinstance(value.get("python_requires"), str)
+        or not value["python_requires"]
+    ):
+        raise ReleaseError("Manifest Python requirement is missing.")
+    for field in (
+        "application_wheel",
+        "source_archive",
+        "runtime_lock",
+        "runtime_constraints",
+    ):
+        entry = value.get(field)
+        if not isinstance(entry, dict) or set(entry) != {"filename", "sha256"}:
+            raise ReleaseError(f"Manifest {field} record is malformed.")
+        _basename(entry.get("filename"), f"Manifest {field} filename")
+        digest = entry.get("sha256")
+        if not isinstance(digest, str) or not DIGEST_RE.fullmatch(digest):
+            raise ReleaseError(f"Manifest {field} digest is malformed.")
+    if (
+        value["runtime_lock"]["filename"] != "runtime-requirements.txt"
+        or value["runtime_constraints"]["filename"] != "runtime-constraints.txt"
+    ):
+        raise ReleaseError(
+            "Manifest runtime filenames do not match the release contract."
+        )
+    platforms, members = value.get("platforms"), value.get("archive_members")
+    if not isinstance(platforms, dict) or set(platforms) != set(PLATFORMS):
+        raise ReleaseError("Manifest platform archive map is incomplete.")
+    if not isinstance(members, dict) or set(members) != set(PLATFORMS):
+        raise ReleaseError("Manifest archive member map is incomplete.")
+    for platform in PLATFORMS:
+        filename = platforms[platform]
+        _basename(filename, f"Manifest {platform} archive")
+        suffix = ".zip" if platform.startswith("windows") else ".tar.gz"
+        if filename != f"{project}-{version}-{platform}{suffix}":
+            raise ReleaseError(f"Manifest archive name for {platform} is inconsistent.")
+        paths = members[platform]
+        if (
+            not isinstance(paths, list)
+            or not paths
+            or any(not isinstance(item, str) for item in paths)
+        ):
+            raise ReleaseError(f"Manifest members for {platform} are malformed.")
+        if paths != sorted(set(paths)):
+            raise ReleaseError(
+                f"Manifest members for {platform} are not unique and sorted."
+            )
+        for member in paths:
+            _safe_member(member)
+    wheel_name = value["application_wheel"]["filename"]
+    sdist_name = value["source_archive"]["filename"]
+    if not wheel_name.startswith(f"{project}-{version}-") or not wheel_name.endswith(
+        ".whl"
+    ):
+        raise ReleaseError("Manifest wheel name does not match project/version.")
+    if sdist_name != f"{project}-{version}.tar.gz":
+        raise ReleaseError(
+            "Manifest source archive name does not match project/version."
+        )
+    return cast(ReleaseManifest, value)
+
+
+def _manifest(directory: Path, identity: Identity) -> ReleaseManifest:
+    path = directory / "release-manifest.json"
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ReleaseError(
+            "Prepared payload has no valid release-manifest.json."
+        ) from exc
+    manifest = _manifest_record(value, identity)
+    for field in (
+        "application_wheel",
+        "source_archive",
+        "runtime_lock",
+        "runtime_constraints",
+    ):
+        entry = manifest[field]
+        candidate = directory / entry["filename"]
+        if not candidate.is_file() or candidate.is_symlink():
+            raise ReleaseError(f"Prepared payload is missing {entry['filename']}.")
+        if _sha256(candidate.read_bytes()) != entry["sha256"]:
+            raise ReleaseError(
+                f"Prepared payload digest mismatch for {entry['filename']}."
+            )
+    return manifest
+
+
+def _basename(value: object, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or not value
+        or value in (".", "..")
+        or Path(value).name != value
+        or "/" in value
+        or "\\" in value
+    ):
+        raise ReleaseError(f"{label} must be a safe basename.")
+    return value
+
+
+def _safe_member(value: str) -> PurePosixPath:
+    path = PurePosixPath(value)
+    if (
+        not value
+        or path.is_absolute()
+        or "\\" in value
+        or any(part in ("", ".", "..") for part in path.parts)
+        or re.match(r"^[A-Za-z]:", value)
+    ):
+        raise ReleaseError(f"Unsafe archive member: {value!r}.")
+    return path
+
+
+def _sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _expected_assets(manifest: ReleaseManifest) -> set[str]:
+    return {
+        manifest["application_wheel"]["filename"],
+        manifest["source_archive"]["filename"],
+        "runtime-requirements.txt",
+        "runtime-constraints.txt",
+        "release-manifest.json",
+        "release-notes.md",
+        "install-linux-macos.sh",
+        "install-windows.ps1",
+        "install_release.py",
+        *manifest["platforms"].values(),
+    }
+
+
+def _archive_files(
+    filename: str,
+    data: bytes,
+    expected: set[str],
+    manifest: ReleaseManifest,
+    common: dict[str, bytes],
+) -> None:
+    platform = next(
+        (key for key, name in manifest["platforms"].items() if name == filename),
+        None,
+    )
+    if platform is None:
+        raise ReleaseError(f"Unexpected platform archive {filename}.")
+    root = f"{manifest['project']}-{manifest['version']}-{platform}/"
+    expected_files = set(manifest["archive_members"][platform])
+    if expected != expected_files:
+        raise ReleaseError(
+            f"Archive file set for {platform} disagrees with its manifest."
+        )
+    required = {
+        "release-manifest.json",
+        "runtime-requirements.txt",
+        "runtime-constraints.txt",
+        "install_release.py",
+    }
+    if not expected_files.issuperset(required):
+        raise ReleaseError(
+            f"Archive member list for {platform} omits common installer files."
+        )
+    allowed_directories = {
+        str(PurePosixPath(member).parent)
+        for member in expected_files
+        if PurePosixPath(member).parent != PurePosixPath(".")
+    }
+    observed: set[str] = set()
+    contents: dict[str, bytes] = {}
+    if filename.endswith(".zip"):
+        try:
+            with zipfile.ZipFile(__import__("io").BytesIO(data)) as archive:
+                for item in archive.infolist():
+                    name = item.filename
+                    if name == root:
+                        continue
+                    if not name.startswith(root):
+                        raise ReleaseError("Archive contains an out-of-root member.")
+                    relative = name.removeprefix(root)
+                    if item.is_dir():
+                        directory = relative.rstrip("/")
+                        _safe_member(directory)
+                        if directory not in allowed_directories:
+                            raise ReleaseError(
+                                "Archive contains an unnecessary directory."
+                            )
+                        continue
+                    _safe_member(relative)
+                    mode = item.external_attr >> 16
+                    if mode & 0o170000 == 0o120000:
+                        raise ReleaseError("Archive contains a symbolic link.")
+                    if relative in observed:
+                        raise ReleaseError("Archive contains duplicate members.")
+                    observed.add(relative)
+                    contents[relative] = archive.read(item)
+        except (OSError, zipfile.BadZipFile) as exc:
+            raise ReleaseError(f"Invalid ZIP archive {filename}.") from exc
+    else:
+        import io
+        import tarfile
+
+        try:
+            with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
+                for item in archive.getmembers():
+                    name = item.name
+                    if name.rstrip("/") == root.rstrip("/"):
+                        if not item.isdir():
+                            raise ReleaseError("Archive root is not a directory.")
+                        continue
+                    if not name.startswith(root):
+                        raise ReleaseError("Archive contains an out-of-root member.")
+                    relative = name.removeprefix(root).rstrip("/")
+                    _safe_member(relative)
+                    if item.isdir():
+                        if relative not in allowed_directories:
+                            raise ReleaseError(
+                                "Archive contains an unnecessary directory."
+                            )
+                        continue
+                    if not item.isfile() or relative in observed:
+                        raise ReleaseError(
+                            "Archive contains a link, duplicate, or special member."
+                        )
+                    observed.add(relative)
+                    stream = archive.extractfile(item)
+                    if stream is None:
+                        raise ReleaseError(f"Cannot read archive member {relative}.")
+                    contents[relative] = stream.read()
+        except (OSError, tarfile.TarError) as exc:
+            raise ReleaseError(f"Invalid tar archive {filename}.") from exc
+    if observed != expected_files:
+        raise ReleaseError(f"Archive members for {platform} differ from its manifest.")
+    for name in required:
+        if contents.get(name) != common[name]:
+            raise ReleaseError(f"Archive {filename} embeds stale {name}.")
+    bootstrap_name = {
+        "windows-x86_64": "install-windows.ps1",
+        "linux-x86_64": "install-linux-macos.sh",
+        "macos-arm64": "install-linux-macos.sh",
+    }[platform]
+    if bootstrap_name not in expected_files or bootstrap_name not in common:
+        raise ReleaseError(f"Archive {filename} omits its canonical bootstrap.")
+    matches = [
+        contents[path]
+        for path in expected_files
+        if PurePosixPath(path).name == bootstrap_name
+    ]
+    if len(matches) != 1 or matches[0] != common[bootstrap_name]:
+        raise ReleaseError(f"Archive {filename} has a mismatched {bootstrap_name}.")
+
+
+def _validate_local_files(
+    directory: Path,
+    names: list[str],
+    identity: Identity,
+) -> tuple[ReleaseManifest, dict[str, bytes]]:
+    if not names or len(names) != len(set(names)):
+        raise ReleaseError("Provide a nonempty, duplicate-free file list.")
+    manifest = _manifest(directory, identity)
+    allowed = _expected_assets(manifest)
+    for name in names:
+        _basename(name, "Upload filename")
+        if name not in allowed:
+            raise ReleaseError(
+                f"Asset {name} is not in the manifest-derived allowlist."
+            )
+    files: dict[str, bytes] = {}
+    for name in names:
+        path = directory / name
+        if not path.is_file() or path.is_symlink():
+            raise ReleaseError(f"Asset {name} is missing or not a regular file.")
+        files[name] = path.read_bytes()
+    common: dict[str, bytes] = {}
+    for name in COMMON_NAMES:
+        path = directory / name
+        if path.is_file() and not path.is_symlink():
+            common[name] = path.read_bytes()
+    required_common = set(COMMON_NAMES) - {"release-notes.md"}
+    missing_common = sorted(required_common - common.keys())
+    if missing_common:
+        raise ReleaseError(
+            f"Prepared payload is missing common assets: {', '.join(missing_common)}."
+        )
+    for name in manifest["platforms"].values():
+        if name in files:
+            platform = next(
+                key for key, value in manifest["platforms"].items() if value == name
+            )
+            _archive_files(
+                name,
+                files[name],
+                set(manifest["archive_members"][platform]),
+                manifest,
+                common,
+            )
+    return manifest, files
+
+
+def _asset_bytes(api: Api, identity: Identity, asset: dict[str, object]) -> bytes:
+    asset_id = asset.get("id")
+    if not isinstance(asset_id, int) or isinstance(asset_id, bool):
+        raise ReleaseError("GitHub asset has an invalid identifier.")
+    return api.request(
+        "GET",
+        _endpoint(identity.repository, f"releases/assets/{asset_id}"),
+        headers=("Accept: application/octet-stream",),
+    )
+
+
+def _delete_asset(api: Api, identity: Identity, asset_id: int) -> None:
+    _tag_commit(api, identity)
+    api.request("DELETE", _endpoint(identity.repository, f"releases/assets/{asset_id}"))
+
+
+def _upload(
+    api: Api, identity: Identity, release_id: int, name: str, data: bytes
+) -> None:
+    _tag_commit(api, identity)
+    encoded = __import__("urllib.parse", fromlist=["quote"]).quote(name, safe="")
+    api.request(
+        "POST",
+        f"https://uploads.github.com/repos/{identity.repository}/releases/{release_id}/assets?name={encoded}",
+        data=data,
+        headers=("Content-Type: application/octet-stream",),
+    )
+
+
+def _sync_asset(
+    api: Api, identity: Identity, release: dict[str, object], name: str, data: bytes
+) -> None:
+    assets = _assets(release)
+    existing = assets.get(name)
+    if existing is not None:
+        digest = existing.get("digest")
+        if (
+            isinstance(digest, str)
+            and digest.startswith("sha256:")
+            and digest[7:] == _sha256(data)
+        ):
+            return
+        remote = _asset_bytes(api, identity, existing)
+        if remote == data:
+            return
+        _delete_asset(api, identity, _asset_id(existing))
+    _upload(api, identity, _release_id(release), name, data)
+    updated = _release(api, identity)
+    uploaded = _assets(updated).get(name)
+    if uploaded is None:
+        raise ReleaseError(f"GitHub did not retain uploaded asset {name}.")
+    digest = uploaded.get("digest")
+    expected_digest = _sha256(data)
+    if isinstance(digest, str) and digest.startswith("sha256:"):
+        if digest[7:] != expected_digest:
+            raise ReleaseError(
+                f"GitHub stored an incorrect digest for uploaded asset {name}."
+            )
+    elif _asset_bytes(api, identity, uploaded) != data:
+        raise ReleaseError(f"GitHub stored different bytes for uploaded asset {name}.")
+
+
+def _asset_id(asset: dict[str, object]) -> int:
+    value = asset.get("id")
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise ReleaseError("GitHub asset has an invalid identifier.")
+    return value
+
+
+def prepare(
+    api: Api, repository: str, tag: str, commit: str, notes: Path
+) -> dict[str, object]:
+    """Validate checked metadata and create or reuse only its draft release."""
+    identity = Identity(_repository(repository), _tag(tag), _sha(commit))
+    if not notes.is_file() or notes.is_symlink():
+        raise ReleaseError("Release notes must be a regular file.")
+    version = identity.tag[1:]
+    try:
+        with Path("pyproject.toml").open("rb") as stream:
+            project = tomllib.load(stream)["project"]
+        distribution = project["name"]
+        current_version = project["version"]
+    except (OSError, KeyError, TypeError, tomllib.TOMLDecodeError) as exc:
+        raise ReleaseError(
+            "Cannot read project name and version from pyproject.toml."
+        ) from exc
+    validate_tag_version(identity.tag, current_version)
+    _tag_commit(api, identity)
+    try:
+        release = _release(api, identity)
+    except ReleaseError as exc:
+        if "404" not in str(exc) and "Not Found" not in str(exc):
+            raise
+        _tag_commit(api, identity)
+        release = _json(
+            api,
+            "POST",
+            _endpoint(identity.repository, "releases"),
+            {
+                "tag_name": identity.tag,
+                "target_commitish": identity.commit,
+                "name": f"{distribution} {version}",
+                "body": notes.read_text(encoding="utf-8"),
+                "draft": True,
+                "prerelease": False,
+            },
+        )
+        if not isinstance(release, dict):
+            raise ReleaseError("GitHub did not return the created draft release.")
+    if release.get("draft") is not True or release.get("tag_name") != identity.tag:
+        raise ReleaseError("Prepared release is not the requested tag's draft.")
+    if release.get("target_commitish") != identity.commit:
+        raise ReleaseError("Draft release has an inconsistent target commit.")
+    return release
+
+
+def upload(
+    api: Api, repository: str, tag: str, commit: str, directory: Path, names: list[str]
+) -> None:
+    identity = Identity(_repository(repository), _tag(tag), _sha(commit))
+    _tag_commit(api, identity)
+    manifest, files = _validate_local_files(directory, names, identity)
+    release = _release(api, identity)
+    for name in names:
+        if name in _expected_assets(manifest):
+            _sync_asset(api, identity, release, name, files[name])
+            release = _release(api, identity)
+
+
+def fetch(
+    api: Api,
+    repository: str,
+    tag: str,
+    commit: str,
+    directory: Path,
+    names: list[str],
+) -> None:
+    """Download selected allowlisted assets from the exact validated draft."""
+    identity = Identity(_repository(repository), _tag(tag), _sha(commit))
+    _tag_commit(api, identity)
+    release = _release(api, identity)
+    assets = _assets(release)
+    manifest_asset = assets.get("release-manifest.json")
+    if manifest_asset is None:
+        raise ReleaseError("Draft has no release manifest.")
+    try:
+        manifest_data = _asset_bytes(api, identity, manifest_asset)
+        manifest = _manifest_record(json.loads(manifest_data), identity)
+    except json.JSONDecodeError as exc:
+        raise ReleaseError("Draft release manifest is invalid.") from exc
+    allowed = _expected_assets(manifest)
+    if not names or len(names) != len(set(names)):
+        raise ReleaseError("Fetch file list must be nonempty and duplicate-free.")
+    for name in names:
+        _basename(name, "Fetch filename")
+        if name not in allowed:
+            raise ReleaseError(
+                f"Asset {name} is not in the manifest-derived allowlist."
+            )
+        if name not in assets:
+            raise ReleaseError(f"Draft is missing asset {name}.")
+    wheel_name = manifest["application_wheel"]["filename"]
+    if wheel_name in names and not {
+        "runtime-requirements.txt",
+        "runtime-constraints.txt",
+    }.issubset(names):
+        raise ReleaseError(
+            "Fetch runtime requirements and constraints before the application wheel."
+        )
+    ordered = sorted(
+        names,
+        key=lambda name: (
+            0
+            if name
+            in (
+                "runtime-requirements.txt",
+                "runtime-constraints.txt",
+                "install_release.py",
+                "install-linux-macos.sh",
+                "install-windows.ps1",
+            )
+            else 1,
+            name,
+        ),
+    )
+    downloaded = {"release-manifest.json": manifest_data}
+    for name in ordered:
+        data = _asset_bytes(api, identity, assets[name])
+        record = next(
+            (
+                manifest[field]
+                for field in (
+                    "application_wheel",
+                    "source_archive",
+                    "runtime_lock",
+                    "runtime_constraints",
+                )
+                if manifest[field]["filename"] == name
+            ),
+            None,
+        )
+        if record is not None and _sha256(data) != record["sha256"]:
+            raise ReleaseError(f"Release asset digest mismatch for {name}.")
+        downloaded[name] = data
+    for name in downloaded:
+        destination = directory / name
+        if destination.exists() and destination.is_symlink():
+            raise ReleaseError(f"Refusing to overwrite symlink {destination}.")
+    directory.mkdir(parents=True, exist_ok=True)
+    for name, data in downloaded.items():
+        (directory / name).write_bytes(data)
+
+
+def finalize(api: Api, repository: str, tag: str, commit: str) -> None:
+    """Validate the complete staged asset set, write checksums, then publish."""
+    identity = Identity(_repository(repository), _tag(tag), _sha(commit))
+    _tag_commit(api, identity)
+    release = _release(api, identity)
+    assets = _assets(release)
+    manifest_asset = assets.get("release-manifest.json")
+    if manifest_asset is None:
+        raise ReleaseError("Draft release has no manifest.")
+    try:
+        manifest_data = _asset_bytes(api, identity, manifest_asset)
+        manifest = _manifest_record(json.loads(manifest_data), identity)
+    except json.JSONDecodeError as exc:
+        raise ReleaseError("Draft manifest is invalid JSON.") from exc
+    allowed = _expected_assets(manifest)
+    actual_underlying = set(assets) - {"SHA256SUMS"}
+    if actual_underlying != allowed:
+        missing = sorted(allowed - actual_underlying)
+        extra = sorted(actual_underlying - allowed)
+        raise ReleaseError(
+            f"Draft asset set is incomplete or unexpected (missing={missing}, extra={extra})."
+        )
+    downloaded = {
+        name: _asset_bytes(api, identity, assets[name]) for name in sorted(allowed)
+    }
+    if downloaded["release-manifest.json"] != manifest_data:
+        raise ReleaseError("Release manifest changed during finalization.")
+    with __import__("tempfile").TemporaryDirectory(
+        prefix="buildben-release-finalize-"
+    ) as temp:
+        directory = Path(temp)
+        for name, data in downloaded.items():
+            (directory / name).write_bytes(data)
+        validated = _manifest(directory, identity)
+        common = {name: downloaded[name] for name in COMMON_NAMES}
+        for archive_name in validated["platforms"].values():
+            platform = next(
+                key
+                for key, value in validated["platforms"].items()
+                if value == archive_name
+            )
+            _archive_files(
+                archive_name,
+                downloaded[archive_name],
+                set(validated["archive_members"][platform]),
+                validated,
+                common,
+            )
+        checksum = "".join(
+            f"{_sha256(downloaded[name])}  {name}\n" for name in sorted(allowed)
+        ).encode("utf-8")
+    _sync_asset(api, identity, release, "SHA256SUMS", checksum)
+    release = _release(api, identity)
+    assets = _assets(release)
+    if set(assets) != allowed | {"SHA256SUMS"}:
+        raise ReleaseError("Draft asset set changed during finalization.")
+    if _asset_bytes(api, identity, assets["SHA256SUMS"]) != checksum:
+        raise ReleaseError("Published checksum asset does not match validated payload.")
+    _tag_commit(api, identity)
+    api.request(
+        "PATCH",
+        _endpoint(identity.repository, f"releases/{_release_id(release)}"),
+        data=json.dumps(
+            {"draft": False, "prerelease": False}, separators=(",", ":")
+        ).encode(),
+    )
+
+
+def wait_ci(
+    api: Api,
+    repository: str,
+    tag: str,
+    commit: str,
+    *,
+    timeout: float = 120.0,
+    interval: float = 5.0,
+    clock=time.monotonic,
+    sleep=time.sleep,
+) -> int:
+    """Wait for the exact successful main-push or tag-dispatch CI run."""
+    identity = Identity(_repository(repository), _tag(tag), _sha(commit))
+    deadline = clock() + timeout
+    run_id: int | None = None
+    while clock() < deadline:
+        endpoint = _endpoint(
+            identity.repository,
+            f"actions/workflows/ci.yml/runs?head_sha={identity.commit}&per_page=100",
+        )
+        data = _json(api, "GET", endpoint)
+        if not isinstance(data, dict) or not isinstance(
+            data.get("workflow_runs"), list
+        ):
+            raise ReleaseError("GitHub returned malformed CI workflow runs.")
+        candidates: list[dict[str, object]] = []
+        for run in data["workflow_runs"]:
+            run_repository = run.get("repository") if isinstance(run, dict) else None
+            head_repository = (
+                run.get("head_repository") if isinstance(run, dict) else None
+            )
+            if (
+                not isinstance(run, dict)
+                or run.get("head_sha") != identity.commit
+                or run.get("path") != ".github/workflows/ci.yml"
+            ):
+                continue
+            if (
+                not isinstance(run_repository, dict)
+                or run_repository.get("full_name") != identity.repository
+                or not isinstance(head_repository, dict)
+                or head_repository.get("full_name") != identity.repository
+            ):
+                continue
+            allowed_push = (
+                run.get("event") == "push" and run.get("head_branch") == "main"
+            )
+            allowed_dispatch = (
+                run.get("event") == "workflow_dispatch"
+                and run.get("head_branch") == identity.tag
+            )
+            if allowed_push or allowed_dispatch:
+                candidates.append(run)
+        if candidates:
+            candidates.sort(
+                key=lambda run: (
+                    str(run.get("created_at", "")),
+                    run.get("run_number", 0)
+                    if isinstance(run.get("run_number"), int)
+                    else 0,
+                ),
+                reverse=True,
+            )
+            value = candidates[0].get("id")
+            if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+                run_id = value
+                break
+        sleep(min(interval, max(0.0, deadline - clock())))
+    if run_id is None:
+        raise ReleaseError(
+            f"No matching ci.yml run for {identity.commit} was found within "
+            f"{timeout:g}s. Dispatch ci.yml for immutable tag {identity.tag}, "
+            "then rerun the release gate."
+        )
+    status = api.watch_ci(identity.repository, run_id)
+    if status:
+        raise ReleaseError(
+            f"Matching CI run {run_id} failed, was cancelled, or timed out "
+            f"(gh run watch exit {status})."
+        )
+    return run_id
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Prepare and publish validated GitHub release assets."
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    prepare_parser = subparsers.add_parser("prepare")
+    prepare_parser.add_argument("--repository", required=True)
+    prepare_parser.add_argument("--tag", required=True)
+    prepare_parser.add_argument("--commit", required=True)
+    prepare_parser.add_argument("--notes", type=Path, required=True)
+    for verb in ("upload", "fetch"):
+        item = subparsers.add_parser(verb)
+        item.add_argument("--repository", required=True)
+        item.add_argument("--tag", required=True)
+        item.add_argument("--commit", required=True)
+        item.add_argument("--directory", type=Path, required=True)
+        item.add_argument("--files", nargs="+", required=True)
+    for verb in ("finalize", "wait-ci"):
+        item = subparsers.add_parser(verb)
+        item.add_argument("--repository", required=True)
+        item.add_argument("--tag", required=True)
+        item.add_argument("--commit", required=True)
+    return parser
+
+
+def main(argv: list[str] | None = None, *, api: Api | None = None) -> int:
+    args = _parser().parse_args(argv)
+    client = api or GitHubApi()
+    try:
+        if args.command == "prepare":
+            release = prepare(
+                client, args.repository, args.tag, args.commit, args.notes
+            )
+            print(f"Prepared draft release {args.tag} (id {_release_id(release)}).")
+        elif args.command == "upload":
+            upload(
+                client,
+                args.repository,
+                args.tag,
+                args.commit,
+                args.directory,
+                args.files,
+            )
+        elif args.command == "fetch":
+            fetch(
+                client,
+                args.repository,
+                args.tag,
+                args.commit,
+                args.directory,
+                args.files,
+            )
+        elif args.command == "finalize":
+            finalize(client, args.repository, args.tag, args.commit)
+        else:
+            run_id = wait_ci(client, args.repository, args.tag, args.commit)
+            print(f"Required CI run {run_id} passed.")
+    except (ReleaseError, OSError, subprocess.SubprocessError, ValueError) as exc:
+        print(f"release-assets: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

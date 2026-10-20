@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -121,6 +122,106 @@ def test_release_notes_reject_unprepared_entries() -> None:
         release_notes.build_release_notes(
             sample_changelog(unreleased_entry="- Not released."), "1.2.3"
         )
+
+
+@pytest.mark.parametrize(
+    ("helper", "breaking_heading"),
+    [
+        (
+            Path("src/buildben_dev/packaging/release_notes.py"),
+            "### 💥 Breaking changes",
+        ),
+        (
+            Path(
+                "src/buildben/_templates_proj/_src-dev-packaging-release_notes.py.tmpl"
+            ),
+            "### 💥 Breaking Change Summary",
+        ),
+    ],
+)
+def test_release_note_cli_build_only_allowance_keeps_release_validation(
+    tmp_path: Path, helper: Path, breaking_heading: str
+) -> None:
+    """Build-only extraction tolerates unreleased entries, but not bad structure."""
+    repository_root = Path(__file__).resolve().parents[1]
+    changelog = sample_changelog(unreleased_entry="- Work still in progress.").replace(
+        "### 💥 Breaking changes", breaking_heading
+    )
+    changelog_path = tmp_path / "CHANGELOG.md"
+    changelog_path.write_text(changelog, encoding="utf-8")
+    output_path = tmp_path / "release-notes.md"
+    command = [
+        sys.executable,
+        str(repository_root / helper),
+        "1.2.3",
+        "--changelog",
+        str(changelog_path),
+        "--project-version",
+        "1.2.3",
+        "--output",
+        str(output_path),
+    ]
+
+    build_only = subprocess.run(
+        [*command, "--allow-unreleased-entries"],
+        cwd=repository_root,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert build_only.returncode == 0, build_only.stderr
+    assert output_path.read_text(encoding="utf-8") == (
+        "## ➕ Added\n\n- Add a tested release workflow.\n"
+    )
+
+    strict = subprocess.run(
+        command, cwd=repository_root, capture_output=True, check=False, text=True
+    )
+    assert strict.returncode != 0
+    assert "still contains release entries" in strict.stderr
+
+    malformed = changelog.replace(breaking_heading, "### 💥 Missing category")
+    changelog_path.write_text(malformed, encoding="utf-8")
+    invalid_structure = subprocess.run(
+        [*command, "--allow-unreleased-entries"],
+        cwd=repository_root,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert invalid_structure.returncode != 0
+    assert "exactly once" in invalid_structure.stderr
+
+    changelog_path.write_text(changelog, encoding="utf-8")
+    mismatched_tag = subprocess.run(
+        [
+            *command,
+            "--allow-unreleased-entries",
+            "--tag",
+            "branch-name",
+        ],
+        cwd=repository_root,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert mismatched_tag.returncode != 0
+    assert "does not match project version" in mismatched_tag.stderr
+
+    tagged_build = subprocess.run(
+        [
+            *command,
+            "--allow-unreleased-entries",
+            "--tag",
+            "v1.2.3",
+        ],
+        cwd=repository_root,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert tagged_build.returncode != 0
+    assert "still contains release entries" in tagged_build.stderr
 
 
 @pytest.mark.parametrize("version", ["v1.2.3", "1.2", "1.2.3.4", "01.2.3"])
@@ -732,7 +833,7 @@ def test_release_notes_validate_release_order_and_cli_arguments(tmp_path: Path) 
     release_notes.validate_next_version("1.2.3", "1.2.4")
     with pytest.raises(ValueError, match="must be newer"):
         release_notes.validate_next_version("1.2.3", "1.2.3")
-    with pytest.raises(ValueError, match="must be provided together"):
+    with pytest.raises(ValueError, match="--tag requires --project-version"):
         release_notes.main(
             [
                 "1.2.3",

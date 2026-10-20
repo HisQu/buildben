@@ -19,37 +19,82 @@ concurrency:
 
 jobs:
   checks:
-    name: Full CI
+    name: Exact-commit CI
     if: github.event_name == 'push'
-    permissions:
-      contents: read
-    uses: ./.github/workflows/ci.yml
-
-  build:
-    name: Build release artifacts
-    if: github.event_name == 'push'
-    needs: checks
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
-    outputs:
-      release_pypi: ${{ steps.release_policy.outputs.release_pypi }}
-
     steps:
-      - name: Checkout release tag
+      - name: Checkout release commit
         uses: actions/checkout@v5
-
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.12"
           enable-cache: auto
+      - name: Install locked project environment
+        run: uv sync --locked --all-extras --all-groups
+      - name: Wait for normal CI on this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          uv run --locked python -m buildben_dev.packaging.release_assets
+          wait-ci --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME"
+          --commit "$GITHUB_SHA"
 
+  prepare-draft:
+    name: Prepare draft release
+    if: github.event_name == 'push'
+    needs: checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+          enable-cache: auto
+      - name: Install locked project environment
+        run: uv sync --locked --all-extras --all-groups
+      - name: Prepare or reuse the tag draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mkdir -p dist
+          version="$(uv version --short)"
+          uv run --locked python src/buildben_dev/packaging/release_notes.py \
+            "$version" --tag "$GITHUB_REF_NAME" --project-version "$version" \
+            --output dist/release-notes.md
+          uv run --locked python -m buildben_dev.packaging.release_assets prepare \
+            --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" \
+            --commit "$GITHUB_SHA" --notes dist/release-notes.md
+
+  build:
+    name: Build and stage common release inputs
+    if: github.event_name == 'push'
+    needs: prepare-draft
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release_pypi: ${{ steps.release_policy.outputs.release_pypi }}
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+          enable-cache: auto
       - name: Install just
         uses: extractions/setup-just@v4
         with:
           just-version: "1.56.0"
-
       - name: Validate release policy
         id: release_policy
         shell: bash
@@ -60,49 +105,132 @@ jobs:
             exit 1
           fi
           echo "release_pypi=${release_pypi}" >> "$GITHUB_OUTPUT"
-
-      - name: Build and validate release bundle
-        run: just _release-artifact-check release/release-notes.md
-
-      - name: Preserve release bundle
-        uses: actions/upload-artifact@v7
-        with:
-          name: release-bundle-${{ github.ref_name }}
-          path: |
-            dist/*.whl
-            dist/*.tar.gz
-            release/release-notes.md
-          if-no-files-found: error
-          retention-days: 14
-
-  github-release:
-    name: Create GitHub Release
-    if: github.event_name == 'push'
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Restore release bundle
-        uses: actions/download-artifact@v8
-        with:
-          name: release-bundle-${{ github.ref_name }}
-
-      - name: Create GitHub Release
+      - name: Build and validate package once
+        run: just build-release-inputs
+      - name: Upload common inputs to the draft release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          release_version="${GITHUB_REF_NAME#v}"
-          gh release create "$GITHUB_REF_NAME" \
-            dist/*.whl \
-            dist/*.tar.gz \
-            --repo "$GITHUB_REPOSITORY" \
-            --verify-tag \
-            --latest \
-            --title "Buildben ${release_version}" \
-            --notes-file release/release-notes.md
+          set -euo pipefail
+          mapfile -t packages < <(find dist -maxdepth 1 -type f \( -name '*.whl' -o -name '*.tar.gz' \) -printf '%f\n' | LC_ALL=C sort)
+          if [[ "${#packages[@]}" -ne 2 ]]; then
+            echo "Expected exactly one wheel and one source archive." >&2
+            exit 1
+          fi
+          uv run --locked python -m buildben_dev.packaging.release_assets upload \
+            --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" \
+            --commit "$GITHUB_SHA" --directory dist --files \
+            "${packages[@]}" runtime-requirements.txt runtime-constraints.txt \
+            release-manifest.json release-notes.md install-linux-macos.sh \
+            install-windows.ps1 install_release.py
+
+  installation-bundle:
+    name: ${{ matrix.target }} installation proof
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            python-version: "3.12"
+            target: windows-x86_64
+          - runner: windows-latest
+            python-version: "3.13"
+            target: windows-x86_64
+          - runner: ubuntu-latest
+            python-version: "3.12"
+            target: linux-x86_64
+          - runner: ubuntu-latest
+            python-version: "3.13"
+            target: linux-x86_64
+          - runner: macos-14
+            python-version: "3.12"
+            target: macos-arm64
+          - runner: macos-14
+            python-version: "3.13"
+            target: macos-arm64
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: auto
+      - name: Install locked project environment
+        run: uv sync --locked --all-extras --all-groups
+      - name: Fetch common payload and assemble native archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          uv run --locked python -m buildben_dev.packaging.release_assets fetch \
+            --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" \
+            --commit "$GITHUB_SHA" --directory dist --files \
+            runtime-requirements.txt runtime-constraints.txt install-linux-macos.sh \
+            install-windows.ps1 install_release.py
+          wheel_name="$(uv run --locked python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["application_wheel"]["filename"])' dist/release-manifest.json)"
+          uv run --locked python -m buildben_dev.packaging.release_assets fetch \
+            --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" \
+            --commit "$GITHUB_SHA" --directory dist --files \
+            runtime-requirements.txt runtime-constraints.txt "$wheel_name"
+          uv run --locked python -m buildben_dev.packaging.installation_bundle archive \
+            --release-directory dist --output-directory dist
+      - name: Smoke the staged archive through its native installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t archives < <(find dist -maxdepth 1 -type f -name "*-${{ matrix.target }}.*" -print | LC_ALL=C sort)
+          if [[ "${#archives[@]}" -ne 1 ]]; then
+            echo "Expected one archive for ${{ matrix.target }}." >&2
+            exit 1
+          fi
+          RELEASE_TARGET="${{ matrix.target }}" RELEASE_ARCHIVE="${archives[0]}" just release-install-smoke
+      - name: Upload platform archive to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t archives < <(find dist -maxdepth 1 -type f -name "*-${{ matrix.target }}.*" -printf '%f\n' | LC_ALL=C sort)
+          if [[ "${#archives[@]}" -ne 1 ]]; then
+            echo "Expected one archive for ${{ matrix.target }}." >&2
+            exit 1
+          fi
+          uv run --locked python -m buildben_dev.packaging.release_assets upload \
+            --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" \
+            --commit "$GITHUB_SHA" --directory dist --files "${archives[@]}"
+
+  github-release:
+    name: Validate and publish GitHub Release
+    if: github.event_name == 'push'
+    needs:
+      - build
+      - installation-bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+          enable-cache: auto
+      - name: Install locked project environment
+        run: uv sync --locked --all-extras --all-groups
+      - name: Validate staged assets and publish the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          uv run --locked python -m buildben_dev.packaging.release_assets
+          finalize --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME"
+          --commit "$GITHUB_SHA"
 
   pypi-publish:
     name: Publish to PyPI
@@ -117,16 +245,13 @@ jobs:
     permissions:
       contents: read
       id-token: write
-
     steps:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
-
-      - name: Restore release bundle
-        uses: actions/download-artifact@v8
-        with:
-          name: release-bundle-${{ github.ref_name }}
-
+      - name: Download package assets from the published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir dist --pattern '*.whl' --pattern '*.tar.gz'
       - name: Publish to PyPI with trusted publishing
         shell: bash
         run: |
@@ -134,7 +259,6 @@ jobs:
             --trusted-publishing always \
             --check-url https://pypi.org/simple/buildben/ \
             dist/*
-
   manual_pypi_preflight:
     name: Check manual PyPI release policy
     if: github.event_name == 'workflow_dispatch'

@@ -25,7 +25,9 @@ UNRELEASED_SECTIONS = (
 )
 
 
-def build_release_notes(markdown: str, version: str) -> str:
+def build_release_notes(
+    markdown: str, version: str, *, allow_unreleased_entries: bool = False
+) -> str:
     """Extract one released changelog section for a GitHub Release.
 
     The changelog remains the release-note source. This strips page-layout
@@ -33,13 +35,14 @@ def build_release_notes(markdown: str, version: str) -> str:
 
     :param markdown: Complete changelog text.
     :param version: Released semantic version without a leading ``v``.
+    :param allow_unreleased_entries: Whether build-only extraction may tolerate
+        entries still present under ``[Unreleased]``.
     :return: GitHub Release body.
     """
     validate_version(version)
-    validate_unreleased_section(markdown)
+    validate_unreleased_section(markdown, allow_entries=allow_unreleased_entries)
     match = _release_heading(markdown, version)
     _validate_toc_entry(markdown, match)
-
     next_heading = re.search(r"^# \[", markdown[match.end() :], re.MULTILINE)
     section_end = (
         match.end() + next_heading.start()
@@ -113,10 +116,11 @@ def latest_release_version(markdown: str) -> str:
     )
 
 
-def validate_unreleased_section(markdown: str) -> None:
-    """Require an empty, complete ``[Unreleased]`` release template.
+def validate_unreleased_section(markdown: str, *, allow_entries: bool = False) -> None:
+    """Require one complete ``[Unreleased]`` template and, by default, no entries.
 
     :param markdown: Complete changelog text.
+    :param allow_entries: Whether build-only note extraction may tolerate entries.
     :return: None.
     """
     if markdown.count(UNRELEASED_HEADING) != 1:
@@ -133,26 +137,40 @@ def validate_unreleased_section(markdown: str) -> None:
                 "The [Unreleased] section must contain each release category "
                 f"exactly once; invalid heading: {heading!r}."
             )
-    content_lines = [
-        line for line in _content_lines(section) if not line.startswith("### ")
-    ]
-    if content_lines:
-        raise ValueError(
-            "The [Unreleased] section still contains release entries; move "
-            "them into the prepared version before tagging."
-        )
+    if not allow_entries:
+        content_lines = [
+            line for line in _content_lines(section) if not line.startswith("### ")
+        ]
+        if content_lines:
+            raise ValueError(
+                "The [Unreleased] section still contains release entries; move "
+                "them into the prepared version before tagging."
+            )
 
 
-def write_release_notes(markdown: str, version: str, output: Path) -> None:
+def write_release_notes(
+    markdown: str,
+    version: str,
+    output: Path,
+    *,
+    allow_unreleased_entries: bool = False,
+) -> None:
     """Write extracted release notes to a workflow artifact path.
 
     :param markdown: Complete changelog text.
     :param version: Released semantic version without a leading ``v``.
     :param output: Destination Markdown file.
+    :param allow_unreleased_entries: Whether build-only extraction may tolerate
+        entries still present under ``[Unreleased]``.
     :return: None.
     """
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(build_release_notes(markdown, version), encoding="utf-8")
+    output.write_text(
+        build_release_notes(
+            markdown, version, allow_unreleased_entries=allow_unreleased_entries
+        ),
+        encoding="utf-8",
+    )
 
 
 def _release_heading(markdown: str, version: str) -> re.Match[str]:
@@ -240,6 +258,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output", type=Path, required=True, help="Destination path.")
     parser.add_argument("--tag", help="Optional pushed tag to validate.")
     parser.add_argument("--project-version", help="Project version to validate.")
+    parser.add_argument(
+        "--allow-unreleased-entries",
+        action="store_true",
+        help="Allow unprepared entries for build-only release-note inputs.",
+    )
     return parser.parse_args(argv)
 
 
@@ -250,17 +273,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     :return: Process exit code.
     """
     args = parse_args(argv)
-    if (args.tag is None) != (args.project_version is None):
-        raise ValueError("--tag and --project-version must be provided together.")
-    if args.tag is not None:
-        validate_tag_version(args.tag, args.project_version)
+    if args.project_version is not None:
+        validate_version(args.project_version)
         if args.version != args.project_version:
             raise ValueError(
                 f"Requested release version {args.version!r} does not match "
                 f"project version {args.project_version!r}."
             )
+    if args.tag is not None:
+        project_version = args.project_version
+        if project_version is None:
+            raise ValueError("--tag requires --project-version.")
+        validate_tag_version(args.tag, project_version)
     write_release_notes(
-        args.changelog.read_text(encoding="utf-8"), args.version, args.output
+        args.changelog.read_text(encoding="utf-8"),
+        args.version,
+        args.output,
+        allow_unreleased_entries=(args.allow_unreleased_entries and args.tag is None),
     )
     return 0
 

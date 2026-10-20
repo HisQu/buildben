@@ -53,6 +53,11 @@ This project follows Semantic Versioning.
   while either policy was false. Migration: commit `"true"` before preparing
   a release intended for PyPI, then use an active workflow ref and target tag
   that both contain that committed setting.
+- Breaking: Ordinary installer use now resolves a published non-prerelease
+  release and installs its validated thin payload instead of automatically
+  selecting a Git checkout or local wheel. Affected: users of the default
+  installer, especially while existing releases lack this payload. Migration:
+  use explicit `--git` or `--dev [PATH]` until a future release publishes one.
 
 <br>
 
@@ -60,12 +65,21 @@ This project follows Semantic Versioning.
 
 - Generated projects include optional `just worktree-create` and
   `just worktree-remove` recipes for isolated, locked development checkouts.
+- Add thin platform archives with the application wheel and lock-derived
+  runtime requirement and constraint exports, plus a public release bootstrap.
 
 <br>
 
 ### 💔 Changed
 
+- `just release-prepare` now performs fast version, lock/export, release-note,
+  wheel/sdist, and Twine checks; `just release-check` remains the explicit full
+  local rehearsal.
+- Tag release workflows reuse successful normal CI for the exact commit and
+  publish the draft only after build and platform installation checks pass.
+
 <br>
+
 
 ### ⚠️ Deprecated
 

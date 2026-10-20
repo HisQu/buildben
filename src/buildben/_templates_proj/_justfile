@@ -19,6 +19,7 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 
 # Include PyPI in normal tag releases. Keep this policy in version control.
 RELEASE_PYPI := "false"
+RELEASE_REPOSITORY := "{github_user}/{my_project}"
 
 # Run `just` with no recipe to list tasks
 default:
@@ -449,19 +450,25 @@ _ci-check-python version environment:
     echo "Python {{version}}: checks passed."
 
 [private]
-_release-artifact-check notes_output:
+_release-artifact-check notes_output build_only="false":
     #!/usr/bin/env bash
     set -euo pipefail
     version="$(uv version --short)"
-    tag="${GITHUB_REF_NAME:-v${version}}"
+    identity_args=(--project-version "$version")
+    notes_args=()
+    if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+        identity_args+=(--tag "${GITHUB_REF_NAME:?GITHUB_REF_NAME is required for tag builds.}")
+    elif [[ "{{build_only}}" == "true" ]]; then
+        notes_args+=(--allow-unreleased-entries)
+    fi
     notes_output="{{notes_output}}"
     artifact_root="$(mktemp -d)"
     smoke_root="$artifact_root/smoke"
     smoke_script="$(realpath src/{my_project}_dev/packaging/install_smoke.py)"
     mkdir -p "$smoke_root" "$(dirname "$notes_output")"
     trap 'rm -rf "$artifact_root"' EXIT
-    python src/{my_project}_dev/packaging/release_notes.py "$version" --tag "$tag" --project-version "$version" --output "$notes_output"
     rm -rf dist
+    python src/{my_project}_dev/packaging/release_notes.py "$version" "${identity_args[@]}" "${notes_args[@]}" --output "$notes_output"
     uv build --python 3.12 --no-sources --no-build-logs
     shopt -s nullglob
     wheels=(dist/*.whl)
@@ -480,6 +487,95 @@ _release-artifact-check notes_output:
             done
         done
     )
+
+# Build package and lock-derived inputs without running the full source matrix.
+build-release-inputs:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just _check-uv
+    uv lock --check
+    just _release-artifact-check dist/release-notes.md true
+    commit="$(git rev-parse --verify --end-of-options 'HEAD^{commit}')"
+    uv run --locked python -m {my_project}_dev.packaging.installation_bundle prepare \
+        --repository "$RELEASE_REPOSITORY" --commit "$commit" --output-directory dist
+
+# Build the native thin archive from the prepared lock-derived payload.
+build-installation-bundle:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just build-release-inputs
+    uv run --locked python -m {my_project}_dev.packaging.installation_bundle archive \
+        --release-directory dist --output-directory dist
+
+# Exercise a local or already-staged archive through its native installer.
+release-install-smoke:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    repository="${RELEASE_REPOSITORY:?Set RELEASE_REPOSITORY to OWNER/REPO.}"
+    target="${RELEASE_TARGET:?Set RELEASE_TARGET to the native installation target.}"
+    smoke_root="$(mktemp -d)"
+    trap 'rm -rf "$smoke_root"' EXIT
+    payload_root="$smoke_root/payload with spaces"
+    export HOME="$smoke_root/home"
+    export XDG_CONFIG_HOME="$smoke_root/config"
+    export XDG_DATA_HOME="$smoke_root/data"
+    export XDG_CACHE_HOME="$smoke_root/cache"
+    export UV_CACHE_DIR="$smoke_root/uv-cache"
+    export UV_TOOL_DIR="$smoke_root/uv-tools"
+    export UV_TOOL_BIN_DIR="$smoke_root/uv-bin"
+    mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME" "$UV_TOOL_DIR" "$UV_TOOL_BIN_DIR" "$payload_root"
+    config_sentinel="$XDG_CONFIG_HOME/{my_project}-sentinel"
+    data_sentinel="$XDG_DATA_HOME/{my_project}-sentinel"
+    printf 'preserve config\n' > "$config_sentinel"
+    printf 'preserve data\n' > "$data_sentinel"
+    archive="${RELEASE_ARCHIVE:-}"
+    if [[ -z "$archive" ]]; then
+        just build-installation-bundle
+        shopt -s nullglob
+        archives=(dist/*-"$target".zip dist/*-"$target".tar.gz)
+        if [[ "${#archives[@]}" -ne 1 ]]; then echo "Expected one archive for ${target}, found ${#archives[@]}." >&2; exit 1; fi
+        archive="${archives[0]}"
+    fi
+    archive_name="$(basename "$archive")"
+    if [[ "$archive_name" != *-"$target".zip && "$archive_name" != *-"$target".tar.gz ]]; then echo "Archive ${archive_name} does not match target ${target}." >&2; exit 1; fi
+    if [[ ! -f "$archive" ]]; then echo "Archive does not exist: ${archive}" >&2; exit 1; fi
+    if [[ "$archive" == *.zip ]]; then unzip -q "$archive" -d "$payload_root"; else tar -xzf "$archive" -C "$payload_root"; fi
+    bundle="$(find "$payload_root" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+    wheel_name="$(uv run --locked python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["application_wheel"]["filename"])' "$bundle/release-manifest.json")"
+    if [[ ! "$wheel_name" =~ ^[A-Za-z0-9_.-]+\.whl$ || ! -f "dist/$wheel_name" ]]; then
+        echo "Release smoke requires the application wheel named by the archive manifest in dist/." >&2
+        exit 1
+    fi
+    cp -- "dist/$wheel_name" "$bundle/$wheel_name"
+    install_staged() {
+        case "$target" in
+            windows-x86_64) installer="$(cygpath -w "$bundle/install-windows.cmd")"; cmd.exe /d /c "\"$installer\" --yes --skip-config" ;;
+            linux-x86_64) bash "$bundle/install-linux-macos.sh" --yes --skip-config ;;
+            macos-arm64) bash "$bundle/install-macos.command" --yes --skip-config ;;
+            *) echo "Unsupported installation target: ${target}." >&2; exit 1 ;;
+        esac
+    }
+    install_staged
+    if [[ "$target" == windows-x86_64 ]]; then
+        tool_bin="$(cygpath -u "$(uv tool dir --bin)")"
+    else
+        tool_bin="$UV_TOOL_BIN_DIR"
+    fi
+    if [[ "$target" == windows-x86_64 ]]; then
+        "$tool_bin/{my_project}.exe" --help
+        "$tool_bin/{my_project}.exe" config setup --help
+    else
+        "$tool_bin/{my_project}" --help
+        "$tool_bin/{my_project}" config setup --help
+    fi
+    install_staged
+    test "$(cat "$config_sentinel")" = "preserve config"
+    test "$(cat "$data_sentinel")" = "preserve data"
+    uv tool uninstall "{my_project}"
+    test "$(cat "$config_sentinel")" = "preserve config"
+    test "$(cat "$data_sentinel")" = "preserve data"
+    echo "Native ${target} thin archive installed, reinstalled, launched, and uninstalled successfully."
+
 
 # Rehearse the release gate. It does not upload anything.
 release-check:
@@ -535,7 +631,8 @@ release-prepare level="patch":
     restore_version_files=true
     uv version --bump "{{level}}" --no-sync
     uv export -o pylock.toml --all-extras --all-groups --quiet
-    PROJECT_RELEASE_IN_PROGRESS=1 just release-check
+    uv lock --check
+    just _release-artifact-check "$notes_file"
     git commit --only pyproject.toml uv.lock pylock.toml -m "Bump version to ${next_version}"
     restore_version_files=false
     if ! git tag -a "$tag" -m "Release ${tag}"; then
