@@ -394,8 +394,7 @@ release-install-smoke:
     install_staged() {
         case "$target" in
             windows-x86_64)
-                installer="$(cygpath -w "$bundle/install-windows.cmd")"
-                MSYS_NO_PATHCONV=1 cmd.exe /d /c "\"$installer\" --yes"
+                (cd -- "$bundle"; MSYS_NO_PATHCONV=1 cmd.exe /d /c install-windows.cmd --yes)
                 ;;
             linux-x86_64)
                 bash "$bundle/install-linux-macos.sh" --yes

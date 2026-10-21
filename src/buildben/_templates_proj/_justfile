@@ -557,7 +557,7 @@ release-install-smoke:
     cp -- "dist/$wheel_name" "$bundle/$wheel_name"
     install_staged() {
         case "$target" in
-            windows-x86_64) installer="$(cygpath -w "$bundle/install-windows.cmd")"; MSYS_NO_PATHCONV=1 cmd.exe /d /c "\"$installer\" --yes --skip-config" ;;
+            windows-x86_64) (cd -- "$bundle"; MSYS_NO_PATHCONV=1 cmd.exe /d /c install-windows.cmd --yes --skip-config) ;;
             linux-x86_64) bash "$bundle/install-linux-macos.sh" --yes --skip-config ;;
             macos-arm64) bash "$bundle/install-macos.command" --yes --skip-config ;;
             *) echo "Unsupported installation target: ${target}." >&2; exit 1 ;;
