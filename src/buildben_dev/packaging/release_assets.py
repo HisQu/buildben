@@ -31,10 +31,15 @@ COMMON_NAMES = (
     "install-windows.ps1",
     "install_release.py",
 )
+RELEASES_PER_PAGE = 100
 
 
 class ReleaseError(RuntimeError):
     """Raised when release identity, payload, or remote state is invalid."""
+
+
+class _ReleaseNotFound(ReleaseError):
+    """Raised when a successful release listing contains no matching tag."""
 
 
 class Api(Protocol):
@@ -196,24 +201,64 @@ def _tag_commit(api: Api, identity: Identity) -> str:
 
 
 def _release(api: Api, identity: Identity) -> dict[str, object]:
-    result = _json(
-        api, "GET", _endpoint(identity.repository, f"releases/tags/{identity.tag}")
-    )
-    if not isinstance(result, dict):
-        raise ReleaseError(f"GitHub release for {identity.tag} is malformed.")
-    if result.get("tag_name") != identity.tag:
+    page = 1
+    seen_ids: set[int] = set()
+    match: dict[str, object] | None = None
+    while True:
+        endpoint = _endpoint(
+            identity.repository,
+            f"releases?per_page={RELEASES_PER_PAGE}&page={page}",
+        )
+        result = _json(api, "GET", endpoint)
+        if not isinstance(result, list) or len(result) > RELEASES_PER_PAGE:
+            raise ReleaseError("GitHub release listing page is malformed.")
+        for item in result:
+            if not isinstance(item, dict):
+                raise ReleaseError(
+                    "GitHub release listing contains a malformed release."
+                )
+            tag_name = item.get("tag_name")
+            if not isinstance(tag_name, str):
+                raise ReleaseError(
+                    "GitHub release listing contains a malformed release."
+                )
+            release_id = item.get("id")
+            if (
+                not isinstance(release_id, int)
+                or isinstance(release_id, bool)
+                or release_id <= 0
+            ):
+                raise ReleaseError(
+                    "GitHub release listing contains an invalid identifier."
+                )
+            if release_id in seen_ids:
+                raise ReleaseError("GitHub release listing repeats an identifier.")
+            seen_ids.add(release_id)
+            if tag_name == identity.tag:
+                if match is not None:
+                    raise ReleaseError(
+                        f"GitHub release listing ambiguously identifies tag "
+                        f"{identity.tag}."
+                    )
+                match = item
+        if len(result) < RELEASES_PER_PAGE:
+            break
+        page += 1
+    if match is None:
+        raise _ReleaseNotFound(f"No GitHub release exists for tag {identity.tag}.")
+    if match.get("tag_name") != identity.tag:
         raise ReleaseError(
             f"GitHub release does not identify exact tag {identity.tag}."
         )
-    if result.get("draft") is not True:
+    if match.get("draft") is not True:
         raise ReleaseError(
             f"Release {identity.tag} is published; refusing to mutate it."
         )
-    if result.get("target_commitish") != identity.commit:
+    if match.get("target_commitish") != identity.commit:
         raise ReleaseError(f"Draft {identity.tag} has an inconsistent target commit.")
-    if result.get("prerelease") is not False:
+    if match.get("prerelease") is not False:
         raise ReleaseError(f"Draft {identity.tag} is marked as a prerelease.")
-    return result
+    return match
 
 
 def _release_id(release: dict[str, object]) -> int:
@@ -662,9 +707,7 @@ def prepare(
     _tag_commit(api, identity)
     try:
         release = _release(api, identity)
-    except ReleaseError as exc:
-        if "404" not in str(exc) and "Not Found" not in str(exc):
-            raise
+    except _ReleaseNotFound:
         _tag_commit(api, identity)
         release = _json(
             api,
