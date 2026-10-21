@@ -97,6 +97,12 @@ This project follows Semantic Versioning.
   and export the configured repository for local release-input builds.
 - Support macOS Bash 3.2 and preserve native Windows paths and CMD arguments
   when exercising the platform installer from Git Bash.
+- Standard-library release and archive operations no longer synchronize the
+  full development environment.
+- Tag jobs reuse already prepared release notes when supplied, stage the full
+  validated payload, and build one platform archive per matrix target.
+- Build platform archives from the common downloaded assets, reconstructing
+  canonical platform launchers and restoring Unix executable modes.
 
 <br>
 

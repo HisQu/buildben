@@ -305,6 +305,16 @@ environment.
 just release-check
 just release patch
 ```
+`just build-release-inputs` accepts an optional positional release-notes path:
+
+```bash
+just build-release-inputs release/prepared-notes.md
+```
+
+Use this to reuse notes that have already been validated. The file must be
+outside `dist`, because the recipe rebuilds that directory. Omit the argument
+to generate notes from the changelog; either way, tag and version validation
+still runs.
 
 > [!WARNING]
 > `just release` creates the version commit and annotated tag, then atomically

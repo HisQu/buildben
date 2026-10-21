@@ -445,16 +445,31 @@ def _payload_bytes(
 ) -> dict[str, tuple[bytes, int]]:
     files = manifest["archive_members"][target]
     expected_names = set(files)
+    canonical_members = expected_names & {
+        "install-windows.cmd",
+        "prepare-powershell-windows.cmd",
+        "install-macos.command",
+    }
+    assets = (
+        _canonical_assets(ROOT, project=manifest["project"])
+        if canonical_members
+        else {}
+    )
     content: dict[str, tuple[bytes, int]] = {}
     for member in files:
-        path = release
-        for part in PurePosixPath(member).parts:
-            path = path / part
-            if path.is_symlink():
-                raise ValueError(f"Archive input is missing or unsafe: {member}")
+        if member in canonical_members:
+            path = assets[member]
+        else:
+            path = release
+            for part in PurePosixPath(member).parts:
+                path = path / part
+                if path.is_symlink():
+                    raise ValueError(f"Archive input is missing or unsafe: {member}")
         if not path.is_file():
             raise ValueError(f"Archive input is missing or unsafe: {member}")
         mode = stat.S_IMODE(path.stat().st_mode)
+        if member.endswith((".sh", ".command")):
+            mode = 0o755
         content[member] = (path.read_bytes(), mode)
     for field in ("runtime_lock", "runtime_constraints"):
         entry = manifest[field]

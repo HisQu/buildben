@@ -172,8 +172,10 @@ able to create assets does not mean published releases contain them.
 
 ### Installation bundle
 
-Upcoming: future release assets will contain a thin platform archive with the
-application wheel and lock-derived runtime exports. Until those assets are
+Upcoming: future release assets will contain thin platform archives with the
+launchers, release manifest, runtime exports, and installer helper. The
+application wheel is a separate release asset that the installer downloads
+online; it is not embedded in the platform archive. Until these assets are
 published, use the explicit `--git` installer mode or `--dev [PATH]` for a
 cloned repository. See the [installer reference](docs/References.md#installer-reference).
 -->
