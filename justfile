@@ -22,6 +22,7 @@ RELEASE_PYPI := "false"
 export RELEASE_REPOSITORY := "HisQu/buildben"
 
 # Run `just` with no recipe to list tasks
+[group('General')]
 default:
     @just --list
 
@@ -112,6 +113,7 @@ _check-clean-worktree action="publishing":
 # ---------------------------------------------------------------
 
 # Remove transient junk: uv cache,  __pycache__, .pytest_cache, .mypy_cache, .ruff_cache. Does NOT touch uv.lock or your venv.
+[group('Environment')]
 clean:
     @echo "🧹 Cleaning caches and build artifacts..."
     find . -type d -name "__pycache__" -prune -exec rm -rf {} + || true
@@ -119,6 +121,7 @@ clean:
     uv cache prune -y || true
 
 # Rebuilds python venv from uv.lock
+[group('Environment')]
 reset-venv:
     @echo "♻ Rebuilding virtual environment..."
     uv venv --seed --clear
@@ -144,30 +147,35 @@ reset-venv:
 #   python -m pip install -e ".[rag]" --group dev
 
 # Install only the package and minimal runtime dependencies.
+[group('Environment')]
 core:
     just _note-direnv
     just _check-uv
     uv sync --locked --no-default-groups
 
 # Install runtime dependencies plus all published optional extras.
+[group('Environment')]
 rag:
     just _note-direnv
     just _check-uv
     uv sync --locked --all-extras --no-default-groups
 
 # Install runtime dependencies plus all local development groups.
+[group('Environment')]
 dev:
     just _note-direnv
     just _check-uv
     uv sync --locked --all-groups
 
 # Install runtime dependencies, all published extras, and all local groups.
+[group('Environment')]
 rag-dev:
     just _note-direnv
     just _check-uv
     uv sync --locked --all-extras --all-groups
 
 # Install or sync everything from uv.lock into venv. (CI should use this)
+[group('Environment')]
 sync:
     just _note-direnv
     just _check-uv
@@ -184,18 +192,21 @@ alias all := rag-dev
 #   just lock --python 3.12     # resolve for a specific interpreter
 
 # Creates uv.lock based on pyproject.toml and exports pylock.toml.
+[group('Dependencies')]
 lock *ARGS:
     just _check-uv
     uv lock {{ARGS}}
     uv export -o pylock.toml --all-extras --all-groups --quiet
 
 # Re-lock with --upgrade & install from the new lock.
+[group('Dependencies')]
 upgrade *ARGS:
     just lock --upgrade {{ARGS}}
     uv sync --all-extras --all-groups --locked
 
 
 # Re-lock with --upgrade ONLY git-based dependencies & uv sync from the new lock.
+[group('Dependencies')]
 upgrade-repos *ARGS:
     @echo "⬆️  Upgrading only git-based dependencies to latest revisions..."
     uv lock \
@@ -211,6 +222,7 @@ alias uprep := upgrade-repos
 # --- Switch python versions -------
 
 # Switches major Python version for the project. Usage: just py-switch 3.13t
+[group('Python')]
 py-switch version="3.13":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -233,6 +245,7 @@ py-switch version="3.13":
 # ---------------------------------------------------------------
 
 # Render README and presentation figures from colocated source scripts.
+[group('Documentation')]
 docs-figures:
     just _check-uv
     uv run --locked python assets/figures/diagram_graphviz.py
@@ -329,6 +342,7 @@ _release-artifact-check notes_output build_only="false" notes_input="":
     )
 
 # Build package and lock-derived inputs without running the full source matrix.
+[group('Release')]
 build-release-inputs notes_file="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -340,6 +354,7 @@ build-release-inputs notes_file="":
         --repository "$RELEASE_REPOSITORY" --commit "$commit" --output-directory dist
 
 # Build the native thin archive from the prepared lock-derived payload.
+[group('Release')]
 build-installation-bundle:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -348,6 +363,7 @@ build-installation-bundle:
         --release-directory dist --output-directory dist
 
 # Exercise a local or already-staged archive through its native installer.
+[group('Release')]
 release-install-smoke:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -444,6 +460,7 @@ release-install-smoke:
     echo "Native ${target} thin archive installed, reinstalled, launched, and uninstalled successfully."
 
 # Rehearse the complete local release gate without publishing anything.
+[group('Release')]
 release-check:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -480,6 +497,7 @@ release-check:
     fi
 
 # Prepare a checked version commit and annotated local release tag.
+[group('Release')]
 release-prepare level="patch":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -535,6 +553,7 @@ release-prepare level="patch":
     echo "================================================================="
 
 # Push a prepared release commit and tag as one remote operation.
+[group('Release')]
 release-push tag:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -573,6 +592,7 @@ release-push tag:
     fi
 
 # Prepare and push a release. GitHub Actions owns artifact publication.
+[group('Release')]
 release level="patch":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -585,6 +605,7 @@ release level="patch":
     fi
 
 # Publish the artifacts attached to an existing GitHub Release.
+[group('Release')]
 publish-pypi tag:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -625,6 +646,7 @@ publish-pypi tag:
     echo "Requested PyPI publication for ${tag}. Follow the workflow URL above."
 
 # Run GitHub Actions triggered by push locally using act
+[group('Automation')]
 gitactions:
     act push \
       --secret-file .env.secret \
@@ -640,16 +662,19 @@ gitactions:
 
 # Example: just run -- python -m yourpkg --help
 # Runs your package’s CLI or module under the locked environment.
+[group('Development')]
 run *CMD:
     just _check-uv
     uv run --locked -- {{CMD}}
 
 # Print effective dependency tree (won’t modify lock when used with --locked)
+[group('Development')]
 tree:
     just _check-uv
     uv tree --locked || uv tree
 
 # Show uv + Python info for debugging bug reports
+[group('Development')]
 diagnose:
     just _check-uv
     uv --version
