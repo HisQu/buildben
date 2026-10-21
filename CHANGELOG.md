@@ -103,6 +103,8 @@ This project follows Semantic Versioning.
   validated payload, and build one platform archive per matrix target.
 - Build platform archives from the common downloaded assets, reconstructing
   canonical platform launchers and restoring Unix executable modes.
+- Pass Windows asset-directory paths with forward slashes so native argument
+  quoting preserves payload paths containing spaces.
 
 <br>
 

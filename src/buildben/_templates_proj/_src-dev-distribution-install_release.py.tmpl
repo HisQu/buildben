@@ -5,11 +5,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import re
 import shutil
 import subprocess
-import sys
 import tempfile
 import urllib.error
 import urllib.request
@@ -485,29 +483,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     """Validate arguments, install the release, and report actionable errors."""
     args = parse_args(argv)
-    if os.environ.get("BUILDBEN_ASSET_HANDOFF_DIAGNOSTIC") == "1":
-        asset_argument = None
-        try:
-            asset_argument = sys.argv[sys.argv.index("--asset-dir") + 1]
-        except (IndexError, ValueError):
-            pass
-        print(
-            f"[asset-handoff] Python --asset-dir argv={asset_argument!r}",
-            file=sys.stderr,
-        )
-        print(
-            f"[asset-handoff] Python parsed asset_dir={str(args.asset_dir)!r}",
-            file=sys.stderr,
-        )
-        if args.asset_dir is not None:
-            for filename in PAYLOAD_FILES:
-                path = args.asset_dir / filename
-                print(
-                    f"[asset-handoff] Python asset=<{path}> "
-                    f"exists={path.exists()} file={path.is_file()} "
-                    f"symlink={path.is_symlink()}",
-                    file=sys.stderr,
-                )
     try:
         install_release(
             repository=args.repository,

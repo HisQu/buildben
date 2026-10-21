@@ -207,15 +207,8 @@ function Install-FromRelease {
             foreach ($Name in @("release-manifest.json", "runtime-requirements.txt", "runtime-constraints.txt")) { if (Test-Path -LiteralPath (Join-Path $ScriptDir $Name)) { $PayloadFound = $true } }
             if ($PayloadFound) {
                 foreach ($Name in @("release-manifest.json", "runtime-requirements.txt", "runtime-constraints.txt")) { if (-not (Test-Path -LiteralPath (Join-Path $ScriptDir $Name) -PathType Leaf)) { throw "Incomplete adjacent release payload: $Name is missing." } }
-                $HelperArguments += @("--asset-dir", $ScriptDir)
-            }
-        }
-        if ($env:BUILDBEN_ASSET_HANDOFF_DIAGNOSTIC -eq "1") {
-            Write-Host "[asset-handoff] PowerShell scriptdir=<$ScriptDir> helper=<$Helper>"
-            foreach ($Name in @("release-manifest.json", "runtime-requirements.txt", "runtime-constraints.txt")) {
-                $AssetPath = Join-Path $ScriptDir $Name
-                $IsLeaf = Test-Path -LiteralPath $AssetPath -PathType Leaf
-                Write-Host "[asset-handoff] PowerShell asset=<$AssetPath> leaf=$IsLeaf"
+# > Forward slashes prevent PowerShell 5.1 from treating a trailing backslash as an escaped native argument quote.
+                $HelperArguments += @("--asset-dir", $ScriptDir.Replace('\', '/'))
             }
         }
         Invoke-Checked -FilePath $InstallPython -Arguments $HelperArguments -Description "$AppDistribution release installation"
