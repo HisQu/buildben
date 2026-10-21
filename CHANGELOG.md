@@ -65,8 +65,9 @@ This project follows Semantic Versioning.
 
 - Generated projects include optional `just worktree-create` and
   `just worktree-remove` recipes for isolated, locked development checkouts.
-- Add thin platform archives with the application wheel and lock-derived
-  runtime requirement and constraint exports, plus a public release bootstrap.
+- Add thin platform archives containing installers, a manifest, and lock-derived
+  runtime requirement and constraint exports. The application wheel and source
+  archive remain separate release assets; the installer downloads the wheel.
 
 <br>
 
@@ -90,6 +91,10 @@ This project follows Semantic Versioning.
 <br>
 
 ### 🔨 Fixed
+
+- Preserve canonical installer executable modes when staging platform archives.
+- Use correctly escaped native file URIs for Windows artifact-install smokes,
+  and export the configured repository for local release-input builds.
 
 <br>
 

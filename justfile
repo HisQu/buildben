@@ -19,7 +19,7 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 
 # Include PyPI in normal tag releases. Keep this policy in version control.
 RELEASE_PYPI := "false"
-RELEASE_REPOSITORY := "HisQu/buildben"
+export RELEASE_REPOSITORY := "HisQu/buildben"
 
 # Run `just` with no recipe to list tasks
 default:
@@ -306,7 +306,10 @@ _release-artifact-check notes_output build_only="false":
         cd "$smoke_root"
         for artifact in "$wheel" "$sdist"; do
             for python_version in 3.12 3.13; do
-                uv run --isolated --python "$python_version" --with "buildben @ file://$artifact" python "$smoke_script" --expected-version "$version"
+                artifact_path="$artifact"
+                if command -v cygpath >/dev/null 2>&1; then artifact_path="$(cygpath -m "$artifact")"; fi
+                artifact_uri="$(python -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve().as_uri())' "$artifact_path")"
+                uv run --isolated --python "$python_version" --with "buildben @ $artifact_uri" python "$smoke_script" --expected-version "$version"
             done
         done
     )

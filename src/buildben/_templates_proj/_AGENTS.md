@@ -55,7 +55,7 @@
 - The public one-line bootstrap fetches scripts from GitHub with curl on Unix or PowerShell on Windows and does not require GitHub CLI. Git is required only for the explicit `--git` mode; do not add an authentication tutorial.
 - Stop on a failed or empty installer fetch before executing any response. Unix examples must guard execution on a successful, nonempty curl response; PowerShell examples must reject failed or empty downloads before running the downloaded script.
 - The public bootstrap uses GitHub to fetch release assets without GitHub CLI. Until the first new thin payload is published, keep explicit `--git` and `--dev [PATH]` instructions available; do not imply legacy published releases contain the new payload.
-- Describe thin archives as the application wheel plus lock-derived runtime requirement and constraint exports. Runtime dependencies resolve online under those constraints; do not describe release installation as offline or wheelhouse-based.
+- Thin archives contain installers, the manifest, and lock-derived runtime requirement and constraint exports, but no application wheel. The wheel remains a separate release asset fetched and verified by the installer. Runtime dependencies install online; do not describe release installation as offline or wheelhouse-based.
 - Normal release workflows reuse one successful full CI run for the exact commit. `just release-check` remains an explicit full local rehearsal, while `release-prepare` runs only fast release validation/build steps.
 - Keep the generated README's installation-bundle placeholder commented until a thin payload is actually published. Do not claim new assets are available merely because the workflow can produce them.
 
