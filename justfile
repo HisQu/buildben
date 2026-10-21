@@ -350,6 +350,11 @@ release-install-smoke:
     export UV_TOOL_DIR="$smoke_root/uv-tools"
     export UV_TOOL_BIN_DIR="$smoke_root/uv-bin"
     mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME" "$UV_TOOL_DIR" "$UV_TOOL_BIN_DIR" "$payload_root"
+    if [[ "$target" == windows-x86_64 ]]; then
+        export UV_TOOL_DIR="$(cygpath -m "$UV_TOOL_DIR")"
+        export UV_TOOL_BIN_DIR="$(cygpath -m "$UV_TOOL_BIN_DIR")"
+        export UV_CACHE_DIR="$(cygpath -m "$UV_CACHE_DIR")"
+    fi
     config_sentinel="$XDG_CONFIG_HOME/buildben-sentinel"
     data_sentinel="$XDG_DATA_HOME/buildben-sentinel"
     printf 'preserve config\n' > "$config_sentinel"
@@ -390,7 +395,7 @@ release-install-smoke:
         case "$target" in
             windows-x86_64)
                 installer="$(cygpath -w "$bundle/install-windows.cmd")"
-                cmd.exe /d /c "\"$installer\" --yes"
+                MSYS_NO_PATHCONV=1 cmd.exe /d /c "\"$installer\" --yes"
                 ;;
             linux-x86_64)
                 bash "$bundle/install-linux-macos.sh" --yes

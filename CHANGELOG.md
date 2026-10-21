@@ -95,6 +95,8 @@ This project follows Semantic Versioning.
 - Preserve canonical installer executable modes when staging platform archives.
 - Use correctly escaped native file URIs for Windows artifact-install smokes,
   and export the configured repository for local release-input builds.
+- Support macOS Bash 3.2 and preserve native Windows paths and CMD arguments
+  when exercising the platform installer from Git Bash.
 
 <br>
 
