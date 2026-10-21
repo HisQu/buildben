@@ -19,7 +19,7 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 
 # Include PyPI in normal tag releases. Keep this policy in version control.
 RELEASE_PYPI := "false"
-RELEASE_REPOSITORY := "{github_user}/{my_project}"
+export RELEASE_REPOSITORY := "{github_user}/{my_project}"
 
 # Run `just` with no recipe to list tasks
 default:
@@ -483,7 +483,10 @@ _release-artifact-check notes_output build_only="false":
         cd "$smoke_root"
         for artifact in "$wheel" "$sdist"; do
             for python_version in 3.12 3.13; do
-                NO_COLOR=1 _TYPER_FORCE_DISABLE_TERMINAL=1 uv run --isolated --python "$python_version" --with "{my_project} @ file://$artifact" python "$smoke_script" --expected-version "$version"
+                artifact_path="$artifact"
+                if command -v cygpath >/dev/null 2>&1; then artifact_path="$(cygpath -m "$artifact")"; fi
+                artifact_uri="$(python -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve().as_uri())' "$artifact_path")"
+                NO_COLOR=1 _TYPER_FORCE_DISABLE_TERMINAL=1 uv run --isolated --python "$python_version" --with "{my_project} @ $artifact_uri" python "$smoke_script" --expected-version "$version"
             done
         done
     )

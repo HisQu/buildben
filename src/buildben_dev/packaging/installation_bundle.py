@@ -423,6 +423,8 @@ def prepare(
         destination = output / filename
         temporary = output / f".{filename}.tmp"
         temporary.write_bytes(data)
+        if filename in assets:
+            temporary.chmod(stat.S_IMODE(assets[filename].stat().st_mode))
         os.replace(temporary, destination)
     return manifest
 
