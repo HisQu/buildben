@@ -77,7 +77,7 @@ jobs:
           echo "release_notes_base64=${notes_base64}" >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build and stage common release inputs
+    name: Build wheel and source archive
     if: github.event_name == 'push'
     needs: prepare-draft
     runs-on: ubuntu-latest
@@ -117,7 +117,9 @@ jobs:
           printf '%s' "$RELEASE_NOTES_BASE64" | base64 --decode > release/release-notes.md
       - name: Build and validate package once
         run: just build-release-inputs release/release-notes.md
-      - name: Upload common inputs to the draft release
+      - name: Smoke the built wheel once on Python 3.12
+        run: just release-wheel-smoke
+      - name: Upload wheel and source archive to the draft release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -131,98 +133,12 @@ jobs:
           PYTHONPATH=src python -m {my_project}_dev.packaging.release_assets upload \
             --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" \
             --commit "$GITHUB_SHA" --directory dist --files \
-            "${packages[@]}" runtime-requirements.txt runtime-constraints.txt \
-            release-manifest.json release-notes.md install-linux-macos.sh \
-            install-windows.ps1 install_release.py
-
-  installation-bundle:
-    name: ${{ matrix.target }} installation proof
-    if: github.event_name == 'push'
-    needs: build
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: windows-latest
-            python-version: "3.12"
-            target: windows-x86_64
-          - runner: ubuntu-latest
-            python-version: "3.12"
-            target: linux-x86_64
-          - runner: macos-14
-            python-version: "3.12"
-            target: macos-arm64
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout release commit
-        uses: actions/checkout@v5
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          python-version: ${{ matrix.python-version }}
-          enable-cache: false
-      - name: Install just
-        uses: extractions/setup-just@v4
-        with:
-          just-version: "1.56.0"
-      - name: Fetch common payload and assemble native archive
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          PYTHONPATH=src python -m {my_project}_dev.packaging.release_assets fetch \
-            --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" \
-            --commit "$GITHUB_SHA" --directory dist --files \
-            release-manifest.json
-          wheel_name="$(python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["application_wheel"]["filename"])' dist/release-manifest.json)"
-          sdist_name="$(python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["source_archive"]["filename"])' dist/release-manifest.json)"
-          PYTHONPATH=src python -m {my_project}_dev.packaging.release_assets fetch \
-            --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" \
-            --commit "$GITHUB_SHA" --directory dist --files \
-            "$wheel_name" "$sdist_name" \
-            runtime-requirements.txt runtime-constraints.txt release-manifest.json \
-            release-notes.md install-linux-macos.sh install-windows.ps1 install_release.py
-          PYTHONPATH=src python -m {my_project}_dev.packaging.installation_bundle archive \
-            --release-directory dist --output-directory dist
-      - name: Smoke the staged archive through its native installer
-        shell: bash
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          target="${{ matrix.target }}"
-          archives=(dist/*-"$target".zip dist/*-"$target".tar.gz)
-          if [[ "${#archives[@]}" -ne 1 ]]; then
-            echo "Expected one archive for $target." >&2
-            exit 1
-          fi
-          RELEASE_TARGET="$target" RELEASE_ARCHIVE="${archives[0]}" just release-install-smoke
-      - name: Upload platform archive to the draft release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          target="${{ matrix.target }}"
-          archives=(dist/*-"$target".zip dist/*-"$target".tar.gz)
-          if [[ "${#archives[@]}" -ne 1 ]]; then
-            echo "Expected one archive for $target." >&2
-            exit 1
-          fi
-          archive_name="$(basename "${archives[0]}")"
-          PYTHONPATH=src python -m {my_project}_dev.packaging.release_assets upload \
-            --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" \
-            --commit "$GITHUB_SHA" --directory dist --files "$archive_name"
+            "${packages[@]}"
 
   github-release:
     name: Validate and publish GitHub Release
     if: github.event_name == 'push'
-    needs:
-      - build
-      - installation-bundle
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write

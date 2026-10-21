@@ -4,7 +4,6 @@ set "PAUSE_WINDOW=1"
 if not "%~1"=="" set "PAUSE_WINDOW=0"
 rem -- Let Windows PowerShell use its own modules when launched from PowerShell 7.
 set "PSModulePath="
-if not defined <MY_PROJECT>_INSTALLER_ASSET_DIR set "<MY_PROJECT>_INSTALLER_ASSET_DIR=%~dp0"
 
 if not exist "%~dp0prepare-powershell-windows.cmd" goto :missing_helper
 set "<MY_PROJECT>_PREPARED_SCRIPT="

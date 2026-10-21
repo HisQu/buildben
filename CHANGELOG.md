@@ -22,6 +22,7 @@ This project follows Semantic Versioning.
 
 1. [Buildben Changelog](#buildben-changelog)
 2. [\[Unreleased\]](#unreleased)
+3. [\[0.11.0\] - 2026-10-21](#0110---2026-10-21)
 3. [\[0.10.3\] - 2026-10-21](#0103---2026-10-21)
 4. [\[0.10.2\] - 2026-10-21](#0102---2026-10-21)
 5. [\[0.10.1\] - 2026-10-21](#0101---2026-10-21)
@@ -74,6 +75,44 @@ This project follows Semantic Versioning.
 <br>
 
 ### 🔒 Security
+
+<br>
+
+---
+
+<br>
+
+<!-- ======================================================== -->
+
+# [0.11.0] - 2026-10-21
+
+<br>
+
+### 💥 Breaking changes
+
+- Breaking: Installers now install published source distributions using their
+  committed lock. Removed installer `--git` and `--dev` modes and the custom
+  installation archives, manifest, helper and runtime-export assets.
+  Affected: Installer-mode users and consumers of the former release payload.
+  Migration: Use a documented one-line installer, or clone the repository and
+  install with `python -m pip install -e .` in a virtual environment. Releases
+  now publish only the standard wheel and source distribution.
+
+<br>
+
+### ➕ Added
+
+- Select authenticated GitHub access with `--github-client gh`; public downloads
+  use anonymous HTTPS by default. READMEs link GitHub CLI installation and setup.
+- Generated source distributions include `uv.lock` and `pylock.toml`; generated
+  README templates retain public and authenticated commands as comments.
+
+<br>
+
+### 🔨 Fixed
+
+- Public installation no longer fails merely because an unauthenticated `gh`
+  executable is installed.
 
 <br>
 

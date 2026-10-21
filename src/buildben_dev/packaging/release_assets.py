@@ -9,28 +9,17 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import tomllib
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Protocol, TypedDict, cast
+from typing import Protocol
 
 from .release_notes import validate_tag_version
 
 SHA_RE = re.compile(r"^[0-9a-f]{40,64}$")
-DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
-VERSION_RE = re.compile(r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$")
-PLATFORMS = ("windows-x86_64", "linux-x86_64", "macos-arm64")
-COMMON_NAMES = (
-    "runtime-requirements.txt",
-    "runtime-constraints.txt",
-    "release-manifest.json",
-    "release-notes.md",
-    "install-linux-macos.sh",
-    "install-windows.ps1",
-    "install_release.py",
-)
 RELEASES_PER_PAGE = 100
 
 
@@ -63,27 +52,6 @@ class Identity:
     repository: str
     tag: str
     commit: str
-
-
-class FileRecord(TypedDict):
-    filename: str
-    sha256: str
-
-
-class ReleaseManifest(TypedDict):
-    schema_version: int
-    project: str
-    version: str
-    tag: str
-    repository: str
-    commit_sha: str
-    python_requires: str
-    application_wheel: FileRecord
-    source_archive: FileRecord
-    runtime_lock: FileRecord
-    runtime_constraints: FileRecord
-    platforms: dict[str, str]
-    archive_members: dict[str, list[str]]
 
 
 class GitHubApi:
@@ -283,134 +251,40 @@ def _assets(release: dict[str, object]) -> dict[str, dict[str, object]]:
     return result
 
 
-def _manifest_record(value: object, identity: Identity) -> ReleaseManifest:
-    """Validate manifest structure and release identity without reading assets."""
-    expected_keys = {
-        "schema_version",
-        "project",
-        "version",
-        "tag",
-        "repository",
-        "commit_sha",
-        "python_requires",
-        "application_wheel",
-        "source_archive",
-        "runtime_lock",
-        "runtime_constraints",
-        "platforms",
-        "archive_members",
-    }
-    if (
-        not isinstance(value, dict)
-        or set(value) != expected_keys
-        or type(value.get("schema_version")) is not int
-        or value["schema_version"] != 1
-    ):
-        raise ReleaseError("Release manifest has unsupported schema or fields.")
-    project, version = value.get("project"), value.get("version")
-    if not isinstance(project, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", project):
-        raise ReleaseError("Manifest project name is invalid.")
-    if not isinstance(version, str) or not VERSION_RE.fullmatch(version):
-        raise ReleaseError("Manifest version is invalid.")
-    if value.get("tag") != identity.tag or identity.tag != f"v{version}":
-        raise ReleaseError("Manifest tag and version are inconsistent.")
-    if (
-        value.get("repository") != identity.repository
-        or value.get("commit_sha") != identity.commit
-    ):
-        raise ReleaseError("Manifest repository or checked commit is inconsistent.")
-    if (
-        not isinstance(value.get("python_requires"), str)
-        or not value["python_requires"]
-    ):
-        raise ReleaseError("Manifest Python requirement is missing.")
-    for field in (
-        "application_wheel",
-        "source_archive",
-        "runtime_lock",
-        "runtime_constraints",
-    ):
-        entry = value.get(field)
-        if not isinstance(entry, dict) or set(entry) != {"filename", "sha256"}:
-            raise ReleaseError(f"Manifest {field} record is malformed.")
-        _basename(entry.get("filename"), f"Manifest {field} filename")
-        digest = entry.get("sha256")
-        if not isinstance(digest, str) or not DIGEST_RE.fullmatch(digest):
-            raise ReleaseError(f"Manifest {field} digest is malformed.")
-    if (
-        value["runtime_lock"]["filename"] != "runtime-requirements.txt"
-        or value["runtime_constraints"]["filename"] != "runtime-constraints.txt"
-    ):
-        raise ReleaseError(
-            "Manifest runtime filenames do not match the release contract."
-        )
-    platforms, members = value.get("platforms"), value.get("archive_members")
-    if not isinstance(platforms, dict) or set(platforms) != set(PLATFORMS):
-        raise ReleaseError("Manifest platform archive map is incomplete.")
-    if not isinstance(members, dict) or set(members) != set(PLATFORMS):
-        raise ReleaseError("Manifest archive member map is incomplete.")
-    for platform in PLATFORMS:
-        filename = platforms[platform]
-        _basename(filename, f"Manifest {platform} archive")
-        suffix = ".zip" if platform.startswith("windows") else ".tar.gz"
-        if filename != f"{project}-{version}-{platform}{suffix}":
-            raise ReleaseError(f"Manifest archive name for {platform} is inconsistent.")
-        paths = members[platform]
-        if (
-            not isinstance(paths, list)
-            or not paths
-            or any(not isinstance(item, str) for item in paths)
-        ):
-            raise ReleaseError(f"Manifest members for {platform} are malformed.")
-        if paths != sorted(set(paths)):
-            raise ReleaseError(
-                f"Manifest members for {platform} are not unique and sorted."
-            )
-        for member in paths:
-            _safe_member(member)
-    wheel_name = value["application_wheel"]["filename"]
-    sdist_name = value["source_archive"]["filename"]
-    if not wheel_name.startswith(f"{project}-{version}-") or not wheel_name.endswith(
-        ".whl"
-    ):
-        raise ReleaseError("Manifest wheel name does not match project/version.")
-    if sdist_name != f"{project}-{version}.tar.gz":
-        raise ReleaseError(
-            "Manifest source archive name does not match project/version."
-        )
-    return cast(ReleaseManifest, value)
+def _normalize(value: str) -> str:
+    return re.sub(r"[-_.]+", "_", value).lower()
 
 
-def _manifest(directory: Path, identity: Identity) -> ReleaseManifest:
-    path = directory / "release-manifest.json"
+def _project() -> tuple[str, str]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        with Path("pyproject.toml").open("rb") as stream:
+            project = tomllib.load(stream)["project"]
+        name, version = project["name"], project["version"]
+    except (OSError, KeyError, TypeError, tomllib.TOMLDecodeError) as exc:
         raise ReleaseError(
-            "Prepared payload has no valid release-manifest.json."
+            "Cannot read project name and version from pyproject.toml."
         ) from exc
-    manifest = _manifest_record(value, identity)
-    for field in (
-        "application_wheel",
-        "source_archive",
-        "runtime_lock",
-        "runtime_constraints",
-    ):
-        entry = manifest[field]
-        candidate = directory / entry["filename"]
-        if not candidate.is_file() or candidate.is_symlink():
-            raise ReleaseError(f"Prepared payload is missing {entry['filename']}.")
-        if _sha256(candidate.read_bytes()) != entry["sha256"]:
-            raise ReleaseError(
-                f"Prepared payload digest mismatch for {entry['filename']}."
-            )
-    return manifest
+    if not isinstance(name, str) or not isinstance(version, str):
+        raise ReleaseError("Project name and version must be strings.")
+    return name, version
 
 
-def _basename(value: object, label: str) -> str:
+def _safe_member(value: str) -> PurePosixPath:
+    path = PurePosixPath(value)
     if (
-        not isinstance(value, str)
-        or not value
+        not value
+        or path.is_absolute()
+        or "\\" in value
+        or ".." in path.parts
+        or re.match(r"^[A-Za-z]:", value)
+    ):
+        raise ReleaseError(f"Unsafe archive member: {value!r}.")
+    return path
+
+
+def _basename(value: str, label: str) -> str:
+    if (
+        not value
         or value in (".", "..")
         or Path(value).name != value
         or "/" in value
@@ -420,201 +294,121 @@ def _basename(value: object, label: str) -> str:
     return value
 
 
-def _safe_member(value: str) -> PurePosixPath:
-    path = PurePosixPath(value)
-    if (
-        not value
-        or path.is_absolute()
-        or "\\" in value
-        or any(part in ("", ".", "..") for part in path.parts)
-        or re.match(r"^[A-Za-z]:", value)
-    ):
-        raise ReleaseError(f"Unsafe archive member: {value!r}.")
-    return path
-
-
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _expected_assets(manifest: ReleaseManifest) -> set[str]:
-    return {
-        manifest["application_wheel"]["filename"],
-        manifest["source_archive"]["filename"],
-        "runtime-requirements.txt",
-        "runtime-constraints.txt",
-        "release-manifest.json",
-        "release-notes.md",
-        "install-linux-macos.sh",
-        "install-windows.ps1",
-        "install_release.py",
-        *manifest["platforms"].values(),
-    }
+def _metadata_matches(data: bytes, name: str, version: str, filename: str) -> None:
+    from email.parser import BytesParser
+
+    metadata = BytesParser().parsebytes(data)
+    if (
+        _normalize(metadata.get("Name", "")) != _normalize(name)
+        or metadata.get("Version") != version
+    ):
+        raise ReleaseError(
+            f"Package metadata in {filename} does not match {name} {version}."
+        )
 
 
-def _archive_files(
-    filename: str,
-    data: bytes,
-    expected: set[str],
-    manifest: ReleaseManifest,
-    common: dict[str, bytes],
-) -> None:
-    platform = next(
-        (key for key, name in manifest["platforms"].items() if name == filename),
-        None,
-    )
-    if platform is None:
-        raise ReleaseError(f"Unexpected platform archive {filename}.")
-    root = f"{manifest['project']}-{manifest['version']}-{platform}/"
-    expected_files = set(manifest["archive_members"][platform])
-    if expected != expected_files:
+def _validate_package(path: Path, name: str, version: str) -> bytes:
+    if not path.is_file() or path.is_symlink():
         raise ReleaseError(
-            f"Archive file set for {platform} disagrees with its manifest."
+            f"Release asset {path.name} is missing or not a regular file."
         )
-    required = {
-        "release-manifest.json",
-        "runtime-requirements.txt",
-        "runtime-constraints.txt",
-        "install_release.py",
-    }
-    if not expected_files.issuperset(required):
-        raise ReleaseError(
-            f"Archive member list for {platform} omits common installer files."
-        )
-    allowed_directories = {
-        str(PurePosixPath(member).parent)
-        for member in expected_files
-        if PurePosixPath(member).parent != PurePosixPath(".")
-    }
-    observed: set[str] = set()
-    contents: dict[str, bytes] = {}
-    if filename.endswith(".zip"):
+    data = path.read_bytes()
+    if path.name.endswith(".whl"):
         try:
-            with zipfile.ZipFile(__import__("io").BytesIO(data)) as archive:
+            with zipfile.ZipFile(path) as archive:
+                names = set()
                 for item in archive.infolist():
-                    name = item.filename
-                    if name == root:
-                        continue
-                    if not name.startswith(root):
-                        raise ReleaseError("Archive contains an out-of-root member.")
-                    relative = name.removeprefix(root)
-                    if item.is_dir():
-                        directory = relative.rstrip("/")
-                        _safe_member(directory)
-                        if directory not in allowed_directories:
-                            raise ReleaseError(
-                                "Archive contains an unnecessary directory."
-                            )
-                        continue
-                    _safe_member(relative)
+                    _safe_member(item.filename.rstrip("/"))
                     mode = item.external_attr >> 16
                     if mode & 0o170000 == 0o120000:
-                        raise ReleaseError("Archive contains a symbolic link.")
-                    if relative in observed:
-                        raise ReleaseError("Archive contains duplicate members.")
-                    observed.add(relative)
-                    contents[relative] = archive.read(item)
+                        raise ReleaseError(
+                            f"Wheel {path.name} contains a symbolic link."
+                        )
+                    if item.filename in names:
+                        raise ReleaseError(f"Wheel {path.name} has duplicate members.")
+                    names.add(item.filename)
+                metadata_names = [
+                    item for item in names if item.endswith(".dist-info/METADATA")
+                ]
+                if len(metadata_names) != 1:
+                    raise ReleaseError(
+                        f"Wheel {path.name} must contain one METADATA file."
+                    )
+                _metadata_matches(
+                    archive.read(metadata_names[0]), name, version, path.name
+                )
         except (OSError, zipfile.BadZipFile) as exc:
-            raise ReleaseError(f"Invalid ZIP archive {filename}.") from exc
+            raise ReleaseError(f"Invalid wheel {path.name}.") from exc
+        normalized = _normalize(path.name[:-4])
+        if not normalized.startswith(f"{_normalize(name)}_{_normalize(version)}_"):
+            raise ReleaseError(
+                f"Wheel filename {path.name} does not match project/version."
+            )
     else:
         import io
         import tarfile
 
+        stem = path.name.removesuffix(".tar.gz")
+        if not stem.endswith("-" + version) or _normalize(
+            stem[: -(len(version) + 1)]
+        ) != _normalize(name):
+            raise ReleaseError(
+                f"Source archive filename {path.name} does not match project/version."
+            )
         try:
             with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
-                for item in archive.getmembers():
-                    name = item.name
-                    if name.rstrip("/") == root.rstrip("/"):
-                        if not item.isdir():
-                            raise ReleaseError("Archive root is not a directory.")
-                        continue
-                    if not name.startswith(root):
-                        raise ReleaseError("Archive contains an out-of-root member.")
-                    relative = name.removeprefix(root).rstrip("/")
-                    _safe_member(relative)
-                    if item.isdir():
-                        if relative not in allowed_directories:
-                            raise ReleaseError(
-                                "Archive contains an unnecessary directory."
-                            )
-                        continue
-                    if not item.isfile() or relative in observed:
+                roots: set[str] = set()
+                metadata = []
+                for member in archive.getmembers():
+                    safe = _safe_member(member.name)
+                    roots.add(safe.parts[0])
+                    if (
+                        member.issym()
+                        or member.islnk()
+                        or not (member.isfile() or member.isdir())
+                    ):
                         raise ReleaseError(
-                            "Archive contains a link, duplicate, or special member."
+                            f"Source archive {path.name} contains a link or special file."
                         )
-                    observed.add(relative)
-                    stream = archive.extractfile(item)
-                    if stream is None:
-                        raise ReleaseError(f"Cannot read archive member {relative}.")
-                    contents[relative] = stream.read()
+                    if len(safe.parts) == 2 and safe.parts[1] == "PKG-INFO":
+                        stream = archive.extractfile(member)
+                        if stream is None:
+                            raise ReleaseError(
+                                f"Cannot read PKG-INFO from {path.name}."
+                            )
+                        metadata.append(stream.read())
+                if len(roots) != 1 or len(metadata) != 1:
+                    raise ReleaseError(
+                        f"Source archive {path.name} must have one root and one PKG-INFO."
+                    )
+                _metadata_matches(metadata[0], name, version, path.name)
         except (OSError, tarfile.TarError) as exc:
-            raise ReleaseError(f"Invalid tar archive {filename}.") from exc
-    if observed != expected_files:
-        raise ReleaseError(f"Archive members for {platform} differ from its manifest.")
-    for name in required:
-        if contents.get(name) != common[name]:
-            raise ReleaseError(f"Archive {filename} embeds stale {name}.")
-    bootstrap_name = {
-        "windows-x86_64": "install-windows.ps1",
-        "linux-x86_64": "install-linux-macos.sh",
-        "macos-arm64": "install-linux-macos.sh",
-    }[platform]
-    if bootstrap_name not in expected_files or bootstrap_name not in common:
-        raise ReleaseError(f"Archive {filename} omits its canonical bootstrap.")
-    matches = [
-        contents[path]
-        for path in expected_files
-        if PurePosixPath(path).name == bootstrap_name
-    ]
-    if len(matches) != 1 or matches[0] != common[bootstrap_name]:
-        raise ReleaseError(f"Archive {filename} has a mismatched {bootstrap_name}.")
+            raise ReleaseError(f"Invalid source archive {path.name}.") from exc
+    return data
 
 
 def _validate_local_files(
-    directory: Path,
-    names: list[str],
-    identity: Identity,
-) -> tuple[ReleaseManifest, dict[str, bytes]]:
-    if not names or len(names) != len(set(names)):
-        raise ReleaseError("Provide a nonempty, duplicate-free file list.")
-    manifest = _manifest(directory, identity)
-    allowed = _expected_assets(manifest)
-    for name in names:
-        _basename(name, "Upload filename")
-        if name not in allowed:
-            raise ReleaseError(
-                f"Asset {name} is not in the manifest-derived allowlist."
-            )
-    files: dict[str, bytes] = {}
-    for name in names:
-        path = directory / name
-        if not path.is_file() or path.is_symlink():
-            raise ReleaseError(f"Asset {name} is missing or not a regular file.")
-        files[name] = path.read_bytes()
-    common: dict[str, bytes] = {}
-    for name in COMMON_NAMES:
-        path = directory / name
-        if path.is_file() and not path.is_symlink():
-            common[name] = path.read_bytes()
-    required_common = set(COMMON_NAMES) - {"release-notes.md"}
-    missing_common = sorted(required_common - common.keys())
-    if missing_common:
-        raise ReleaseError(
-            f"Prepared payload is missing common assets: {', '.join(missing_common)}."
-        )
-    for name in manifest["platforms"].values():
-        if name in files:
-            platform = next(
-                key for key, value in manifest["platforms"].items() if value == name
-            )
-            _archive_files(
-                name,
-                files[name],
-                set(manifest["archive_members"][platform]),
-                manifest,
-                common,
-            )
-    return manifest, files
+    directory: Path, names: list[str], identity: Identity
+) -> dict[str, bytes]:
+    if len(names) != 2 or len(names) != len(set(names)):
+        raise ReleaseError("Upload exactly one wheel and one source archive.")
+    for filename in names:
+        _basename(filename, "Upload filename")
+    name, version = _project()
+    if identity.tag != f"v{version}":
+        raise ReleaseError("Project version does not match the release tag.")
+    normalized = _normalize(name)
+    wheels = [item for item in names if item.endswith(".whl")]
+    sdists = [item for item in names if item.endswith(".tar.gz")]
+    if len(wheels) != 1 or len(sdists) != 1:
+        raise ReleaseError("Upload exactly one wheel and one source archive.")
+    if _normalize(sdists[0][:-7].removesuffix("-" + version)) != normalized:
+        raise ReleaseError("Source archive filename does not match project/version.")
+    return {item: _validate_package(directory / item, name, version) for item in names}
 
 
 def _asset_bytes(api: Api, identity: Identity, asset: dict[str, object]) -> bytes:
@@ -696,16 +490,8 @@ def prepare(
     identity = Identity(_repository(repository), _tag(tag), _sha(commit))
     if not notes.is_file() or notes.is_symlink():
         raise ReleaseError("Release notes must be a regular file.")
+    distribution, current_version = _project()
     version = identity.tag[1:]
-    try:
-        with Path("pyproject.toml").open("rb") as stream:
-            project = tomllib.load(stream)["project"]
-        distribution = project["name"]
-        current_version = project["version"]
-    except (OSError, KeyError, TypeError, tomllib.TOMLDecodeError) as exc:
-        raise ReleaseError(
-            "Cannot read project name and version from pyproject.toml."
-        ) from exc
     validate_tag_version(identity.tag, current_version)
     _tag_commit(api, identity)
     try:
@@ -739,156 +525,41 @@ def upload(
 ) -> None:
     identity = Identity(_repository(repository), _tag(tag), _sha(commit))
     _tag_commit(api, identity)
-    manifest, files = _validate_local_files(directory, names, identity)
+    files = _validate_local_files(directory, names, identity)
     release = _release(api, identity)
-    for name in names:
-        if name in _expected_assets(manifest):
-            _sync_asset(api, identity, release, name, files[name])
-            release = _release(api, identity)
-
-
-def fetch(
-    api: Api,
-    repository: str,
-    tag: str,
-    commit: str,
-    directory: Path,
-    names: list[str],
-) -> None:
-    """Download selected allowlisted assets from the exact validated draft."""
-    identity = Identity(_repository(repository), _tag(tag), _sha(commit))
-    _tag_commit(api, identity)
-    release = _release(api, identity)
-    assets = _assets(release)
-    manifest_asset = assets.get("release-manifest.json")
-    if manifest_asset is None:
-        raise ReleaseError("Draft has no release manifest.")
-    try:
-        manifest_data = _asset_bytes(api, identity, manifest_asset)
-        manifest = _manifest_record(json.loads(manifest_data), identity)
-    except json.JSONDecodeError as exc:
-        raise ReleaseError("Draft release manifest is invalid.") from exc
-    allowed = _expected_assets(manifest)
-    if not names or len(names) != len(set(names)):
-        raise ReleaseError("Fetch file list must be nonempty and duplicate-free.")
-    for name in names:
-        _basename(name, "Fetch filename")
-        if name not in allowed:
-            raise ReleaseError(
-                f"Asset {name} is not in the manifest-derived allowlist."
-            )
-        if name not in assets:
-            raise ReleaseError(f"Draft is missing asset {name}.")
-    wheel_name = manifest["application_wheel"]["filename"]
-    if wheel_name in names and not {
-        "runtime-requirements.txt",
-        "runtime-constraints.txt",
-    }.issubset(names):
+    existing = _assets(release)
+    if set(existing) - set(files):
         raise ReleaseError(
-            "Fetch runtime requirements and constraints before the application wheel."
+            "Draft contains unexpected assets; refusing to replace or delete them."
         )
-    ordered = sorted(
-        names,
-        key=lambda name: (
-            0
-            if name
-            in (
-                "runtime-requirements.txt",
-                "runtime-constraints.txt",
-                "install_release.py",
-                "install-linux-macos.sh",
-                "install-windows.ps1",
-            )
-            else 1,
-            name,
-        ),
-    )
-    downloaded = {"release-manifest.json": manifest_data}
-    for name in ordered:
-        data = _asset_bytes(api, identity, assets[name])
-        record = next(
-            (
-                manifest[field]
-                for field in (
-                    "application_wheel",
-                    "source_archive",
-                    "runtime_lock",
-                    "runtime_constraints",
-                )
-                if manifest[field]["filename"] == name
-            ),
-            None,
-        )
-        if record is not None and _sha256(data) != record["sha256"]:
-            raise ReleaseError(f"Release asset digest mismatch for {name}.")
-        downloaded[name] = data
-    for name in downloaded:
-        destination = directory / name
-        if destination.exists() and destination.is_symlink():
-            raise ReleaseError(f"Refusing to overwrite symlink {destination}.")
-    directory.mkdir(parents=True, exist_ok=True)
-    for name, data in downloaded.items():
-        (directory / name).write_bytes(data)
+    for name, data in files.items():
+        _sync_asset(api, identity, release, name, data)
+        release = _release(api, identity)
 
 
 def finalize(api: Api, repository: str, tag: str, commit: str) -> None:
-    """Validate the complete staged asset set, write checksums, then publish."""
+    """Validate exactly one wheel and sdist, then publish the checked draft."""
     identity = Identity(_repository(repository), _tag(tag), _sha(commit))
     _tag_commit(api, identity)
     release = _release(api, identity)
     assets = _assets(release)
-    manifest_asset = assets.get("release-manifest.json")
-    if manifest_asset is None:
-        raise ReleaseError("Draft release has no manifest.")
-    try:
-        manifest_data = _asset_bytes(api, identity, manifest_asset)
-        manifest = _manifest_record(json.loads(manifest_data), identity)
-    except json.JSONDecodeError as exc:
-        raise ReleaseError("Draft manifest is invalid JSON.") from exc
-    allowed = _expected_assets(manifest)
-    actual_underlying = set(assets) - {"SHA256SUMS"}
-    if actual_underlying != allowed:
-        missing = sorted(allowed - actual_underlying)
-        extra = sorted(actual_underlying - allowed)
+    names = set(assets)
+    if (
+        len(names) != 2
+        or sum(name.endswith(".whl") for name in names) != 1
+        or sum(name.endswith(".tar.gz") for name in names) != 1
+    ):
         raise ReleaseError(
-            f"Draft asset set is incomplete or unexpected (missing={missing}, extra={extra})."
+            "Draft must contain exactly one wheel and one source archive."
         )
-    downloaded = {
-        name: _asset_bytes(api, identity, assets[name]) for name in sorted(allowed)
-    }
-    if downloaded["release-manifest.json"] != manifest_data:
-        raise ReleaseError("Release manifest changed during finalization.")
-    with __import__("tempfile").TemporaryDirectory(
-        prefix="buildben-release-finalize-"
-    ) as temp:
+    with tempfile.TemporaryDirectory(prefix="buildben-release-finalize-") as temp:
         directory = Path(temp)
-        for name, data in downloaded.items():
-            (directory / name).write_bytes(data)
-        validated = _manifest(directory, identity)
-        common = {name: downloaded[name] for name in COMMON_NAMES}
-        for archive_name in validated["platforms"].values():
-            platform = next(
-                key
-                for key, value in validated["platforms"].items()
-                if value == archive_name
-            )
-            _archive_files(
-                archive_name,
-                downloaded[archive_name],
-                set(validated["archive_members"][platform]),
-                validated,
-                common,
-            )
-        checksum = "".join(
-            f"{_sha256(downloaded[name])}  {name}\n" for name in sorted(allowed)
-        ).encode("utf-8")
-    _sync_asset(api, identity, release, "SHA256SUMS", checksum)
-    release = _release(api, identity)
-    assets = _assets(release)
-    if set(assets) != allowed | {"SHA256SUMS"}:
-        raise ReleaseError("Draft asset set changed during finalization.")
-    if _asset_bytes(api, identity, assets["SHA256SUMS"]) != checksum:
-        raise ReleaseError("Published checksum asset does not match validated payload.")
+        for name, asset in assets.items():
+            _basename(name, "GitHub asset name")
+            (directory / name).write_bytes(_asset_bytes(api, identity, asset))
+        files = _validate_local_files(directory, sorted(names), identity)
+        if set(files) != names:
+            raise ReleaseError("Draft asset set changed during finalization.")
     _tag_commit(api, identity)
     api.request(
         "PATCH",
@@ -992,13 +663,12 @@ def _parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("--tag", required=True)
     prepare_parser.add_argument("--commit", required=True)
     prepare_parser.add_argument("--notes", type=Path, required=True)
-    for verb in ("upload", "fetch"):
-        item = subparsers.add_parser(verb)
-        item.add_argument("--repository", required=True)
-        item.add_argument("--tag", required=True)
-        item.add_argument("--commit", required=True)
-        item.add_argument("--directory", type=Path, required=True)
-        item.add_argument("--files", nargs="+", required=True)
+    item = subparsers.add_parser("upload")
+    item.add_argument("--repository", required=True)
+    item.add_argument("--tag", required=True)
+    item.add_argument("--commit", required=True)
+    item.add_argument("--directory", type=Path, required=True)
+    item.add_argument("--files", nargs="+", required=True)
     for verb in ("finalize", "wait-ci"):
         item = subparsers.add_parser(verb)
         item.add_argument("--repository", required=True)
@@ -1018,15 +688,6 @@ def main(argv: list[str] | None = None, *, api: Api | None = None) -> int:
             print(f"Prepared draft release {args.tag} (id {_release_id(release)}).")
         elif args.command == "upload":
             upload(
-                client,
-                args.repository,
-                args.tag,
-                args.commit,
-                args.directory,
-                args.files,
-            )
-        elif args.command == "fetch":
-            fetch(
                 client,
                 args.repository,
                 args.tag,

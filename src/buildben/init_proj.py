@@ -168,6 +168,7 @@ def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path
         / f"{name}_dev"
         / "packaging"
         / "install_smoke.py",
+        "_MANIFEST.in": project_root / "MANIFEST.in",
         "_src-dev-distribution-install-linux-macos.sh": project_root
         / "src"
         / f"{name}_dev"
@@ -188,21 +189,11 @@ def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path
         / f"{name}_dev"
         / "distribution"
         / "prepare-powershell-windows.cmd",
-        "_src-dev-packaging-installation_bundle.py.tmpl": project_root
-        / "src"
-        / f"{name}_dev"
-        / "packaging"
-        / "installation_bundle.py",
         "_src-dev-packaging-release_assets.py.tmpl": project_root
         / "src"
         / f"{name}_dev"
         / "packaging"
         / "release_assets.py",
-        "_src-dev-distribution-install_release.py.tmpl": project_root
-        / "src"
-        / f"{name}_dev"
-        / "distribution"
-        / "install_release.py",
         "_src-dev-distribution-install-macos.command": project_root
         / "src"
         / f"{name}_dev"

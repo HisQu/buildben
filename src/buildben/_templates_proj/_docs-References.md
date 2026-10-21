@@ -78,31 +78,33 @@ before starting its installer.
 | `prepare-powershell-windows.cmd` | Handles RemoteSigned policy and downloaded-file marks for the Windows entry point. |
 | `install-macos.command` | macOS double-click wrapper that forwards to the Bash installer. |
 
-Both installers use the public release bootstrap for the ordinary installation.
-Until the first thin release payload is published, use the explicit developer
-modes below; the new release payload is upcoming and is not available from
-published releases yet.
+The scripts fetch their installer from the repository's default branch, then
+resolve a published stable release. The default transport downloads public
+release assets anonymously: curl on Unix and native PowerShell HTTP on Windows.
+Use `--github-client gh` to request GitHub resources with the authenticated
+GitHub CLI; a failed gh request is not retried anonymously. Install
+[GitHub CLI](https://cli.github.com/), then run `gh auth login` and
+`gh auth setup-git` when authenticated GitHub or private VCS access is needed.
+Public release downloads and curl do not inherit gh credentials.
 
 | Option | Effect |
 | --- | --- |
-| *(no mode)* | Install the latest published non-prerelease release when its thin payload is available. |
-| `--git` | Install the `main` branch from Git. Use this during the paused-release interval. |
-| `--dev [PATH]` | Run `uv sync` in an existing cloned repository; `PATH` defaults to the current directory. |
-| `--version VERSION` | Select a release version, adding a leading `v` when needed. |
+| *(no version option)* | Install the latest published non-prerelease release source archive. |
+| `--version VERSION` | Select a stable release version, accepting `X.Y.Z` or `vX.Y.Z`. |
+| `--github-client curl` | Use anonymous public download transport (the default); Windows uses native PowerShell HTTP. |
+| `--github-client gh` | Use authenticated GitHub CLI requests without anonymous fallback. |
 | `--uv PATH` | Use a specific uv executable. |
 | `--yes` | Skip the installer confirmation. |
 | `--skip-config` | Skip `{my_project} config setup` after installation. |
 | `--help` | Print the supported options. |
 
-The released installer consumes a thin platform archive containing the
-application wheel, release manifest, and lock-derived runtime requirement and
-constraint exports. It installs the verified wheel with `uv tool install`,
-resolving runtime dependencies online under those locked constraints. It does
-not download or install a wheelhouse. An old published release without the
-thin payload cannot be installed through the release bootstrap; use `--git` or
-`--dev [PATH]` until a new payload is published. The generated release workflow
-has one normal full CI gate for the exact tagged commit; release preparation
-does not rerun that full gate locally.
+The release contains one standard wheel and one source archive. The installer
+selects the matching source archive, requires its `pyproject.toml` and `uv.lock`,
+exports the locked runtime requirements, and installs it with `uv tool
+install`. A legacy source archive without `uv.lock` fails explicitly rather
+than falling back to Git or another version. The normal release workflow reuses
+one successful full CI gate for the exact tagged commit; it does not build
+platform-specific installer archives.
 
 ## Storage commands
 
