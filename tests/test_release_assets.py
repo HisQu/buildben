@@ -25,6 +25,9 @@ class StatefulReleaseApi:
     def __init__(self) -> None:
         self.commit = COMMIT
         self.release: dict[str, object] | None = None
+        self.preceding_releases: list[dict[str, object]] = []
+        self.release_list_error: str | None = None
+        self.malformed_release_list_page = False
         self.assets: dict[int, tuple[str, bytes]] = {}
         self.next_asset_id = 1
         self.created_release_count = 0
@@ -52,9 +55,22 @@ class StatefulReleaseApi:
         if path.endswith("/git/tags/" + TAG_OBJECT):
             return self._json({"object": {"type": "commit", "sha": self.commit}})
         if path.endswith("/releases/tags/" + TAG):
-            if self.release is None:
+            if self.release is None or self.release.get("draft") is True:
                 raise release_assets.ReleaseError("HTTP 404: Not Found")
             return self._json(self._release_payload())
+        if path.endswith("/releases") and method == "GET":
+            if self.release_list_error is not None:
+                raise release_assets.ReleaseError(self.release_list_error)
+            if self.malformed_release_list_page:
+                return self._json({"releases": []})
+            query = parse_qs(parsed.query)
+            per_page = int(query["per_page"][0])
+            page = int(query["page"][0])
+            releases = [*self.preceding_releases]
+            if self.release is not None:
+                releases.append(self._release_payload())
+            start = (page - 1) * per_page
+            return self._json(releases[start : start + per_page])
         if path.endswith("/actions/workflows/ci.yml/runs"):
             self.ci_queries += 1
             return self._json({"workflow_runs": self.ci_runs})
@@ -299,6 +315,135 @@ def test_upload_retry_reuses_identical_assets_and_finalizes_complete_draft(
         )
     ).encode()
     assert checksum == expected_lines
+
+
+def test_prepare_reuses_and_uploads_draft_when_by_tag_lookup_is_published_only(
+    tmp_path: Path,
+) -> None:
+    payload = tmp_path / "payload"
+    payload.mkdir()
+    names = _prepared_payload(payload)
+    api = StatefulReleaseApi()
+    api.release = {
+        "id": 22,
+        "tag_name": TAG,
+        "target_commitish": COMMIT,
+        "draft": True,
+        "prerelease": False,
+        "body": "Existing draft",
+    }
+    notes = tmp_path / "release-notes.md"
+    notes.write_text("Release notes\n", encoding="utf-8")
+
+    release = release_assets.prepare(api, "HisQu/buildben", TAG, COMMIT, notes)
+    release_assets.upload(api, "HisQu/buildben", TAG, COMMIT, payload, names)
+
+    assert release["id"] == 22
+    assert api.created_release_count == 0
+    assert api.release is not None and api.release["draft"] is True
+    assert {name for name, _data in api.assets.values()} == set(names)
+
+
+def test_prepare_finds_matching_draft_after_first_release_page(
+    tmp_path: Path,
+) -> None:
+    notes = tmp_path / "release-notes.md"
+    notes.write_text("Release notes\n", encoding="utf-8")
+    api = StatefulReleaseApi()
+    api.preceding_releases = [
+        {"id": 100 + index, "tag_name": f"v1.0.{index}"} for index in range(100)
+    ]
+    api.release = {
+        "id": 22,
+        "tag_name": TAG,
+        "target_commitish": COMMIT,
+        "draft": True,
+        "prerelease": False,
+        "body": "Existing draft",
+    }
+
+    release = release_assets.prepare(api, "HisQu/buildben", TAG, COMMIT, notes)
+
+    assert release["id"] == 22
+    assert api.created_release_count == 0
+
+
+def test_prepare_does_not_create_draft_when_release_listing_fails(
+    tmp_path: Path,
+) -> None:
+    notes = tmp_path / "release-notes.md"
+    notes.write_text("Release notes\n", encoding="utf-8")
+    api = StatefulReleaseApi()
+    api.release_list_error = "HTTP 403: Resource not accessible"
+
+    with pytest.raises(release_assets.ReleaseError, match="403"):
+        release_assets.prepare(api, "HisQu/buildben", TAG, COMMIT, notes)
+
+    assert api.created_release_count == 0
+    assert api.release is None
+
+
+def test_prepare_rejects_malformed_release_listing_without_creation(
+    tmp_path: Path,
+) -> None:
+    notes = tmp_path / "release-notes.md"
+    notes.write_text("Release notes\n", encoding="utf-8")
+    api = StatefulReleaseApi()
+    api.malformed_release_list_page = True
+
+    with pytest.raises(release_assets.ReleaseError, match="listing page is malformed"):
+        release_assets.prepare(api, "HisQu/buildben", TAG, COMMIT, notes)
+
+    assert api.created_release_count == 0
+    assert api.release is None
+
+
+def test_prepare_rejects_ambiguous_matching_releases_without_mutation(
+    tmp_path: Path,
+) -> None:
+    notes = tmp_path / "release-notes.md"
+    notes.write_text("Release notes\n", encoding="utf-8")
+    api = StatefulReleaseApi()
+    api.preceding_releases = [{"id": 23, "tag_name": TAG}]
+    api.release = {
+        "id": 22,
+        "tag_name": TAG,
+        "target_commitish": COMMIT,
+        "draft": True,
+        "prerelease": False,
+        "body": "Existing draft",
+    }
+
+    with pytest.raises(release_assets.ReleaseError, match="ambiguously identifies"):
+        release_assets.prepare(api, "HisQu/buildben", TAG, COMMIT, notes)
+
+    assert api.created_release_count == 0
+    assert api.release is not None
+    assert api.release["draft"] is True
+    assert api.release["body"] == "Existing draft"
+
+
+def test_prepare_rejects_published_matching_release_without_mutation(
+    tmp_path: Path,
+) -> None:
+    notes = tmp_path / "release-notes.md"
+    notes.write_text("Release notes\n", encoding="utf-8")
+    api = StatefulReleaseApi()
+    api.release = {
+        "id": 22,
+        "tag_name": TAG,
+        "target_commitish": COMMIT,
+        "draft": False,
+        "prerelease": False,
+        "body": "Published release",
+    }
+    with pytest.raises(release_assets.ReleaseError, match="published"):
+        release_assets.prepare(api, "HisQu/buildben", TAG, COMMIT, notes)
+
+    assert api.created_release_count == 0
+    assert api.release is not None
+    assert api.release["draft"] is False
+    assert api.release["body"] == "Published release"
 
 
 def test_upload_rejects_bytes_that_github_does_not_retain(tmp_path: Path) -> None:
