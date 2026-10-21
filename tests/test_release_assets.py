@@ -5,9 +5,12 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import shutil
 import tarfile
+import threading
 import tomllib
 import zipfile
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -767,3 +770,99 @@ def test_upload_retry_verifies_identical_bytes_without_digest_metadata(
     assert api.asset_downloads > first_download_count
     assert api.deleted_asset_names == []
     assert len(api.assets) == len(names)
+
+
+def test_gh_upload_sends_length_and_preserves_binary_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    if shutil.which("gh") is None:
+        pytest.skip("gh executable is unavailable")
+
+    payload = bytes(range(256)) * 4
+    received: list[bytes] = []
+    received_headers: list[tuple[list[str], str | None]] = []
+    ref_path = f"/repos/HisQu/buildben/git/ref/tags/{TAG}"
+    tag_path = f"/repos/HisQu/buildben/git/tags/{TAG_OBJECT}"
+
+    class StrictHandler(BaseHTTPRequestHandler):
+        def log_message(self, format: str, *args: object) -> None:
+            return
+
+        def _send_json(self, status: int, value: object) -> None:
+            body = json.dumps(value).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self) -> None:
+            path = urlsplit(self.path).path
+            if path == ref_path:
+                self._send_json(200, {"object": {"type": "tag", "sha": TAG_OBJECT}})
+            elif path == tag_path:
+                self._send_json(200, {"object": {"type": "commit", "sha": COMMIT}})
+            else:
+                self.send_error(404)
+
+        def do_POST(self) -> None:
+            lengths = self.headers.get_all("Content-Length", [])
+            transfer_encoding = self.headers.get("Transfer-Encoding")
+            received_headers.append((lengths, transfer_encoding))
+            if (
+                len(lengths) != 1
+                or lengths[0] != str(len(payload))
+                or transfer_encoding is not None
+            ):
+                self.send_error(400, "Bad Content-Length")
+                return
+            body = self.rfile.read(int(lengths[0]))
+            if body != payload:
+                self.send_error(400, "Binary payload mismatch")
+                return
+            received.append(body)
+            self._send_json(201, {"name": "binary-payload.bin"})
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), StrictHandler)
+    server.daemon_threads = True
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    config_dir = tmp_path / "gh-config"
+    config_dir.mkdir()
+    monkeypatch.setenv("GH_CONFIG_DIR", str(config_dir))
+    monkeypatch.setenv("GH_TOKEN", "dummy-github-token")
+    monkeypatch.setenv("GH_ENTERPRISE_TOKEN", "dummy-enterprise-token")
+    monkeypatch.setenv("GH_NO_UPDATE_NOTIFIER", "1")
+
+    class LoopbackGitHubApi(release_assets.GitHubApi):
+        def request(
+            self,
+            method: str,
+            endpoint: str,
+            *,
+            data: bytes | None = None,
+            headers: tuple[str, ...] = (),
+        ) -> bytes:
+            parsed = urlsplit(endpoint)
+            local_endpoint = (
+                f"http://127.0.0.1:{server.server_port}/{parsed.path.lstrip('/')}"
+            )
+            if parsed.query:
+                local_endpoint += f"?{parsed.query}"
+            return super().request(method, local_endpoint, data=data, headers=headers)
+
+    thread.start()
+    try:
+        release_assets._upload(
+            LoopbackGitHubApi(),
+            release_assets.Identity("HisQu/buildben", TAG, COMMIT),
+            22,
+            "binary-payload.bin",
+            payload,
+        )
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+
+    assert received_headers == [([str(len(payload))], None)]
+    assert received == [payload]
