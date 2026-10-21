@@ -74,21 +74,27 @@ jobs:
           - runner: windows-latest
             python-version: "3.12"
             target: windows-x86_64
+            installer-client: curl
           - runner: windows-latest
             python-version: "3.13"
             target: windows-x86_64
+            installer-client: gh
           - runner: ubuntu-latest
             python-version: "3.12"
             target: linux-x86_64
+            installer-client: curl
           - runner: ubuntu-latest
             python-version: "3.13"
             target: linux-x86_64
+            installer-client: gh
           - runner: macos-14
             python-version: "3.12"
             target: macos-arm64
+            installer-client: curl
           - runner: macos-14
             python-version: "3.13"
             target: macos-arm64
+            installer-client: gh
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -103,8 +109,8 @@ jobs:
           just-version: "1.56.0"
       - name: Install project from uv.lock
         run: uv sync --locked --all-extras --all-groups
-      - name: Build and install the local thin payload
+      - name: Run source-installer consumer smoke
         env:
-          RELEASE_REPOSITORY: HisQu/buildben
-          RELEASE_TARGET: ${{ matrix.target }}
+          GH_TOKEN: ${{ github.token }}
+          INSTALLER_SMOKE_CLIENT: ${{ matrix.installer-client }}
         run: just release-install-smoke

@@ -233,14 +233,11 @@ just release patch
 > GitHub Actions.
 
 The tag workflow reuses one successful full `ci.yml` run for the exact tagged
-commit rather than running a second full test matrix. It prepares thin
-platform archives from the committed lock's runtime exports, validates the
-wheel and sdist, and publishes release assets only after the required build
-and platform installation checks pass. The public bootstrap consumes those
-assets once a new release payload has been published. Existing published
-releases do not yet contain this payload, so during the paused-release
-interval users should install from Git with `--git` or synchronize a checkout
-with `--dev [PATH]`; do not direct users to install from a legacy release.
+commit rather than repeating the full source matrix. It builds and validates
+one wheel and source archive, then publishes only those two assets with release
+notes in the GitHub release body. Normal CI exercises the source installer on
+all six native OS/Python cells; the release job performs one Python 3.12 wheel
+installation smoke and does not build platform installers.
 
 `just build-release-inputs` accepts an optional positional path to already
 validated release notes:

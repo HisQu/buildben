@@ -57,7 +57,7 @@ actual application behavior is implemented.
 | [ConfigManager](Explanations.md#configuration-tools) | `APP_RC.manage()` | Shared operations for setup, inspection, editing, and storage management. |
 | [Config CLI](Explanations.md#configuration-tools) | `{my_project} config ...` | Configuration commands mounted on the application. |
 | [Config editor](Explanations.md#configuration-tools) | `{my_project} config edit` | Terminal interface for inspecting layers and editing saved overrides. |
-| [Installers](References.md#installer-reference) | `src/{my_project}_dev/distribution` | Public release bootstrap, with explicit Git checkout and cloned-repository developer modes. |
+| [Installers](References.md#installer-reference) | `src/{my_project}_dev/distribution` | Canonical stable-release source installers with public and authenticated transports. |
 
 ## Documentation rules
 
@@ -67,11 +67,11 @@ package descriptions. Contributors and coding agents must follow them.
 ### Installation instructions
 
 - Keep the root README concise and put installation before usage. Under `Installation`, put the H3 heading `One-line install` before `Install from a cloned repository`. Under each, label platform commands with `For Linux & macOS` and `For Windows` headings.
-- The public one-line bootstrap downloads its installer through curl on Unix or PowerShell on Windows and does not require GitHub CLI. Git is required for the explicit `--git` mode. Do not require `gh` or authenticated GitHub CLI for generated public projects.
-- Stop on a failed or empty installer fetch before executing any response. Unix examples must guard execution on a successful, nonempty curl response; PowerShell examples must reject failed or empty downloads before running the downloaded script.
+- The public one-line bootstrap downloads the canonical installer from the repository's default branch and does not require GitHub CLI. Unix uses curl; Windows uses native PowerShell HTTP. An explicit `--github-client gh` uses authenticated GitHub CLI requests without fallback.
+- Link https://cli.github.com/ and document `gh auth login` and `gh auth setup-git` where authenticated access is needed. Private VCS dependencies require separate working Git credentials.
 - Cloned-repository instructions use `python -m venv` and `python -m pip install -e .`, so users can install without uv. Mention uv as optional.
-- The public release bootstrap will install thin archives made from lock-derived runtime exports once a new release payload is published. Until then, keep the bundle section commented out and direct users to explicit `--git` or `--dev` modes.
-- Keep platform installer code in `src/{my_project}_dev/distribution`; the root install scripts are thin shortcuts. See the [installer reference](References.md#installer-reference) for modes and options.
+- GitHub releases contain one standard wheel and one source archive; do not describe installer bundles, platform archives, manifests, or permanent runtime exports.
+- Keep platform installer code in `src/{my_project}_dev/distribution`; root install scripts are thin shortcuts. See the [installer reference](References.md#installer-reference) for options and transport behavior.
 
 ### Names and explanations
 

@@ -1,0 +1,23 @@
+include uv.lock
+include pylock.toml
+
+recursive-include src/buildben *
+recursive-include src/buildben_dev *
+
+prune INPUT
+prune OUTPUT
+prune .venv
+prune venv
+prune build
+prune dist
+prune logs
+prune .agent-sessions
+prune AGENT_SESSIONS
+prune .git
+prune .pytest_cache
+prune .ruff_cache
+prune __pycache__
+recursive-exclude * *.py[cod]
+recursive-exclude * *.log
+recursive-exclude tests *
+recursive-exclude assets *

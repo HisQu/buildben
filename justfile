@@ -289,12 +289,7 @@ _release-artifact-check notes_output build_only="false" notes_input="":
     fi
     notes_output="{{notes_output}}"
     notes_input={{quote(notes_input)}}
-    artifact_root="$(mktemp -d)"
-    smoke_root="$artifact_root/smoke"
-    smoke_script="$(realpath src/buildben_dev/packaging/install_smoke.py)"
-    mkdir -p "$smoke_root" "$(dirname "$notes_output")"
-    trap 'rm -rf "$artifact_root"' EXIT
-
+    mkdir -p "$(dirname "$notes_output")"
     rm -rf dist
     if [[ -n "$notes_input" ]]; then
         if [[ ! -f "$notes_input" ]]; then
@@ -305,7 +300,6 @@ _release-artifact-check notes_output build_only="false" notes_input="":
         if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
             PYTHONPATH=src python -c 'import sys; from buildben_dev.packaging.release_notes import validate_tag_version; validate_tag_version(*sys.argv[1:])' "$GITHUB_REF_NAME" "$version"
         fi
-        mkdir -p "$(dirname "$notes_output")"
         cp -- "$notes_input" "$notes_output"
     else
         python src/buildben_dev/packaging/release_notes.py "$version" "${identity_args[@]}" "${notes_args[@]}" --output "$notes_output"
@@ -326,22 +320,9 @@ _release-artifact-check notes_output build_only="false" notes_input="":
         echo "Expected sdist buildben-${version}.tar.gz, found ${sdists[0]}." >&2
         exit 1
     fi
-    wheel="$(realpath "${wheels[0]}")"
-    sdist="$(realpath "${sdists[0]}")"
-    uv run --with twine --no-project -- twine check "$wheel" "$sdist"
-    (
-        cd "$smoke_root"
-        for artifact in "$wheel" "$sdist"; do
-            for python_version in 3.12 3.13; do
-                artifact_path="$artifact"
-                if command -v cygpath >/dev/null 2>&1; then artifact_path="$(cygpath -m "$artifact")"; fi
-                artifact_uri="$(python -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve().as_uri())' "$artifact_path")"
-                uv run --isolated --python "$python_version" --with "buildben @ $artifact_uri" python "$smoke_script" --expected-version "$version"
-            done
-        done
-    )
+    uv run --with twine --no-project -- twine check "${wheels[0]}" "${sdists[0]}"
 
-# Build package and lock-derived inputs without running the full source matrix.
+# Build standard wheel and sdist once without running the full source matrix.
 [group('Release')]
 build-release-inputs notes_file="":
     #!/usr/bin/env bash
@@ -349,115 +330,39 @@ build-release-inputs notes_file="":
     just _check-uv
     uv lock --check
     just _release-artifact-check dist/release-notes.md true {{quote(notes_file)}}
-    commit="$(git rev-parse --verify --end-of-options 'HEAD^{commit}')"
-    PYTHONPATH=src python -m buildben_dev.packaging.installation_bundle prepare \
-        --repository "$RELEASE_REPOSITORY" --commit "$commit" --output-directory dist
 
-# Build the native thin archive from the prepared lock-derived payload.
-[group('Release')]
-build-installation-bundle:
+# Smoke one built wheel in an isolated Python 3.12 environment.
+release-wheel-smoke:
     #!/usr/bin/env bash
     set -euo pipefail
-    just build-release-inputs
-    PYTHONPATH=src python -m buildben_dev.packaging.installation_bundle archive \
-        --release-directory dist --output-directory dist
+    shopt -s nullglob
+    wheels=(dist/*.whl)
+    if [[ "${#wheels[@]}" -ne 1 ]]; then echo "Expected exactly one wheel in dist/." >&2; exit 1; fi
+    version="$(uv version --short)"
+    wheel="$(realpath "${wheels[0]}")"
+    artifact_uri="$(python -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve().as_uri())' "$wheel")"
+    smoke_script="$(realpath src/buildben_dev/packaging/install_smoke.py)"
+    smoke_root="$(mktemp -d)"
+    trap 'rm -rf "$smoke_root"' EXIT
+    (cd "$smoke_root"; uv run --isolated --python 3.12 --with "buildben @ $artifact_uri" python "$smoke_script" --expected-version "$version")
 
-# Exercise a local or already-staged archive through its native installer.
+# Run the opt-in source installer consumer test against a built sdist.
 [group('Release')]
 release-install-smoke:
     #!/usr/bin/env bash
     set -euo pipefail
-    repository="${RELEASE_REPOSITORY:?Set RELEASE_REPOSITORY to OWNER/REPO.}"
-    target="${RELEASE_TARGET:?Set RELEASE_TARGET to the native installation target.}"
-    smoke_root="$(mktemp -d)"
-    trap 'rm -rf "$smoke_root"' EXIT
-    payload_root="$smoke_root/payload with spaces"
-    export HOME="$smoke_root/home"
-    export XDG_CONFIG_HOME="$smoke_root/config"
-    export XDG_DATA_HOME="$smoke_root/data"
-    export XDG_CACHE_HOME="$smoke_root/cache"
-    export UV_CACHE_DIR="$smoke_root/uv-cache"
-    export UV_TOOL_DIR="$smoke_root/uv-tools"
-    export UV_TOOL_BIN_DIR="$smoke_root/uv-bin"
-    mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME" "$UV_TOOL_DIR" "$UV_TOOL_BIN_DIR" "$payload_root"
-    if [[ "$target" == windows-x86_64 ]]; then
-        export UV_TOOL_DIR="$(cygpath -m "$UV_TOOL_DIR")"
-        export UV_TOOL_BIN_DIR="$(cygpath -m "$UV_TOOL_BIN_DIR")"
-        export UV_CACHE_DIR="$(cygpath -m "$UV_CACHE_DIR")"
-    fi
-    config_sentinel="$XDG_CONFIG_HOME/buildben-sentinel"
-    data_sentinel="$XDG_DATA_HOME/buildben-sentinel"
-    printf 'preserve config\n' > "$config_sentinel"
-    printf 'preserve data\n' > "$data_sentinel"
-    archive="${RELEASE_ARCHIVE:-}"
-    if [[ -z "$archive" ]]; then
-        just build-installation-bundle
+    if [[ -z "${INSTALLER_SMOKE_SOURCE:-}" ]]; then
+        just build-release-inputs
         shopt -s nullglob
-        archives=(dist/*-"$target".zip dist/*-"$target".tar.gz)
-        if [[ "${#archives[@]}" -ne 1 ]]; then
-            echo "Expected one archive for ${target}, found ${#archives[@]}." >&2
-            exit 1
-        fi
-        archive="${archives[0]}"
+        sdists=(dist/*.tar.gz)
+        if [[ "${#sdists[@]}" -ne 1 ]]; then echo "Expected exactly one source archive in dist/." >&2; exit 1; fi
+        smoke_source="$(realpath "${sdists[0]}")"
+        if command -v cygpath >/dev/null 2>&1; then smoke_source="$(cygpath -m "$smoke_source")"; fi
+        export INSTALLER_SMOKE_SOURCE="$smoke_source"
     fi
-    archive_name="$(basename "$archive")"
-    if [[ "$archive_name" != *-"$target".zip && "$archive_name" != *-"$target".tar.gz ]]; then
-        echo "Archive ${archive_name} does not match target ${target}." >&2
-        exit 1
-    fi
-    if [[ ! -f "$archive" ]]; then
-        echo "Archive does not exist: ${archive}" >&2
-        exit 1
-    fi
-    if [[ "$archive" == *.zip ]]; then
-        unzip -q "$archive" -d "$payload_root"
-    else
-        tar -xzf "$archive" -C "$payload_root"
-    fi
-    bundle="$(find "$payload_root" -mindepth 1 -maxdepth 1 -type d -print -quit)"
-    wheel_name="$(python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["application_wheel"]["filename"])' "$bundle/release-manifest.json")"
-    if [[ ! "$wheel_name" =~ ^[A-Za-z0-9_.-]+\.whl$ || ! -f "dist/$wheel_name" ]]; then
-        echo "Release smoke requires the application wheel named by the archive manifest in dist/." >&2
-        exit 1
-    fi
-    cp -- "dist/$wheel_name" "$bundle/$wheel_name"
-    install_staged() {
-        case "$target" in
-            windows-x86_64)
-                (cd -- "$bundle"; MSYS_NO_PATHCONV=1 cmd.exe /d /c install-windows.cmd --yes)
-                ;;
-            linux-x86_64)
-                bash "$bundle/install-linux-macos.sh" --yes
-                ;;
-            macos-arm64)
-                bash "$bundle/install-macos.command" --yes
-                ;;
-            *)
-                echo "Unsupported installation target: ${target}." >&2
-                exit 1
-                ;;
-        esac
-    }
-    install_staged
-    if [[ "$target" == windows-x86_64 ]]; then
-        tool_bin="$(cygpath -u "$(uv tool dir --bin)")"
-    else
-        tool_bin="$UV_TOOL_BIN_DIR"
-    fi
-    if [[ "$target" == windows-x86_64 ]]; then
-        "$tool_bin/buildben.exe" --help
-        "$tool_bin/bube.exe" --help
-    else
-        "$tool_bin/buildben" --help
-        "$tool_bin/bube" --help
-    fi
-    install_staged
-    test "$(cat "$config_sentinel")" = "preserve config"
-    test "$(cat "$data_sentinel")" = "preserve data"
-    uv tool uninstall buildben
-    test "$(cat "$config_sentinel")" = "preserve config"
-    test "$(cat "$data_sentinel")" = "preserve data"
-    echo "Native ${target} thin archive installed, reinstalled, launched, and uninstalled successfully."
+    if [[ ! -f "$INSTALLER_SMOKE_SOURCE" ]]; then echo "Source archive does not exist: $INSTALLER_SMOKE_SOURCE" >&2; exit 1; fi
+    export INSTALLER_SMOKE_CLIENT="${INSTALLER_SMOKE_CLIENT:-curl}"
+    python -m pytest -n 0 tests/test_release_install.py -k source_install_smoke
 
 # Rehearse the complete local release gate without publishing anything.
 [group('Release')]

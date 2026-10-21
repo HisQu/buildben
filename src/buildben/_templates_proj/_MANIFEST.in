@@ -1,13 +1,22 @@
+include uv.lock
+include pylock.toml
 
-### include the same patterns so sdist ≃ wheel
+recursive-include src *
 
-### Inside src (Usually handled by pyproject.toml, still put it here)
-recursive-include src/<my_project>/data *.xlsx
-recursive-include src/<my_project>/images *.png *.jpg
-
-### Outside src (project root):
-include examples/*.ipynb
-include experiments/*.ipynb
-include config/*.ini
-
-# TODO: Explore tools that replace this, like hatchling or uv
+prune INPUT
+prune OUTPUT
+prune .venv
+prune venv
+prune build
+prune dist
+prune logs
+prune .agent-sessions
+prune AGENT_SESSIONS
+prune .git
+prune .pytest_cache
+prune .ruff_cache
+prune __pycache__
+recursive-exclude * *.py[cod]
+recursive-exclude * *.log
+recursive-exclude tests *
+recursive-exclude assets *

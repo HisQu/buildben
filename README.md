@@ -98,7 +98,7 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 
 ### 🏃Quick & Dirty:
 ```bash
-git clone https://github.com/markur4/buildben.git
+git clone https://github.com/HisQu/buildben.git
 cd buildben
 python -m pip install -e "."    # venv recommended
 ```
@@ -116,18 +116,39 @@ pipx ensurepath                   # Add pipx to PATH, if not already done
 pipx upgrade-all                  # !! Never run pipx with sudo !!
 ```
 -->
-#### 1. Install [`uv`](https://github.com/astral-sh/uv):
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
+### Install from a published source distribution
+
+The installer resolves the latest stable GitHub release and installs its source
+distribution. Public downloads do not require GitHub CLI.
+
+#### Linux & macOS
+
+```sh
+installer="$(curl -fsSL 'https://raw.githubusercontent.com/HisQu/buildben/main/src/buildben_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" --
 ```
 
-#### 2. Clone & install `buildben`:
-```bash
-git clone https://github.com/hisqu/buildben.git
-cd buildben         # Needed, `pipx install buildben` does NOT work!
-uv tool install -e . # Installs buildben in a dedicated venv managed by uv
+```sh
+installer="$(gh api -H 'Accept: application/vnd.github.raw+json' 'repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" -- --github-client gh
 ```
-<!-- pipx install -e .   # Editable for direct modifications. -->
+
+#### Windows
+
+```powershell
+$s = Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/HisQu/buildben/main/src/buildben_dev/distribution/install-windows.ps1'; if ([string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n")))
+```
+
+```powershell
+$s = gh api -H 'Accept: application/vnd.github.raw+json' 'repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-windows.ps1'; if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n"))) '--github-client' 'gh'
+```
+
+For authenticated access, install [GitHub CLI](https://cli.github.com/), then
+run `gh auth login` and `gh auth setup-git`. Public downloads use anonymous
+access; `curl` does not inherit gh credentials. Private VCS dependencies still
+need Git authentication independently of release visibility. BuildBen and
+generated applications do not require administrator privileges.
+
+### Install from a cloned repository
+
 
 #### 3. Install [`just`](https://github.com/casey/just):
 ```bash

@@ -52,12 +52,12 @@
 
 ## Installation rules
 - Keep the root README concise and installation-first. Under `Installation`, put the H3 heading `One-line install` before `Install from a cloned repository`. Under each, label platform commands with `For Linux & macOS` and `For Windows` headings.
-- The public one-line bootstrap fetches scripts from GitHub with curl on Unix or PowerShell on Windows and does not require GitHub CLI. Git is required only for the explicit `--git` mode; do not add an authentication tutorial.
-- Stop on a failed or empty installer fetch before executing any response. Unix examples must guard execution on a successful, nonempty curl response; PowerShell examples must reject failed or empty downloads before running the downloaded script.
-- The public bootstrap uses GitHub to fetch release assets without GitHub CLI. Until the first new thin payload is published, keep explicit `--git` and `--dev [PATH]` instructions available; do not imply legacy published releases contain the new payload.
-- Thin archives contain installers, the manifest, and lock-derived runtime requirement and constraint exports, but no application wheel. The wheel remains a separate release asset fetched and verified by the installer. Runtime dependencies install online; do not describe release installation as offline or wheelhouse-based.
-- Normal release workflows reuse one successful full CI run for the exact commit. `just release-check` remains an explicit full local rehearsal, while `release-prepare` runs only fast release validation/build steps.
-- Keep the generated README's installation-bundle placeholder commented until a thin payload is actually published. Do not claim new assets are available merely because the workflow can produce them.
+- The one-line installer selects the latest stable GitHub release source archive by default. Public downloads use curl on Unix or native PowerShell HTTP on Windows and do not require GitHub CLI.
+- BuildBen and generated installers accept `--github-client gh` for authenticated GitHub requests; they do not fall back when authentication fails. Link https://cli.github.com/ and document `gh auth login` plus `gh auth setup-git` when authenticated access is relevant.
+- Private VCS dependencies independently require working Git credentials. Public release downloads and curl never inherit gh credentials.
+- Keep cloned-repository development separate from installer options: use Python and `pip install -e .`, or use `uv sync` when desired. Installers do not provide `--git` or `--dev` modes.
+- Standard GitHub releases contain exactly one wheel and one source archive, with release notes in the release body. Do not document installation bundles, platform archives, manifests, or permanent runtime exports.
+- Normal release workflows reuse one successful full CI run for the exact commit. The six native CI cells exercise the source installer; the release job runs one Python 3.12 wheel install smoke.
 
 ## Verification
 - Review the diff for duplicate helpers, naming drift, unnecessary abstractions, and regressions.

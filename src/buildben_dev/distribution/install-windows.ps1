@@ -1,25 +1,16 @@
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-# == Application settings =====================================================
 $AppDistribution = "buildben"
 $AppCommand = "buildben"
-$Repository = "https://github.com/HisQu/buildben.git"
+$Repository = "HisQu/buildben"
 $UvVersion = "0.12.18"
-$BootstrapTag = ""
-$BootstrapHelperSha256 = ""
 $ConfigureApp = "false"
-$AssetEnvName = "BUILDBEN_INSTALLER_ASSET_DIR"
-
-# == Installer state ==========================================================
-$RequestedMode = "auto"
-$Mode = $null
+$GithubClient = "curl"
 $Version = $null
-$DevPath = $null
 $ExplicitUv = $null
 $AssumeYes = $false
 $SkipConfig = $false
-$ScriptDir = $null
 $Uv = $null
 $UvOrigin = "missing"
 $InstallPython = $null
@@ -28,16 +19,11 @@ function Show-Usage {
     @"
 Usage: install-windows.cmd [OPTIONS]
 
-Default mode: install the latest published release. Use --version for a
-specific published release, --git for a developer installation, or --dev
-to synchronize an existing checkout.
-
-Modes (choose at most one):
-  --git                 Install from the Git repository.
-  -d, --dev [PATH]      Sync an existing checkout. PATH defaults to the current directory.
+Install the latest published stable source distribution, or select one version.
 
 Options:
-  -v, --version VERSION Install a published release (0.1.0 becomes v0.1.0).
+  -v, --version VERSION Select a published release (0.1.0 becomes v0.1.0).
+  --github-client CLIENT Use public curl or authenticated gh (default: curl).
   --uv PATH             Use a specific uv executable.
   -y, --yes             Skip the installer confirmation.
   --skip-config         Skip configuration setup.
@@ -58,27 +44,18 @@ function Invoke-Captured {
     return ($Output | Out-String).Trim()
 }
 
-function Set-RequestedMode {
-    param([Parameter(Mandatory)][string] $Value)
-    if ($script:RequestedMode -ne "auto") { throw "Installation modes are mutually exclusive." }
-    $script:RequestedMode = $Value
-}
-
 function Parse-Arguments {
     param([string[]] $Arguments)
     for ($Index = 0; $Index -lt $Arguments.Count; $Index++) {
         $Argument = $Arguments[$Index]
         switch ($Argument) {
-            "--git" { Set-RequestedMode "git"; continue }
-            { $_ -in @("-d", "--dev") } {
-                Set-RequestedMode "dev"
-                if ($Index + 1 -lt $Arguments.Count -and -not $Arguments[$Index + 1].StartsWith("-")) { $Index++; $script:DevPath = $Arguments[$Index] }
-                else { $script:DevPath = "." }
-                continue
-            }
             { $_ -in @("-v", "--version") } {
                 if ($Index + 1 -ge $Arguments.Count) { throw "$Argument requires a version." }
                 $Index++; $script:Version = $Arguments[$Index]; continue
+            }
+            "--github-client" {
+                if ($Index + 1 -ge $Arguments.Count) { throw "--github-client requires curl or gh." }
+                $Index++; $script:GithubClient = $Arguments[$Index]; continue
             }
             "--uv" {
                 if ($Index + 1 -ge $Arguments.Count) { throw "--uv requires a path." }
@@ -90,31 +67,13 @@ function Parse-Arguments {
             default { throw "Unknown argument: $Argument" }
         }
     }
+    if ($GithubClient -notin @("curl", "gh")) { throw "Invalid --github-client '$GithubClient'; choose curl or gh." }
+    if ($null -ne $Version) {
+        $Normalized = $Version.TrimStart("v")
+        if ($Normalized -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') { throw "Invalid release version: $Version" }
+        $script:Version = "v$Normalized"
+    }
     return $true
-}
-
-function Resolve-InstallerAssetDir {
-    $AssetSetting = Get-Item -LiteralPath "Env:$AssetEnvName" -ErrorAction SilentlyContinue
-    if ($null -ne $AssetSetting -and -not [string]::IsNullOrWhiteSpace($AssetSetting.Value)) {
-        if (-not (Test-Path -LiteralPath $AssetSetting.Value -PathType Container)) { throw "Installer asset directory does not exist: $($AssetSetting.Value)" }
-        $script:ScriptDir = (Resolve-Path -LiteralPath $AssetSetting.Value).Path
-    }
-    elseif (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) { $script:ScriptDir = $PSScriptRoot }
-}
-
-function Resolve-InstallationMode {
-    switch ($RequestedMode) {
-        "git" { $script:Mode = "git" }
-        "dev" {
-            $script:Mode = "dev"
-            if ([string]::IsNullOrWhiteSpace($DevPath)) { $script:DevPath = "." }
-            $Resolved = Resolve-Path -LiteralPath $DevPath -ErrorAction SilentlyContinue
-            if ($null -eq $Resolved -or -not (Test-Path -LiteralPath (Join-Path $Resolved.Path "pyproject.toml") -PathType Leaf)) { throw "No pyproject.toml found in development checkout: $DevPath" }
-            $script:DevPath = $Resolved.Path
-        }
-        "auto" { $script:Mode = "release" }
-        default { throw "Unknown installation mode: $RequestedMode" }
-    }
 }
 
 function Set-UvPath {
@@ -130,11 +89,6 @@ function Set-UvPath {
 
 function Find-Uv {
     if (-not [string]::IsNullOrWhiteSpace($ExplicitUv)) { Set-UvPath -Path $ExplicitUv -Origin "explicit"; return }
-    if (-not [string]::IsNullOrWhiteSpace($ScriptDir)) {
-        foreach ($Candidate in @((Join-Path $ScriptDir "uv.exe"), (Join-Path $ScriptDir "uv\uv.exe"))) {
-            if (Test-Path -LiteralPath $Candidate -PathType Leaf) { Set-UvPath -Path $Candidate -Origin "local"; return }
-        }
-    }
     $Command = Get-Command uv -CommandType Application -ErrorAction SilentlyContinue
     if ($null -ne $Command) { Set-UvPath -Path $Command.Source -Origin "system"; return }
     $script:Uv = $null; $script:UvOrigin = "missing"
@@ -150,13 +104,10 @@ function Install-PermanentUv {
 
 function Confirm-Plan {
     Write-Host "`n$AppDistribution installation plan"
-    Write-Host "Mode: $Mode; uv: $UvOrigin"
-    if ($Mode -eq "dev") { Write-Host "Synchronize checkout: $DevPath" }
-    elseif ($Mode -eq "git") { Write-Host "Install from $Repository at $(if ($Version) { "v$($Version.TrimStart('v'))" } else { "main" })" }
-    else { Write-Host "Install the selected published GitHub release." }
+    Write-Host "Install a published stable source distribution; transport: $GithubClient; uv: $UvOrigin"
+    if ($null -ne $Version) { Write-Host "Version: $Version" }
     if ($SkipConfig -or $ConfigureApp -ne "true") { Write-Host "Configuration setup will be skipped." }
-    elseif ($Mode -eq "dev") { Write-Host "Run $AppCommand config setup in the checkout." }
-    else { Write-Host "Run $AppCommand config setup after installation." }
+    elseif ($AssumeYes) { }
     if ($AssumeYes) { return $true }
     $Answer = Read-Host "Continue? $(if ($UvOrigin -eq 'missing') { 'uv will be installed permanently. Enter y/yes or n/no' } else { '[y/N]' })"
     if ($Answer.Trim().ToLowerInvariant() -in @("y", "yes")) { return $true }
@@ -181,52 +132,78 @@ function Find-InstallationPython {
 
 function Install-FromRelease {
     Find-InstallationPython
-    $TemporaryDirectory = $null
+    $TemporaryDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $TemporaryDirectory | Out-Null
+$PythonCode = @'
+import json, os, re, subprocess, sys, tarfile
+from pathlib import Path, PurePosixPath
+uv, client, repo, requested, temp, distribution = sys.argv[1:]
+root = Path(temp)
+version_re = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+def normalize(value): return re.sub(r"[-_.]+", "_", value).lower()
+def run_powershell(script, variables):
+    environment = os.environ | variables
+    return subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script], check=True, text=True, capture_output=True, env=environment).stdout
+def gh_api(path):
+    return run_powershell("gh api $env:BUILDBEN_INSTALLER_GH_ENDPOINT", {"BUILDBEN_INSTALLER_GH_ENDPOINT": path})
+def public_json(url):
+    environment = os.environ | {"BUILDBEN_INSTALLER_HTTP_URL": url}
+    script = "$ProgressPreference='SilentlyContinue'; Invoke-RestMethod -Uri $env:BUILDBEN_INSTALLER_HTTP_URL | ConvertTo-Json -Depth 100 -Compress"
+    return subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script], check=True, text=True, capture_output=True, env=environment).stdout
+def public_download(url, destination):
+    environment = os.environ | {"BUILDBEN_INSTALLER_HTTP_URL": url, "BUILDBEN_INSTALLER_HTTP_FILE": str(destination)}
+    script = "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -UseBasicParsing -Uri $env:BUILDBEN_INSTALLER_HTTP_URL -OutFile $env:BUILDBEN_INSTALLER_HTTP_FILE"
+    subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script], check=True, env=environment)
+if requested:
+    if not re.fullmatch(r"v" + version_re.pattern[1:-1], requested): raise SystemExit("Malformed release tag")
+    endpoint = f"/repos/{repo}/releases/tags/{requested}"
+else: endpoint = f"/repos/{repo}/releases/latest"
+response = gh_api(endpoint) if client == "gh" else public_json(f"https://api.github.com{endpoint}")
+try: release = json.loads(response)
+except (ValueError, TypeError) as exc: raise SystemExit("GitHub returned invalid release JSON") from exc
+if not isinstance(release, dict) or release.get("draft") is not False or release.get("prerelease") is not False: raise SystemExit("Selected GitHub release is not a published stable release")
+tag = release.get("tag_name")
+if not isinstance(tag, str) or not re.fullmatch(r"v" + version_re.pattern[1:-1], tag): raise SystemExit("GitHub release has a malformed tag")
+if requested and tag != requested: raise SystemExit("GitHub returned a different release tag")
+version = tag[1:]
+assets = release.get("assets")
+if not isinstance(assets, list): raise SystemExit("GitHub release has no asset list")
+matching = []
+for asset in assets:
+    if not isinstance(asset, dict): continue
+    name, url = asset.get("name"), asset.get("browser_download_url")
+    if isinstance(name, str) and isinstance(url, str) and name.endswith(".tar.gz") and name[:-7].endswith("-" + version) and normalize(name[:-7][:-(len(version)+1)]) == normalize(distribution): matching.append((name, url))
+if len(matching) != 1: raise SystemExit(f"Expected exactly one matching source distribution, found {len(matching)}")
+name, url = matching[0]
+archive = root / name
+if client == "gh":
+    run_powershell("gh release download $env:BUILDBEN_INSTALLER_GH_TAG --repo $env:BUILDBEN_INSTALLER_GH_REPO --pattern $env:BUILDBEN_INSTALLER_GH_PATTERN --dir $env:BUILDBEN_INSTALLER_GH_DIR", {"BUILDBEN_INSTALLER_GH_TAG": tag, "BUILDBEN_INSTALLER_GH_REPO": repo, "BUILDBEN_INSTALLER_GH_PATTERN": name, "BUILDBEN_INSTALLER_GH_DIR": temp})
+else: public_download(url, archive)
+if not archive.is_file() or archive.stat().st_size == 0: raise SystemExit("Source distribution download is empty")
+with tarfile.open(archive, "r:gz") as package:
+    members = package.getmembers(); roots = set()
+    for member in members:
+        path = PurePosixPath(member.name)
+        if path.is_absolute() or ".." in path.parts or "\\" in member.name or re.match(r"^[A-Za-z]:", member.name): raise SystemExit("Source archive contains an unsafe path")
+        if member.issym() or member.islnk() or not (member.isdir() or member.isfile()): raise SystemExit("Source archive contains links or special files")
+        if path.parts: roots.add(path.parts[0])
+    if len(roots) != 1: raise SystemExit("Source archive must contain exactly one project root")
+    (root / "source").mkdir()
+    package.extractall(root / "source", filter="data")
+project_root = root / "source" / next(iter(roots))
+pyproject, lock = project_root / "pyproject.toml", project_root / "uv.lock"
+if not pyproject.is_file() or not lock.is_file(): raise SystemExit("Release source must contain pyproject.toml and uv.lock; this release is not installable")
+import tomllib
+with pyproject.open("rb") as stream: project = tomllib.load(stream).get("project", {})
+if normalize(project.get("name", "")) != normalize(distribution) or project.get("version") != version: raise SystemExit("Source project metadata does not match selected release")
+subprocess.run([uv, "export", "--locked", "--no-dev", "--no-default-groups", "--no-emit-project", "--format", "requirements.txt", "--output-file", str(root / "runtime-requirements.txt")], cwd=project_root, check=True)
+subprocess.run([uv, "tool", "install", "--force", "--refresh", "--python", sys.executable, "--with-requirements", str(root / "runtime-requirements.txt"), str(project_root)], check=True)
+'@
     try {
-        $Helper = $null
-        if (-not [string]::IsNullOrWhiteSpace($ScriptDir)) { $Helper = Join-Path $ScriptDir "install_release.py" }
-        if ($null -eq $Helper -or -not (Test-Path -LiteralPath $Helper -PathType Leaf)) {
-            if ([string]::IsNullOrWhiteSpace($BootstrapTag) -or [string]::IsNullOrWhiteSpace($BootstrapHelperSha256)) { throw "No trusted adjacent helper or stamped release source is available." }
-            $TemporaryDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString("N"))
-            New-Item -ItemType Directory -Path $TemporaryDirectory | Out-Null
-            $Helper = Join-Path $TemporaryDirectory "install_release.py"
-            $OwnerRepo = $Repository -replace '^https://github\.com/', '' -replace '\.git$', ''
-            $HelperUrl = "https://raw.githubusercontent.com/$OwnerRepo/$BootstrapTag/src/$($AppDistribution.Replace('-', '_'))_dev/distribution/install_release.py"
-            Invoke-WebRequest -Uri $HelperUrl -OutFile $Helper
-        }
-        if (-not [string]::IsNullOrWhiteSpace($BootstrapHelperSha256)) {
-            $ActualDigest = (Get-FileHash -LiteralPath $Helper -Algorithm SHA256).Hash.ToLowerInvariant()
-            if ($ActualDigest -ne $BootstrapHelperSha256) { throw "Release helper digest does not match the stamped installer." }
-        }
-        $OwnerRepo = $Repository -replace '^https://github\.com/', '' -replace '\.git$', ''
-        $HelperArguments = @($Helper, "--repository", $OwnerRepo, "--distribution", $AppDistribution, "--uv", $Uv, "--python", $InstallPython)
-        if ($null -ne $Version) { $HelperArguments += @("--version", $Version) }
-        elseif (-not [string]::IsNullOrWhiteSpace($BootstrapTag)) { $HelperArguments += @("--version", $BootstrapTag) }
-        if (-not [string]::IsNullOrWhiteSpace($ScriptDir)) {
-            $PayloadFound = $false
-            foreach ($Name in @("release-manifest.json", "runtime-requirements.txt", "runtime-constraints.txt")) { if (Test-Path -LiteralPath (Join-Path $ScriptDir $Name)) { $PayloadFound = $true } }
-            if ($PayloadFound) {
-                foreach ($Name in @("release-manifest.json", "runtime-requirements.txt", "runtime-constraints.txt")) { if (-not (Test-Path -LiteralPath (Join-Path $ScriptDir $Name) -PathType Leaf)) { throw "Incomplete adjacent release payload: $Name is missing." } }
-# > Forward slashes prevent PowerShell 5.1 from treating a trailing backslash as an escaped native argument quote.
-                $HelperArguments += @("--asset-dir", $ScriptDir.Replace('\', '/'))
-            }
-        }
-        Invoke-Checked -FilePath $InstallPython -Arguments $HelperArguments -Description "$AppDistribution release installation"
+        Invoke-Checked -FilePath $InstallPython -Arguments @("-c", $PythonCode, $Uv, $GithubClient, $Repository, [string]$Version, $TemporaryDirectory, $AppDistribution) -Description "$AppDistribution source installation"
         Update-ToolPath
     }
-    finally {
-        if ($null -ne $TemporaryDirectory) { Remove-Item -LiteralPath $TemporaryDirectory -Recurse -Force -ErrorAction SilentlyContinue }
-    }
-}
-
-function Install-FromGit {
-    $Git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue
-    if ($null -eq $Git) { throw "Git is required for installation from the repository." }
-    $Ref = if ([string]::IsNullOrWhiteSpace($Version)) { "main" } elseif ($Version.StartsWith("v")) { $Version } else { "v$Version" }
-    & $Git.Source ls-remote --exit-code $Repository $Ref *> $null
-    if ($LASTEXITCODE -ne 0) { throw "Cannot access Git ref '$Ref'. Check Git installation and repository access." }
-    Invoke-Checked -FilePath $Uv -Arguments @("tool", "install", "--force", "--refresh", "git+$Repository@$Ref") -Description "$AppDistribution Git installation"
-    Update-ToolPath
+    finally { Remove-Item -LiteralPath $TemporaryDirectory -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
 function Configure-InstalledApplication {
@@ -237,31 +214,16 @@ function Configure-InstalledApplication {
     Invoke-Checked -FilePath $Executable -Arguments @("config", "setup") -Description "Configuration setup"
 }
 
-function Initialize-Development {
-    $HasLock = Test-Path -LiteralPath (Join-Path $DevPath "uv.lock") -PathType Leaf
-    Push-Location $DevPath
-    try {
-        if ($HasLock) { Invoke-Checked -FilePath $Uv -Arguments @("sync", "--locked") -Description "Development synchronization" }
-        else { Invoke-Checked -FilePath $Uv -Arguments @("sync") -Description "Development synchronization" }
-        if (-not $SkipConfig -and $ConfigureApp -eq "true") {
-            if ($HasLock) { Invoke-Checked -FilePath $Uv -Arguments @("run", "--locked", $AppCommand, "config", "setup") -Description "Configuration setup" }
-            else { Invoke-Checked -FilePath $Uv -Arguments @("run", $AppCommand, "config", "setup") -Description "Configuration setup" }
-        }
-    }
-    finally { Pop-Location }
-}
-
 function Invoke-Main {
     param([string[]] $Arguments)
     if (-not (Parse-Arguments -Arguments $Arguments)) { return }
-    Resolve-InstallerAssetDir; Resolve-InstallationMode; Find-Uv
+    Find-Uv
     if (-not (Confirm-Plan)) { return }
     if ($UvOrigin -eq "missing") { Install-PermanentUv }
-    if ($Mode -eq "git") { Install-FromGit; Configure-InstalledApplication }
-    elseif ($Mode -eq "release") { Install-FromRelease; Configure-InstalledApplication }
-    else { Initialize-Development }
+    Install-FromRelease
+    Configure-InstalledApplication
     Write-Host "`n$AppDistribution setup completed successfully."
-    if ($Mode -ne "dev") { Write-Host "If '$AppCommand' is not available immediately, open a new shell." }
+    Write-Host "If '$AppCommand' is not available immediately, open a new shell."
 }
 
 try { Invoke-Main -Arguments $args }

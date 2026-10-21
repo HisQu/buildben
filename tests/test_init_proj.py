@@ -194,41 +194,23 @@ def test_scaffolded_project_runs_pytest(bube_test_project: Path) -> None:
     _run([sys.executable, "-m", "pytest", "-q"], cwd=proot, env=_project_env(proot))
 
 
-def test_scaffolded_release_modules_run_without_buildben_installed(
+def test_scaffolded_release_publisher_runs_without_buildben_installed(
     bube_test_project: Path,
 ) -> None:
-    """Run generated release CLIs without site-packages or BuildBen on PYTHONPATH."""
+    """Run the generated release publisher without site-packages or BuildBen."""
     project_root = bube_test_project
     package = "bube_test_tmp_dev"
     env = os.environ.copy()
     env["PYTHONPATH"] = str(project_root / "src")
-
-    commands = [
-        [
-            sys.executable,
-            "-S",
-            "-m",
-            f"{package}.packaging.installation_bundle",
-            "--help",
-        ],
+    result = subprocess.run(
         [sys.executable, "-S", "-m", f"{package}.packaging.release_assets", "--help"],
-        [
-            sys.executable,
-            "-S",
-            str(project_root / "src" / package / "distribution" / "install_release.py"),
-            "--help",
-        ],
-    ]
-    for command in commands:
-        result = subprocess.run(
-            command,
-            cwd=project_root,
-            env=env,
-            capture_output=True,
-            check=False,
-            text=True,
-        )
-        assert result.returncode == 0, result.stdout + result.stderr
+        cwd=project_root,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def _runtime_command(project_root: Path, *arguments: str) -> str:
