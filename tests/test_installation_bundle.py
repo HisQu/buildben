@@ -133,6 +133,7 @@ def test_archive_contains_only_validated_manifest_members(tmp_path) -> None:
     contents["release-manifest.json"] = (release / "release-manifest.json").read_bytes()
     for filename, value in contents.items():
         (release / filename).write_bytes(value)
+    (release / "install-linux-macos.sh").chmod(0o644)
     result = archive(release, tmp_path / "out")
     assert len(result) == 1
     with tarfile.open(result[0], "r:gz") as bundle:
@@ -142,6 +143,83 @@ def test_archive_contains_only_validated_manifest_members(tmp_path) -> None:
             for name in manifest["archive_members"]["linux-x86_64"]
         ]
         assert all(not name.endswith((".whl", ".pyc")) for name in names)
+        shell_member = bundle.getmember("app-1.2.3-linux-x86_64/install-linux-macos.sh")
+        assert shell_member.mode & 0o111
+
+
+def test_archive_uses_common_downloads_and_canonical_windows_launcher(
+    tmp_path, monkeypatch
+) -> None:
+    import hashlib
+    import json
+    import platform
+    import zipfile
+
+    import buildben_dev.packaging.installation_bundle as bundle
+
+    release = tmp_path / "release"
+    release.mkdir()
+    manifest = _manifest()
+    manifest["project"] = "buildben"
+    manifest["version"] = "0.9.1"
+    manifest["tag"] = "v0.9.1"
+    manifest["platforms"] = {
+        target: f"buildben-0.9.1-{target}.{suffix}"
+        for target, suffix in bundle.TARGETS.items()
+    }
+    from buildben_dev.distribution.install_release import archive_members
+
+    manifest["archive_members"] = {
+        target: archive_members(target) for target in bundle.TARGETS
+    }
+    canonical = bundle._canonical_assets(bundle.ROOT, project="buildben")
+    manifest["application_wheel"]["filename"] = "buildben-0.9.1-py3-none-any.whl"
+    manifest["source_archive"]["filename"] = "buildben-0.9.1.tar.gz"
+    contents = {
+        "runtime-requirements.txt": b"# empty runtime graph\n",
+        "runtime-constraints.txt": b"# empty constraints\n",
+        "install_release.py": canonical["install_release.py"].read_bytes(),
+    }
+    manifest["runtime_lock"]["sha256"] = hashlib.sha256(
+        contents["runtime-requirements.txt"]
+    ).hexdigest()
+    manifest["runtime_constraints"]["sha256"] = hashlib.sha256(
+        contents["runtime-constraints.txt"]
+    ).hexdigest()
+    helper_digest = hashlib.sha256(contents["install_release.py"]).hexdigest()
+    shell = canonical["install-linux-macos.sh"].read_text(encoding="utf-8")
+    shell = shell.replace('BOOTSTRAP_TAG=""', 'BOOTSTRAP_TAG="v0.9.1"')
+    shell = shell.replace(
+        'BOOTSTRAP_HELPER_SHA256=""',
+        f'BOOTSTRAP_HELPER_SHA256="{helper_digest}"',
+    )
+    powershell = canonical["install-windows.ps1"].read_text(encoding="utf-8")
+    powershell = powershell.replace('$BootstrapTag = ""', '$BootstrapTag = "v0.9.1"')
+    powershell = powershell.replace(
+        '$BootstrapHelperSha256 = ""',
+        f'$BootstrapHelperSha256 = "{helper_digest}"',
+    )
+    contents["install-linux-macos.sh"] = shell.encode("utf-8")
+    contents["install-windows.ps1"] = powershell.encode("utf-8")
+    for filename, data in contents.items():
+        (release / filename).write_bytes(data)
+    for filename in (
+        "buildben-0.9.1-py3-none-any.whl",
+        "buildben-0.9.1.tar.gz",
+        "release-notes.md",
+    ):
+        (release / filename).write_bytes(b"common release asset\n")
+    (release / "install-linux-macos.sh").chmod(0o644)
+    manifest_path = release / "release-manifest.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    monkeypatch.setattr(platform, "system", lambda: "Windows")
+    monkeypatch.setattr(platform, "machine", lambda: "x86_64")
+    archive_path = bundle.archive(release, tmp_path / "out")[0]
+    with zipfile.ZipFile(archive_path) as archive_file:
+        members = archive_file.namelist()
+        assert any(name.endswith("/install-windows.cmd") for name in members)
+        assert any(name.endswith("/install-windows.ps1") for name in members)
+        assert any(name.endswith("/prepare-powershell-windows.cmd") for name in members)
 
 
 def test_prepare_stages_prebuilt_assets_exports_and_deterministic_manifest(

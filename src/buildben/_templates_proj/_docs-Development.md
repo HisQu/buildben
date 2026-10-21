@@ -242,6 +242,17 @@ releases do not yet contain this payload, so during the paused-release
 interval users should install from Git with `--git` or synchronize a checkout
 with `--dev [PATH]`; do not direct users to install from a legacy release.
 
+`just build-release-inputs` accepts an optional positional path to already
+validated release notes:
+
+```shell
+just build-release-inputs release/prepared-notes.md
+```
+
+Keep the supplied file outside `dist`, which the recipe rebuilds. Omit the
+argument to generate notes from the changelog. Tag and version validation runs
+in either case.
+
 PyPI publication remains independently controlled by the tagged `justfile`
 setting:
 ```just

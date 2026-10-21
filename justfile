@@ -263,7 +263,7 @@ _ci-check-python version environment:
     echo "Python {{version}}: checks passed."
 
 [private]
-_release-artifact-check notes_output build_only="false":
+_release-artifact-check notes_output build_only="false" notes_input="":
     #!/usr/bin/env bash
     set -euo pipefail
     version="$(uv version --short)"
@@ -275,6 +275,7 @@ _release-artifact-check notes_output build_only="false":
         notes_args+=(--allow-unreleased-entries)
     fi
     notes_output="{{notes_output}}"
+    notes_input={{quote(notes_input)}}
     artifact_root="$(mktemp -d)"
     smoke_root="$artifact_root/smoke"
     smoke_script="$(realpath src/buildben_dev/packaging/install_smoke.py)"
@@ -282,7 +283,20 @@ _release-artifact-check notes_output build_only="false":
     trap 'rm -rf "$artifact_root"' EXIT
 
     rm -rf dist
-    python src/buildben_dev/packaging/release_notes.py "$version" "${identity_args[@]}" "${notes_args[@]}" --output "$notes_output"
+    if [[ -n "$notes_input" ]]; then
+        if [[ ! -f "$notes_input" ]]; then
+            echo "Release notes input must be a regular file: $notes_input" >&2
+            exit 1
+        fi
+        PYTHONPATH=src python -c 'import sys; from buildben_dev.packaging.release_notes import validate_version; validate_version(sys.argv[1])' "$version"
+        if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            PYTHONPATH=src python -c 'import sys; from buildben_dev.packaging.release_notes import validate_tag_version; validate_tag_version(*sys.argv[1:])' "$GITHUB_REF_NAME" "$version"
+        fi
+        mkdir -p "$(dirname "$notes_output")"
+        cp -- "$notes_input" "$notes_output"
+    else
+        python src/buildben_dev/packaging/release_notes.py "$version" "${identity_args[@]}" "${notes_args[@]}" --output "$notes_output"
+    fi
     uv build --python 3.12 --no-sources --no-build-logs
     shopt -s nullglob
     wheels=(dist/*.whl)
@@ -315,14 +329,14 @@ _release-artifact-check notes_output build_only="false":
     )
 
 # Build package and lock-derived inputs without running the full source matrix.
-build-release-inputs:
+build-release-inputs notes_file="":
     #!/usr/bin/env bash
     set -euo pipefail
     just _check-uv
     uv lock --check
-    just _release-artifact-check dist/release-notes.md true
+    just _release-artifact-check dist/release-notes.md true {{quote(notes_file)}}
     commit="$(git rev-parse --verify --end-of-options 'HEAD^{commit}')"
-    uv run --locked python -m buildben_dev.packaging.installation_bundle prepare \
+    PYTHONPATH=src python -m buildben_dev.packaging.installation_bundle prepare \
         --repository "$RELEASE_REPOSITORY" --commit "$commit" --output-directory dist
 
 # Build the native thin archive from the prepared lock-derived payload.
@@ -330,7 +344,7 @@ build-installation-bundle:
     #!/usr/bin/env bash
     set -euo pipefail
     just build-release-inputs
-    uv run --locked python -m buildben_dev.packaging.installation_bundle archive \
+    PYTHONPATH=src python -m buildben_dev.packaging.installation_bundle archive \
         --release-directory dist --output-directory dist
 
 # Exercise a local or already-staged archive through its native installer.
@@ -385,16 +399,27 @@ release-install-smoke:
         tar -xzf "$archive" -C "$payload_root"
     fi
     bundle="$(find "$payload_root" -mindepth 1 -maxdepth 1 -type d -print -quit)"
-    wheel_name="$(uv run --locked python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["application_wheel"]["filename"])' "$bundle/release-manifest.json")"
+    wheel_name="$(python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["application_wheel"]["filename"])' "$bundle/release-manifest.json")"
     if [[ ! "$wheel_name" =~ ^[A-Za-z0-9_.-]+\.whl$ || ! -f "dist/$wheel_name" ]]; then
         echo "Release smoke requires the application wheel named by the archive manifest in dist/." >&2
         exit 1
     fi
     cp -- "dist/$wheel_name" "$bundle/$wheel_name"
+    if [[ "$target" == windows-x86_64 ]]; then
+        printf '[asset-handoff] smoke bundle=<%s>\n' "$bundle"
+        for name in release-manifest.json runtime-requirements.txt runtime-constraints.txt; do
+            path="$bundle/$name"
+            if [[ -L "$path" ]]; then state=symlink
+            elif [[ -f "$path" ]]; then state=regular
+            else state=missing
+            fi
+            printf '[asset-handoff] smoke asset=<%s> type=%s\n' "$path" "$state"
+        done
+    fi
     install_staged() {
         case "$target" in
             windows-x86_64)
-                (cd -- "$bundle"; MSYS_NO_PATHCONV=1 cmd.exe /d /c install-windows.cmd --yes)
+                (cd -- "$bundle"; MSYS_NO_PATHCONV=1 BUILDBEN_ASSET_HANDOFF_DIAGNOSTIC=1 cmd.exe /d /c install-windows.cmd --yes)
                 ;;
             linux-x86_64)
                 bash "$bundle/install-linux-macos.sh" --yes

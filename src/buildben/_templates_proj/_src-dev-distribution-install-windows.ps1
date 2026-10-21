@@ -210,6 +210,14 @@ function Install-FromRelease {
                 $HelperArguments += @("--asset-dir", $ScriptDir)
             }
         }
+        if ($env:BUILDBEN_ASSET_HANDOFF_DIAGNOSTIC -eq "1") {
+            Write-Host "[asset-handoff] PowerShell scriptdir=<$ScriptDir> helper=<$Helper>"
+            foreach ($Name in @("release-manifest.json", "runtime-requirements.txt", "runtime-constraints.txt")) {
+                $AssetPath = Join-Path $ScriptDir $Name
+                $IsLeaf = Test-Path -LiteralPath $AssetPath -PathType Leaf
+                Write-Host "[asset-handoff] PowerShell asset=<$AssetPath> leaf=$IsLeaf"
+            }
+        }
         Invoke-Checked -FilePath $InstallPython -Arguments $HelperArguments -Description "$AppDistribution release installation"
         Update-ToolPath
     }

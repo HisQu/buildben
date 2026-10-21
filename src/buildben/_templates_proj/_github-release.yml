@@ -22,6 +22,7 @@ jobs:
     name: Exact-commit CI
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       actions: read
       contents: read
@@ -33,13 +34,11 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: auto
-      - name: Install locked project environment
-        run: uv sync --locked --all-extras --all-groups
       - name: Wait for normal CI on this exact commit
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          uv run --locked python -m {my_project}_dev.packaging.release_assets
+          PYTHONPATH=src python -m {my_project}_dev.packaging.release_assets
           wait-ci --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME"
           --commit "$GITHUB_SHA"
 
@@ -48,6 +47,8 @@ jobs:
     if: github.event_name == 'push'
     needs: checks
     runs-on: ubuntu-latest
+    outputs:
+      release_notes_base64: ${{ steps.prepare.outputs.release_notes_base64 }}
     permissions:
       contents: write
     steps:
@@ -58,21 +59,22 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: auto
-      - name: Install locked project environment
-        run: uv sync --locked --all-extras --all-groups
       - name: Prepare or reuse the tag draft
+        id: prepare
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          mkdir -p dist
+          mkdir -p release
           version="$(uv version --short)"
-          uv run --locked python src/{my_project}_dev/packaging/release_notes.py \
+          python src/{my_project}_dev/packaging/release_notes.py \
             "$version" --tag "$GITHUB_REF_NAME" --project-version "$version" \
-            --output dist/release-notes.md
-          uv run --locked python -m {my_project}_dev.packaging.release_assets prepare \
+            --output release/release-notes.md
+          PYTHONPATH=src python -m {my_project}_dev.packaging.release_assets prepare \
             --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" \
-            --commit "$GITHUB_SHA" --notes dist/release-notes.md
+            --commit "$GITHUB_SHA" --notes release/release-notes.md
+          notes_base64="$(base64 -w 0 release/release-notes.md)"
+          echo "release_notes_base64=${notes_base64}" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build and stage common release inputs
@@ -105,8 +107,16 @@ jobs:
             exit 1
           fi
           echo "release_pypi=${release_pypi}" >> "$GITHUB_OUTPUT"
+      - name: Restore prepared release notes
+        env:
+          RELEASE_NOTES_BASE64: ${{ needs.prepare-draft.outputs.release_notes_base64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          printf '%s' "$RELEASE_NOTES_BASE64" | base64 --decode > release/release-notes.md
       - name: Build and validate package once
-        run: just build-release-inputs
+        run: just build-release-inputs release/release-notes.md
       - name: Upload common inputs to the draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -118,7 +128,7 @@ jobs:
             echo "Expected exactly one wheel and one source archive." >&2
             exit 1
           fi
-          uv run --locked python -m {my_project}_dev.packaging.release_assets upload \
+          PYTHONPATH=src python -m {my_project}_dev.packaging.release_assets upload \
             --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" \
             --commit "$GITHUB_SHA" --directory dist --files \
             "${packages[@]}" runtime-requirements.txt runtime-constraints.txt \
@@ -137,20 +147,11 @@ jobs:
           - runner: windows-latest
             python-version: "3.12"
             target: windows-x86_64
-          - runner: windows-latest
-            python-version: "3.13"
-            target: windows-x86_64
           - runner: ubuntu-latest
             python-version: "3.12"
             target: linux-x86_64
-          - runner: ubuntu-latest
-            python-version: "3.13"
-            target: linux-x86_64
           - runner: macos-14
             python-version: "3.12"
-            target: macos-arm64
-          - runner: macos-14
-            python-version: "3.13"
             target: macos-arm64
     permissions:
       contents: write
@@ -162,48 +163,59 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: auto
-      - name: Install locked project environment
-        run: uv sync --locked --all-extras --all-groups
+      - name: Install just
+        uses: extractions/setup-just@v4
+        with:
+          just-version: "1.56.0"
       - name: Fetch common payload and assemble native archive
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          uv run --locked python -m {my_project}_dev.packaging.release_assets fetch \
+          set -euo pipefail
+          PYTHONPATH=src python -m {my_project}_dev.packaging.release_assets fetch \
             --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" \
             --commit "$GITHUB_SHA" --directory dist --files \
-            runtime-requirements.txt runtime-constraints.txt install-linux-macos.sh \
-            install-windows.ps1 install_release.py
-          wheel_name="$(uv run --locked python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["application_wheel"]["filename"])' dist/release-manifest.json)"
-          uv run --locked python -m {my_project}_dev.packaging.release_assets fetch \
+            release-manifest.json
+          wheel_name="$(python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["application_wheel"]["filename"])' dist/release-manifest.json)"
+          sdist_name="$(python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["source_archive"]["filename"])' dist/release-manifest.json)"
+          PYTHONPATH=src python -m {my_project}_dev.packaging.release_assets fetch \
             --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" \
             --commit "$GITHUB_SHA" --directory dist --files \
-            runtime-requirements.txt runtime-constraints.txt "$wheel_name"
-          uv run --locked python -m {my_project}_dev.packaging.installation_bundle archive \
+            "$wheel_name" "$sdist_name" \
+            runtime-requirements.txt runtime-constraints.txt release-manifest.json \
+            release-notes.md install-linux-macos.sh install-windows.ps1 install_release.py
+          PYTHONPATH=src python -m {my_project}_dev.packaging.installation_bundle archive \
             --release-directory dist --output-directory dist
       - name: Smoke the staged archive through its native installer
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t archives < <(find dist -maxdepth 1 -type f -name "*-${{ matrix.target }}.*" -print | LC_ALL=C sort)
+          shopt -s nullglob
+          target="${{ matrix.target }}"
+          archives=(dist/*-"$target".zip dist/*-"$target".tar.gz)
           if [[ "${#archives[@]}" -ne 1 ]]; then
-            echo "Expected one archive for ${{ matrix.target }}." >&2
+            echo "Expected one archive for $target." >&2
             exit 1
           fi
-          RELEASE_TARGET="${{ matrix.target }}" RELEASE_ARCHIVE="${archives[0]}" just release-install-smoke
+          RELEASE_TARGET="$target" RELEASE_ARCHIVE="${archives[0]}" just release-install-smoke
       - name: Upload platform archive to the draft release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t archives < <(find dist -maxdepth 1 -type f -name "*-${{ matrix.target }}.*" -printf '%f\n' | LC_ALL=C sort)
+          shopt -s nullglob
+          target="${{ matrix.target }}"
+          archives=(dist/*-"$target".zip dist/*-"$target".tar.gz)
           if [[ "${#archives[@]}" -ne 1 ]]; then
-            echo "Expected one archive for ${{ matrix.target }}." >&2
+            echo "Expected one archive for $target." >&2
             exit 1
           fi
-          uv run --locked python -m {my_project}_dev.packaging.release_assets upload \
+          archive_name="$(basename "${archives[0]}")"
+          PYTHONPATH=src python -m {my_project}_dev.packaging.release_assets upload \
             --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" \
-            --commit "$GITHUB_SHA" --directory dist --files "${archives[@]}"
+            --commit "$GITHUB_SHA" --directory dist --files "$archive_name"
 
   github-release:
     name: Validate and publish GitHub Release
@@ -222,13 +234,11 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: auto
-      - name: Install locked project environment
-        run: uv sync --locked --all-extras --all-groups
       - name: Validate staged assets and publish the draft
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          uv run --locked python -m {my_project}_dev.packaging.release_assets
+          PYTHONPATH=src python -m {my_project}_dev.packaging.release_assets
           finalize --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME"
           --commit "$GITHUB_SHA"
 
