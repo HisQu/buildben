@@ -33,7 +33,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.12"
-          enable-cache: auto
+          enable-cache: false
       - name: Wait for normal CI on this exact commit
         env:
           GH_TOKEN: ${{ github.token }}
@@ -58,7 +58,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.12"
-          enable-cache: auto
+          enable-cache: false
       - name: Prepare or reuse the tag draft
         id: prepare
         env:
@@ -162,7 +162,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python-version }}
-          enable-cache: auto
+          enable-cache: false
       - name: Install just
         uses: extractions/setup-just@v4
         with:
@@ -233,7 +233,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.12"
-          enable-cache: auto
+          enable-cache: false
       - name: Validate staged assets and publish the draft
         env:
           GH_TOKEN: ${{ github.token }}
