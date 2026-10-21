@@ -248,6 +248,7 @@ uncommented and populated.
 
 #### List `just` recipes:
 *Recipes* (=functions) are defined in the `justfile`. Edit them or add more as you like! 
+`just --list` displays recipes grouped by task.
 ```bash
 just  # Alias for `just --list`. 
 ```
