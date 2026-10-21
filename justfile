@@ -405,21 +405,10 @@ release-install-smoke:
         exit 1
     fi
     cp -- "dist/$wheel_name" "$bundle/$wheel_name"
-    if [[ "$target" == windows-x86_64 ]]; then
-        printf '[asset-handoff] smoke bundle=<%s>\n' "$bundle"
-        for name in release-manifest.json runtime-requirements.txt runtime-constraints.txt; do
-            path="$bundle/$name"
-            if [[ -L "$path" ]]; then state=symlink
-            elif [[ -f "$path" ]]; then state=regular
-            else state=missing
-            fi
-            printf '[asset-handoff] smoke asset=<%s> type=%s\n' "$path" "$state"
-        done
-    fi
     install_staged() {
         case "$target" in
             windows-x86_64)
-                (cd -- "$bundle"; MSYS_NO_PATHCONV=1 BUILDBEN_ASSET_HANDOFF_DIAGNOSTIC=1 cmd.exe /d /c install-windows.cmd --yes)
+                (cd -- "$bundle"; MSYS_NO_PATHCONV=1 cmd.exe /d /c install-windows.cmd --yes)
                 ;;
             linux-x86_64)
                 bash "$bundle/install-linux-macos.sh" --yes
