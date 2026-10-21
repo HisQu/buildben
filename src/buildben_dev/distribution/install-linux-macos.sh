@@ -182,7 +182,7 @@ bootstrap_development() {
     (cd -- "$project"; if [[ -f uv.lock ]]; then "$UV" sync --locked; else "$UV" sync; fi; if [[ "$SKIP_CONFIG" != true && "false" == true ]]; then if [[ -f uv.lock ]]; then "$UV" run --locked "$APP_COMMAND" config setup; else "$UV" run "$APP_COMMAND" config setup; fi; fi)
 }
 main() {
-    parse_args "$@"; ASSET_ENV_NAME="${APP_DISTRIBUTION//-/_}"; ASSET_ENV_NAME="${ASSET_ENV_NAME^^}_INSTALLER_ASSET_DIR"
+    parse_args "$@"; ASSET_ENV_NAME="${APP_DISTRIBUTION//-/_}"; ASSET_ENV_NAME="$(printf '%s' "$ASSET_ENV_NAME" | tr '[:lower:]' '[:upper:]')_INSTALLER_ASSET_DIR"
     resolve_script_dir; resolve_mode; discover_uv; print_plan; confirm_plan
     [[ "$UV_ORIGIN" != missing ]] || install_permanent_uv
     case "$MODE" in release) install_from_release; configure_installed_application ;; git) install_from_git; configure_installed_application ;; dev) bootstrap_development ;; esac
