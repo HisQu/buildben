@@ -642,7 +642,10 @@ def _upload(
         "POST",
         f"https://uploads.github.com/repos/{identity.repository}/releases/{release_id}/assets?name={encoded}",
         data=data,
-        headers=("Content-Type: application/octet-stream",),
+        headers=(
+            "Content-Type: application/octet-stream",
+            f"Content-Length: {len(data)}",
+        ),
     )
 
 
