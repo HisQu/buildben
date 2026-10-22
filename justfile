@@ -289,8 +289,8 @@ _release-artifact-check notes_output build_only="false" notes_input="":
     fi
     notes_output="{{notes_output}}"
     notes_input={{quote(notes_input)}}
-    mkdir -p "$(dirname "$notes_output")"
     rm -rf dist
+    mkdir -p "$(dirname "$notes_output")"
     if [[ -n "$notes_input" ]]; then
         if [[ ! -f "$notes_input" ]]; then
             echo "Release notes input must be a regular file: $notes_input" >&2

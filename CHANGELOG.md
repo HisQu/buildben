@@ -22,6 +22,7 @@ This project follows Semantic Versioning.
 
 1. [Buildben Changelog](#buildben-changelog)
 2. [\[Unreleased\]](#unreleased)
+3. [\[0.11.3\] - 2026-10-22](#0113---2026-10-22)
 3. [\[0.11.2\] - 2026-10-22](#0112---2026-10-22)
 3. [\[0.11.1\] - 2026-10-21](#0111---2026-10-21)
 3. [\[0.11.0\] - 2026-10-21](#0110---2026-10-21)
@@ -77,6 +78,43 @@ This project follows Semantic Versioning.
 <br>
 
 ### 🔒 Security
+
+<br>
+
+---
+
+<br>
+
+<!-- ======================================================== -->
+
+# [0.11.3] - 2026-10-22
+
+<br>
+
+### 💥 Breaking changes
+
+- Breaking: Upgrading from 0.10.3 or earlier replaces custom installation
+  payloads with a wheel and locked source distribution; installer `--git` and
+  `--dev` modes are removed. Affected: Users of those modes or payload assets.
+  Migration: Use the README one-liner or an ordinary clone/venv/editable install.
+  See [0.11.0](#0110---2026-10-21) for transport and source-lock details.
+
+<br>
+
+### ➕ Added
+
+- Public HTTPS installation is independent of GitHub CLI; authenticated users
+  can select `--github-client gh`. READMEs link GitHub CLI installation/setup,
+  and generated README templates keep both transports' commands as comments.
+
+<br>
+
+### 🔨 Fixed
+
+- Preserve the release-notes output directory when building with a supplied
+  notes file, as the draft-release workflow does.
+- Support Windows PowerShell 5.1 source installation, including default and
+  explicitly selected release versions.
 
 <br>
 
