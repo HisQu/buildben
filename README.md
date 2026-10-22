@@ -116,10 +116,84 @@ pipx ensurepath                   # Add pipx to PATH, if not already done
 pipx upgrade-all                  # !! Never run pipx with sudo !!
 ```
 -->
-### Install from a published source distribution
+### One-line installation
 
-The installer resolves the latest stable GitHub release and installs its source
-distribution. Public downloads do not require GitHub CLI.
+The installer bootstraps from the current `main` branch in both modes. By
+default it installs the latest stable release source distribution;
+`--version X.Y.Z` selects a specific stable release. Release installs use the
+published release artifact. `--main` instead installs one snapshot of the
+current remote `main` branch, pinned to the commit resolved for that invocation
+and its committed `uv.lock`; it does not use local checkout changes or require
+a GitHub release or Actions artifact.
+
+`--main` requires GitHub access. Public access uses anonymous GitHub requests;
+authenticated access uses GitHub CLI as described below. Main may contain
+unreleased code whose CI has not passed. The installed package version comes
+from `pyproject.toml` and may match a release; the installer prints the source
+commit SHA to identify the snapshot. Omit `--main`, or use `--version`, to
+install a release again.
+
+#### Linux & macOS
+
+Latest stable release:
+
+```sh
+installer="$(curl -fsSL 'https://raw.githubusercontent.com/HisQu/buildben/main/src/buildben_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" --
+```
+
+Specific stable release: append `--version X.Y.Z` to the installer arguments.
+
+Current remote `main` snapshot:
+
+```sh
+installer="$(curl -fsSL 'https://raw.githubusercontent.com/HisQu/buildben/main/src/buildben_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" -- --main
+```
+
+Authenticated latest stable release:
+
+```sh
+installer="$(gh api -H 'Accept: application/vnd.github.raw+json' 'repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" -- --github-client gh
+```
+
+Authenticated current remote `main` snapshot:
+
+```sh
+installer="$(gh api -H 'Accept: application/vnd.github.raw+json' 'repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" -- --github-client gh --main
+```
+
+#### Windows
+
+Latest stable release:
+
+```powershell
+$s = Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/HisQu/buildben/main/src/buildben_dev/distribution/install-windows.ps1'; if ([string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n")))
+```
+
+Specific stable release: append `'-Version' 'X.Y.Z'` to the scriptblock invocation.
+
+Current remote `main` snapshot:
+
+```powershell
+$s = Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/HisQu/buildben/main/src/buildben_dev/distribution/install-windows.ps1'; if ([string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n"))) '--main'
+```
+
+Authenticated latest stable release:
+
+```powershell
+$s = gh api -H 'Accept: application/vnd.github.raw+json' 'repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-windows.ps1'; if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n"))) '--github-client' 'gh'
+```
+
+Authenticated current remote `main` snapshot:
+
+```powershell
+$s = gh api -H 'Accept: application/vnd.github.raw+json' 'repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-windows.ps1'; if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n"))) '--github-client' 'gh' '--main'
+```
+
+`--main` cannot be combined with `--version`. For authenticated access, install [GitHub CLI](https://cli.github.com/), then
+run `gh auth login` and `gh auth setup-git`. Public downloads use anonymous
+access; `curl` does not inherit gh credentials. Private VCS dependencies still
+need Git authentication independently of release visibility. BuildBen and
+generated applications do not require administrator privileges.
 
 #### Linux & macOS
 

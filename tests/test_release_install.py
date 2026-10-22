@@ -5,14 +5,15 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tarfile
 import threading
+import tomllib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
-from urllib.parse import quote
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -38,6 +39,15 @@ def _write_sdist(path: Path, members: dict[str, bytes]) -> None:
             info.size = len(data)
             archive.addfile(info, io.BytesIO(data))
 
+def _archive_bytes(members: dict[str, bytes]) -> bytes:
+    stream = io.BytesIO()
+    with tarfile.open(fileobj=stream, mode="w:gz") as archive:
+        for name, data in members.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
+    return stream.getvalue()
+
 
 def _install_smoke_fixture(
     tmp_path: Path,
@@ -46,29 +56,92 @@ def _install_smoke_fixture(
     *,
     release_overrides: dict[str, object] | None = None,
     latest_release_overrides: dict[str, object] | None = None,
+    repository: str = "HisQu/buildben",
+    source_mode: str = "release",
+    main_commit: str | None = None,
+    main_commit_response: bytes | None = None,
+    main_archive_bytes: bytes | None = None,
+    main_commit_status: int = 200,
+    main_archive_status: int = 200,
+    second_main_source: Path | None = None,
 ):
     source = source.resolve(strict=True)
-    version = source.name.removesuffix(".tar.gz").rsplit("-", 1)[-1]
+    if source_mode == "main":
+        if main_commit is None or not re.fullmatch(r"[0-9a-f]{40}", main_commit):
+            pytest.fail("Main smoke requires a full lowercase 40-character commit SHA.")
+        with tarfile.open(source, "r:gz") as archive:
+            pyproject_member = next(
+                member
+                for member in archive.getmembers()
+                if PurePosixPath(member.name).name == "pyproject.toml"
+            )
+            pyproject_file = archive.extractfile(pyproject_member)
+            assert pyproject_file is not None
+            project_data = tomllib.loads(pyproject_file.read().decode())
+        version = project_data["project"]["version"]
+    else:
+        version = source.name.removesuffix(".tar.gz").rsplit("-", 1)[-1]
+    second_commit = "b" * 40
+    commit_response = (
+        json.dumps({"sha": main_commit}).encode()
+        if main_commit_response is None
+        else main_commit_response
+    )
+    if second_main_source is None:
+        second_main_source = tmp_path / "moving-main.tar.gz"
+        _write_sdist(
+            second_main_source,
+            {
+                "pyproject.toml": b'[project]\nname = "not-buildben"\nversion = "99.0.0"\n',
+                "uv.lock": b"version = 1\n",
+            },
+        )
 
     class Handler(BaseHTTPRequestHandler):
+        commit_requests = 0
+
         def log_message(self, format: str, *args: object) -> None:
             return
 
-        def do_GET(self) -> None:
-            if self.path != f"/assets/{quote(source.name)}":
-                self.send_error(404)
-                return
-            data = source.read_bytes()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/gzip")
+        def _send(
+            self, data: bytes, content_type: str, status: int = 200
+        ) -> None:
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
+
+        def do_GET(self) -> None:
+            if self.path == f"/assets/{quote(source.name)}":
+                self._send(source.read_bytes(), "application/gzip")
+                return
+            if self.path == f"/api/repos/{repository}/commits/main":
+                type(self).commit_requests += 1
+                self._send(
+                    commit_response if type(self).commit_requests == 1
+                    else json.dumps({"sha": second_commit}).encode(),
+                    "application/json",
+                    main_commit_status,
+                )
+                return
+            if self.path == f"/api/repos/{repository}/tarball/{main_commit}":
+                self._send(
+                    source.read_bytes() if main_archive_bytes is None else main_archive_bytes,
+                    "application/gzip",
+                    main_archive_status,
+                )
+                return
+            if self.path == f"/api/repos/{repository}/tarball/{second_commit}":
+                self._send(second_main_source.read_bytes(), "application/gzip")
+                return
+            self.send_error(404)
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     server.daemon_threads = True
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     asset_url = f"http://127.0.0.1:{server.server_port}/assets/{quote(source.name)}"
+    api_url = f"http://127.0.0.1:{server.server_port}/api"
     release_value = json.loads(_release_json(source, asset_url))
     if release_overrides is not None:
         release_value.update(release_overrides)
@@ -85,13 +158,15 @@ def _install_smoke_fixture(
         module.mkdir()
         (module / "InstallerHttpFixture.psm1").write_text(
             "function Invoke-RestMethod { param([string]$Uri); "
-            "if ($Uri -like 'https://api.github.com/repos/HisQu/buildben/releases/*') { "
+            "if ($Uri -like 'https://api.github.com/repos/*/releases/*') { "
             "$releasePath = $env:INSTALLER_SMOKE_RELEASE_JSON; "
             "if ($Uri -like '*/latest') { $releasePath = $env:INSTALLER_SMOKE_LATEST_RELEASE_JSON }; "
             "return (Get-Content -Raw -LiteralPath $releasePath | ConvertFrom-Json) }; "
-            "Microsoft.PowerShell.Utility\\Invoke-RestMethod -Uri $Uri }\n"
+            "$fixtureUri = $Uri -replace '^https://api.github.com', $env:INSTALLER_SMOKE_API_URL; "
+            "Microsoft.PowerShell.Utility\\Invoke-RestMethod -Uri $fixtureUri }\n"
             "function Invoke-WebRequest { param([string]$Uri, [string]$OutFile); "
-            "Microsoft.PowerShell.Utility\\Invoke-WebRequest -UseBasicParsing -Uri $Uri -OutFile $OutFile }\n"
+            "$fixtureUri = $Uri -replace '^https://api.github.com', $env:INSTALLER_SMOKE_API_URL; "
+            "Microsoft.PowerShell.Utility\\Invoke-WebRequest -UseBasicParsing -Uri $fixtureUri -OutFile $OutFile }\n"
             "Export-ModuleMember -Function Invoke-RestMethod, Invoke-WebRequest\n",
             encoding="utf-8",
         )
@@ -103,19 +178,25 @@ def _install_smoke_fixture(
         )
         gh_shim = shim_dir / "gh_shim.py"
         gh_shim.write_text(
-            "import os, pathlib, subprocess, sys\n"
+            "import os, pathlib, subprocess, sys, urllib.request\n"
             "pathlib.Path(os.environ['INSTALLER_SMOKE_GH_CALLED']).write_text('called')\n"
             "if os.environ.get('INSTALLER_SMOKE_GH_FAIL') == '1': raise SystemExit(88)\n"
             "args=sys.argv[1:]\n"
             "if args[:1] == ['api']:\n"
-            " release_path=os.environ['INSTALLER_SMOKE_LATEST_RELEASE_JSON'] if args[1].endswith('/latest') else os.environ['INSTALLER_SMOKE_RELEASE_JSON']\n"
+            " endpoint=args[1]\n"
+            " if '/commits/main' in endpoint:\n"
+            "  print(urllib.request.urlopen(os.environ['INSTALLER_SMOKE_API_URL']+endpoint).read().decode()); raise SystemExit(0)\n"
+            " if '/tarball/' in endpoint:\n"
+            "  sys.stdout.buffer.write(urllib.request.urlopen(os.environ['INSTALLER_SMOKE_API_URL']+endpoint).read()); raise SystemExit(0)\n"
+            " release_path=os.environ['INSTALLER_SMOKE_LATEST_RELEASE_JSON'] if endpoint.endswith('/latest') else os.environ['INSTALLER_SMOKE_RELEASE_JSON']\n"
             " print(pathlib.Path(release_path).read_text()); raise SystemExit(0)\n"
             "if args[:2] == ['release','download']:\n"
             " name=args[args.index('--pattern')+1]; dest=pathlib.Path(args[args.index('--dir')+1]); dest.mkdir(parents=True,exist_ok=True)\n"
             " output=dest/name\n"
             " subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-Command','Invoke-WebRequest -Uri $env:INSTALLER_SMOKE_ASSET_URL -OutFile $env:INSTALLER_SMOKE_GH_OUTPUT'],env=os.environ | {'INSTALLER_SMOKE_GH_OUTPUT':str(output)},check=True)\n"
-            " raise SystemExit(0)\n"
-            "raise SystemExit(87)\n",
+            "real=os.environ.get('INSTALLER_SMOKE_REAL_GH')\n"
+            "if not real: raise SystemExit(87)\n"
+            "raise SystemExit(subprocess.run([real,*args],check=False).returncode)\n",
             encoding="utf-8",
         )
         (shim_dir / "gh.cmd").write_text(
@@ -130,10 +211,13 @@ def _install_smoke_fixture(
             "#!/usr/bin/env python3\n"
             "import os, pathlib, subprocess, sys\n"
             "args=sys.argv[1:]\n"
+            "pathlib.Path(os.environ['INSTALLER_SMOKE_CURL_CALLED']).write_text('called')\n"
             "url=next((arg for arg in args if arg.startswith(('http://','https://'))), '')\n"
-            "if url.startswith('https://api.github.com/repos/HisQu/buildben/releases/'):\n"
+            "if '/releases/' in url:\n"
             " release_path=os.environ['INSTALLER_SMOKE_LATEST_RELEASE_JSON'] if url.endswith('/latest') else os.environ['INSTALLER_SMOKE_RELEASE_JSON']\n"
             " print(pathlib.Path(release_path).read_text()); raise SystemExit(0)\n"
+            "if url.startswith('https://api.github.com/repos/'):\n"
+            " args[args.index(url)]=os.environ['INSTALLER_SMOKE_API_URL']+url.split('github.com',1)[1]\n"
             "real=os.environ['INSTALLER_SMOKE_REAL_CURL']\n"
             "raise SystemExit(subprocess.run([real,*args],check=False).returncode)\n",
             encoding="utf-8",
@@ -142,23 +226,31 @@ def _install_smoke_fixture(
         gh_shim = shim_dir / "gh"
         gh_shim.write_text(
             "#!/usr/bin/env python3\n"
-            "import os, pathlib, subprocess, sys\n"
+            "import os, pathlib, subprocess, sys, urllib.request\n"
             "pathlib.Path(os.environ['INSTALLER_SMOKE_GH_CALLED']).write_text('called')\n"
             "if os.environ.get('INSTALLER_SMOKE_GH_FAIL') == '1': raise SystemExit(88)\n"
             "args=sys.argv[1:]\n"
             "if args[:1] == ['api']:\n"
-            " release_path=os.environ['INSTALLER_SMOKE_LATEST_RELEASE_JSON'] if args[1].endswith('/latest') else os.environ['INSTALLER_SMOKE_RELEASE_JSON']\n"
+            " endpoint=args[1]\n"
+            " if '/commits/main' in endpoint:\n"
+            "  print(urllib.request.urlopen(os.environ['INSTALLER_SMOKE_API_URL']+endpoint).read().decode()); raise SystemExit(0)\n"
+            " if '/tarball/' in endpoint:\n"
+            "  sys.stdout.buffer.write(urllib.request.urlopen(os.environ['INSTALLER_SMOKE_API_URL']+endpoint).read()); raise SystemExit(0)\n"
+            " release_path=os.environ['INSTALLER_SMOKE_LATEST_RELEASE_JSON'] if endpoint.endswith('/latest') else os.environ['INSTALLER_SMOKE_RELEASE_JSON']\n"
             " print(pathlib.Path(release_path).read_text()); raise SystemExit(0)\n"
             "if args[:2] == ['release','download']:\n"
             " name=args[args.index('--pattern')+1]; dest=pathlib.Path(args[args.index('--dir')+1]); dest.mkdir(parents=True,exist_ok=True)\n"
             " subprocess.run([os.environ['INSTALLER_SMOKE_REAL_CURL'],'-fsSL',os.environ['INSTALLER_SMOKE_ASSET_URL'],'-o',str(dest/name)],check=True)\n"
-            " raise SystemExit(0)\n"
-            "raise SystemExit(87)\n",
+            "real=os.environ.get('INSTALLER_SMOKE_REAL_GH')\n"
+            "if not real: raise SystemExit(87)\n"
+            "raise SystemExit(subprocess.run([real,*args],check=False).returncode)\n",
             encoding="utf-8",
         )
         gh_shim.chmod(0o755)
 
     isolated = tmp_path / "isolated home with spaces"
+    installer_temp = tmp_path / "installer temporary directory with spaces"
+    installer_temp.mkdir()
     config = isolated / "config"
     data = isolated / "data"
     cache = isolated / "cache"
@@ -174,7 +266,7 @@ def _install_smoke_fixture(
     uv = shutil.which("uv")
     if uv is None:
         pytest.fail("The source-installer tests require the runner's uv executable.")
-    gh_called = tmp_path / "gh-called"
+    real_gh = shutil.which("gh")
     environment = {
         key: value
         for key, value in os.environ.items()
@@ -189,14 +281,20 @@ def _install_smoke_fixture(
             "UV_TOOL_DIR": str(tool_dir),
             "UV_TOOL_BIN_DIR": str(tool_bin),
             "UV_CACHE_DIR": str(uv_cache),
-            "INSTALLER_SMOKE_SOURCE": str(source),
+            "TMPDIR": str(installer_temp),
+            "TMP": str(installer_temp),
+            "TEMP": str(installer_temp),
+            "INSTALLER_SMOKE_SOURCE": str(source) if source_mode == "release" else "",
+            "INSTALLER_SMOKE_MAIN_SOURCE": str(source) if source_mode == "main" else "",
+            "INSTALLER_SMOKE_MAIN_COMMIT": main_commit or "",
             "INSTALLER_SMOKE_CLIENT": client,
             "INSTALLER_SMOKE_RELEASE_JSON": str(tmp_path / "release.json"),
-            "INSTALLER_SMOKE_LATEST_RELEASE_JSON": str(
-                tmp_path / "latest-release.json"
-            ),
+            "INSTALLER_SMOKE_LATEST_RELEASE_JSON": str(tmp_path / "latest-release.json"),
             "INSTALLER_SMOKE_ASSET_URL": asset_url,
+            "INSTALLER_SMOKE_API_URL": api_url,
             "INSTALLER_SMOKE_GH_CALLED": str(gh_called),
+            "INSTALLER_SMOKE_REAL_GH": real_gh or "",
+            "INSTALLER_SMOKE_CURL_CALLED": str(tmp_path / "curl-called"),
             "INSTALLER_SMOKE_GH_FAIL": "1" if client == "curl" else "0",
         }
     )
@@ -230,7 +328,13 @@ def _install_smoke_fixture(
     )
 
 
-def _installer_command(uv: str, *arguments: str) -> list[str]:
+def _installer_command(
+    uv: str, *arguments: str, skip_config: bool = True
+) -> list[str]:
+    prefix = ["--yes"]
+    if skip_config:
+        prefix.append("--skip-config")
+    prefix.extend(["--uv", uv])
     if os.name == "nt":
         return [
             "powershell.exe",
@@ -238,25 +342,28 @@ def _installer_command(uv: str, *arguments: str) -> list[str]:
             "-NonInteractive",
             "-File",
             str(INSTALLER_DIR / "install-windows.ps1"),
-            "--yes",
-            "--skip-config",
-            "--uv",
-            uv,
+            *prefix,
             *arguments,
         ]
     return [
         "bash",
         str(INSTALLER_DIR / "install-linux-macos.sh"),
-        "--yes",
-        "--skip-config",
-        "--uv",
-        uv,
+        *prefix,
         *arguments,
     ]
 
 
 @pytest.mark.parametrize(
-    "arguments", [["--git"], ["--dev", "."], ["--github-client", "automatic"]]
+    "arguments",
+    [
+        ["--git"],
+        ["--dev", "."],
+        ["--github-client", "automatic"],
+        ["--main", "--version", "0.1.0"],
+        ["--version", "0.1.0", "--main"],
+        ["--main", "-v", ""],
+        ["-v", "", "--main"],
+    ]
 )
 def test_rejected_options_do_not_run_uv(arguments: list[str], tmp_path: Path) -> None:
     if os.name == "nt":
@@ -285,21 +392,38 @@ def test_rejected_options_do_not_run_uv(arguments: list[str], tmp_path: Path) ->
     assert "invoked" not in output, output
 
 
-def test_source_install_smoke(tmp_path: Path) -> None:
-    """Install an actual sdist through the production script and test transport shim."""
-    source_value = os.environ.get("INSTALLER_SMOKE_SOURCE")
+@pytest.mark.parametrize("source_mode", ["release", "main"])
+def test_source_install_smoke(tmp_path: Path, source_mode: str) -> None:
+    """Install an actual release or pinned main archive through the installer."""
+    source_key = (
+        "INSTALLER_SMOKE_SOURCE"
+        if source_mode == "release"
+        else "INSTALLER_SMOKE_MAIN_SOURCE"
+    )
+    source_value = os.environ.get(source_key)
     if not source_value:
-        pytest.skip("INSTALLER_SMOKE_SOURCE is unset; source-install smoke is opt-in.")
+        pytest.skip(f"{source_key} is unset; source-install smoke is opt-in.")
     source = Path(source_value)
     if not source.is_absolute() or not source.is_file():
-        pytest.fail(
-            "INSTALLER_SMOKE_SOURCE must name an absolute path to a built sdist."
-        )
+        pytest.fail(f"{source_key} must name an absolute path to an archive.")
+    main_commit = None
+    if source_mode == "main":
+        main_commit = os.environ.get("INSTALLER_SMOKE_MAIN_COMMIT")
+        if main_commit is None or not re.fullmatch(r"[0-9a-f]{40}", main_commit):
+            pytest.fail(
+                "INSTALLER_SMOKE_MAIN_COMMIT must contain a full lowercase 40-character SHA."
+            )
     client = os.environ.get("INSTALLER_SMOKE_CLIENT", "curl")
     if client not in {"curl", "gh"}:
         pytest.fail("INSTALLER_SMOKE_CLIENT must be curl or gh.")
 
-    fixture = _install_smoke_fixture(tmp_path, source, client)
+    fixture = _install_smoke_fixture(
+        tmp_path,
+        source,
+        client,
+        source_mode=source_mode,
+        main_commit=main_commit,
+    )
     (
         server,
         thread,
@@ -312,10 +436,23 @@ def test_source_install_smoke(tmp_path: Path) -> None:
         version,
         gh_called,
     ) = fixture
+    installer_arguments = ["--github-client", client]
+    if source_mode == "main":
+        installer_arguments.append("--main")
+    installed_environment = {
+        key: value
+        for key, value in environment.items()
+        if key
+        not in {
+            "INSTALLER_SMOKE_SOURCE",
+            "INSTALLER_SMOKE_MAIN_SOURCE",
+            "INSTALLER_SMOKE_MAIN_COMMIT",
+        }
+    }
     thread.start()
     try:
         result = subprocess.run(
-            _installer_command(uv, "--github-client", client),
+            _installer_command(uv, *installer_arguments, skip_config=False),
             check=False,
             capture_output=True,
             text=True,
@@ -335,7 +472,7 @@ def test_source_install_smoke(tmp_path: Path) -> None:
                 check=False,
                 capture_output=True,
                 text=True,
-                env=environment,
+                env=installed_environment,
             )
             assert help_result.returncode == 0, help_result.stdout + help_result.stderr
         smoke_result = subprocess.run(
@@ -349,7 +486,7 @@ def test_source_install_smoke(tmp_path: Path) -> None:
             check=False,
             capture_output=True,
             text=True,
-            env=environment,
+            env=installed_environment,
         )
         assert smoke_result.returncode == 0, smoke_result.stdout + smoke_result.stderr
         assert gh_called.exists() is (client == "gh")
@@ -358,7 +495,7 @@ def test_source_install_smoke(tmp_path: Path) -> None:
             check=True,
             capture_output=True,
             text=True,
-            env=environment,
+            env=installed_environment,
         ).stdout.strip()
         assert Path(origin).resolve().is_relative_to((tool_dir / "buildben").resolve())
         assert config_sentinel.read_text(encoding="utf-8") == "keep config"
@@ -368,7 +505,7 @@ def test_source_install_smoke(tmp_path: Path) -> None:
             check=False,
             capture_output=True,
             text=True,
-            env=environment,
+            env=installed_environment,
         )
         assert uninstall.returncode == 0, uninstall.stdout + uninstall.stderr
         assert config_sentinel.read_text(encoding="utf-8") == "keep config"
@@ -377,6 +514,248 @@ def test_source_install_smoke(tmp_path: Path) -> None:
         server.shutdown()
         thread.join()
         server.server_close()
+
+
+def _run_main_failure(
+    tmp_path: Path,
+    *,
+    main_commit_response: bytes | None = None,
+    main_archive_bytes: bytes | None = None,
+    main_commit_status: int = 200,
+    main_archive_status: int = 200,
+    preserve_installed_sentinel: bool = False,
+    client: str = "curl",
+) -> tuple[str, Path, Path]:
+    source = tmp_path / "valid-main-source.tar.gz"
+    _write_sdist(
+        source,
+        {
+            "pyproject.toml": b'[project]\nname = "buildben"\nversion = "0.10.3"\n',
+            "uv.lock": b"version = 1\n",
+        },
+    )
+    fixture = _install_smoke_fixture(
+        tmp_path,
+        source,
+        client,
+        source_mode="main",
+        main_commit="a" * 40,
+        main_commit_response=main_commit_response,
+        main_archive_bytes=main_archive_bytes,
+        main_commit_status=main_commit_status,
+        main_archive_status=main_archive_status,
+    )
+    server, thread, environment, uv, tool_dir, _, _, _, _, gh_called = fixture
+    if client == "gh":
+        environment["INSTALLER_SMOKE_GH_FAIL"] = "1"
+    sentinel = None
+    if preserve_installed_sentinel:
+        sentinel = tool_dir / "buildben" / "install-state-sentinel"
+        sentinel.parent.mkdir()
+        sentinel.write_text("previous installation", encoding="utf-8")
+    thread.start()
+    try:
+        result = subprocess.run(
+            _installer_command(
+                uv, "--github-client", client, "--main", skip_config=True
+            ),
+            check=False,
+            capture_output=True,
+            text=True,
+            env=environment,
+            timeout=120,
+        )
+        output = result.stdout + result.stderr
+        assert result.returncode != 0, output
+        if sentinel is None:
+            assert list(tool_dir.iterdir()) == []
+        else:
+            assert sentinel.read_text(encoding="utf-8") == "previous installation"
+        if client == "gh":
+            assert not Path(environment["INSTALLER_SMOKE_CURL_CALLED"]).exists()
+        return output, gh_called, tool_dir
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        b"not-json",
+        b"{}",
+        json.dumps({"sha": "not-a-full-sha"}).encode(),
+        json.dumps({"sha": "A" * 40}).encode(),
+    ],
+)
+def test_main_rejects_missing_or_invalid_commit_sha(
+    tmp_path: Path, response: bytes
+) -> None:
+    output, gh_called, _ = _run_main_failure(
+        tmp_path, main_commit_response=response
+    )
+    assert "invalid main commit SHA" in output
+    assert not gh_called.exists()
+
+def test_main_commit_transport_failure_does_not_install(
+    tmp_path: Path,
+) -> None:
+    output, gh_called, _ = _run_main_failure(
+        tmp_path, main_commit_status=500
+    )
+    assert output
+    assert not gh_called.exists()
+
+def test_main_archive_transport_failure_does_not_install(
+    tmp_path: Path,
+) -> None:
+    output, gh_called, _ = _run_main_failure(
+        tmp_path, main_archive_status=404
+    )
+    assert output
+    assert not gh_called.exists()
+
+
+
+@pytest.mark.parametrize("archive_bytes", [b"", b"truncated gzip bytes"])
+def test_main_rejects_empty_or_invalid_archive(
+    tmp_path: Path, archive_bytes: bytes
+) -> None:
+    output, _, _ = _run_main_failure(
+        tmp_path, main_archive_bytes=archive_bytes
+    )
+    lower_output = output.lower()
+    assert "empty file" in lower_output or "not a gzip file" in lower_output
+
+
+@pytest.mark.parametrize(
+    ("members", "error"),
+    [
+        (
+            {
+                "snapshot/pyproject.toml": b'[project]\nname = "other"\nversion = "0.1.0"\n',
+                "snapshot/uv.lock": b"version = 1\n",
+            },
+            "Source project metadata does not match",
+        ),
+        (
+            {
+                "snapshot/pyproject.toml": b'[project]\nname = "buildben"\n',
+                "snapshot/uv.lock": b"version = 1\n",
+            },
+            "Source project metadata does not match",
+        ),
+        (
+            {
+                "snapshot/pyproject.toml": b'[project]\nname = "buildben"\nversion = ""\n',
+                "snapshot/uv.lock": b"version = 1\n",
+            },
+            "Source project metadata does not match",
+        ),
+        (
+            {"snapshot/uv.lock": b"version = 1\n"},
+            "pyproject.toml and uv.lock",
+        ),
+        (
+            {
+                "snapshot/pyproject.toml": b'[project]\nname = "buildben"\nversion = "0.1.0"\n',
+            },
+            "pyproject.toml and uv.lock",
+        ),
+        (
+            {
+                "snapshot/pyproject.toml": b'[project]\nname = "buildben"\nversion = "0.1.0"\n',
+                "snapshot/uv.lock": b"version = 1\n",
+                "../outside": b"unsafe",
+            },
+            "unsafe path",
+        ),
+        (
+            {
+                "snapshot/pyproject.toml": b'[project]\nname = "buildben"\nversion = "0.1.0"\n',
+                "snapshot/uv.lock": b"version = 1\n",
+                "/absolute": b"unsafe",
+            },
+            "unsafe path",
+        ),
+        (
+            {
+                "snapshot/pyproject.toml": b'[project]\nname = "buildben"\nversion = "0.1.0"\n',
+                "snapshot/uv.lock": b"version = 1\n",
+                "C:/drive-qualified": b"unsafe",
+            },
+            "unsafe path",
+        ),
+        (
+            {
+                "one/pyproject.toml": b'[project]\nname = "buildben"\nversion = "0.1.0"\n',
+                "two/uv.lock": b"version = 1\n",
+            },
+            "exactly one project root",
+        ),
+    ],
+)
+def test_main_rejects_invalid_archive_metadata_and_members(
+    tmp_path: Path, members: dict[str, bytes], error: str
+) -> None:
+    output, _, _ = _run_main_failure(
+        tmp_path, main_archive_bytes=_archive_bytes(members)
+    )
+    assert error in output
+
+@pytest.mark.parametrize("member_type", [tarfile.SYMTYPE, tarfile.FIFOTYPE])
+def test_main_rejects_links_and_special_members(
+    tmp_path: Path, member_type: bytes
+) -> None:
+    stream = io.BytesIO()
+    with tarfile.open(fileobj=stream, mode="w:gz") as archive:
+        for name, data in {
+            "snapshot/pyproject.toml": b'[project]\nname = "buildben"\nversion = "0.1.0"\n',
+            "snapshot/uv.lock": b"version = 1\n",
+        }.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
+        special = tarfile.TarInfo("snapshot/special")
+        special.type = member_type
+        if member_type == tarfile.SYMTYPE:
+            special.linkname = "pyproject.toml"
+        archive.addfile(special)
+    output, _, _ = _run_main_failure(
+        tmp_path, main_archive_bytes=stream.getvalue()
+    )
+    assert "links or special files" in output
+
+def test_main_stale_lock_fails_before_installation(tmp_path: Path) -> None:
+    stale_lock = (Path(__file__).resolve().parents[1] / "uv.lock").read_bytes()
+    project = (
+        b'[project]\nname = "buildben"\nversion = "0.10.3"\n'
+        b'requires-python = ">=3.12"\ndependencies = []\n'
+    )
+    output, _, _ = _run_main_failure(
+        tmp_path,
+        main_archive_bytes=_archive_bytes(
+            {"snapshot/pyproject.toml": project, "snapshot/uv.lock": stale_lock}
+        ),
+        preserve_installed_sentinel=True,
+    )
+    assert "lock" in output.lower()
+
+
+
+def test_main_gh_failure_does_not_fall_back_to_public_transport(
+    tmp_path: Path,
+) -> None:
+    output, gh_called, tool_dir = _run_main_failure(tmp_path, client="gh")
+    expected_error = (
+        "source installation failed"
+        if os.name == "nt"
+        else "returned non-zero exit status 88"
+    )
+    assert expected_error in output
+    assert gh_called.is_file()
+    assert list(tool_dir.iterdir()) == []
 
 
 @pytest.mark.parametrize("release_overrides", [{"draft": True}, {"prerelease": True}])

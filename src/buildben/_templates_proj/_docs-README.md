@@ -57,7 +57,7 @@ actual application behavior is implemented.
 | [ConfigManager](Explanations.md#configuration-tools) | `APP_RC.manage()` | Shared operations for setup, inspection, editing, and storage management. |
 | [Config CLI](Explanations.md#configuration-tools) | `{my_project} config ...` | Configuration commands mounted on the application. |
 | [Config editor](Explanations.md#configuration-tools) | `{my_project} config edit` | Terminal interface for inspecting layers and editing saved overrides. |
-| [Installers](References.md#installer-reference) | `src/{my_project}_dev/distribution` | Canonical stable-release source installers with public and authenticated transports. |
+| [Installers](References.md#installer-reference) | `src/{my_project}_dev/distribution` | Canonical installers for latest/specified releases and pinned `--main` snapshots, using public or authenticated transports. |
 
 ## Documentation rules
 
@@ -67,11 +67,12 @@ package descriptions. Contributors and coding agents must follow them.
 ### Installation instructions
 
 - Keep the root README concise and put installation before usage. Under `Installation`, put the H3 heading `One-line install` before `Install from a cloned repository`. Under each, label platform commands with `For Linux & macOS` and `For Windows` headings.
-- The public one-line bootstrap downloads the canonical installer from the repository's default branch and does not require GitHub CLI. Unix uses curl; Windows uses native PowerShell HTTP. An explicit `--github-client gh` uses authenticated GitHub CLI requests without fallback.
+- The one-line installer bootstraps from the repository's default branch. It installs the latest stable release by default; `--version VERSION` selects a release and `--main` selects a single pinned commit from remote `main` with its committed `uv.lock`. Main requires GitHub access but no release or Actions artifact; it may be unreleased code whose CI has not passed. See the [installer reference](References.md#installer-reference).
+- Public installation uses curl on Unix or native PowerShell HTTP on Windows and does not require GitHub CLI. `--github-client gh` uses authenticated GitHub CLI requests without fallback.
 - Link https://cli.github.com/ and document `gh auth login` and `gh auth setup-git` where authenticated access is needed. Private VCS dependencies require separate working Git credentials.
 - Cloned-repository instructions use `python -m venv` and `python -m pip install -e .`, so users can install without uv. Mention uv as optional.
 - GitHub releases contain one standard wheel and one source archive; do not describe installer bundles, platform archives, manifests, or permanent runtime exports.
-- Keep platform installer code in `src/{my_project}_dev/distribution`; root install scripts are thin shortcuts. See the [installer reference](References.md#installer-reference) for options and transport behavior.
+- Keep platform installer code in `src/{my_project}_dev/distribution`; root install scripts are thin shortcuts.
 
 ### Names and explanations
 

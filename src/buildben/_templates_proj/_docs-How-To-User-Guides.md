@@ -25,16 +25,54 @@ name. Replace demonstration paths with your chosen directories for actual use.
 
 ## One-line install
 
-The one-line installer fetches a canonical installer from the repository's
-default branch, then selects the latest stable GitHub release source archive.
-Public installation is the default: curl on Linux and macOS, and native
-PowerShell HTTP on Windows. Neither requires GitHub CLI. Private VCS dependencies
-still need working Git credentials; public release downloads do not supply them.
+The one-line installer bootstraps from the repository's current `main` branch
+in both modes. By default it installs the latest stable release source
+distribution; `--version X.Y.Z` selects a specific stable release. A release
+install uses the published release artifact. `--main` instead installs one
+snapshot of the current remote `main`, pinned to the commit resolved for that
+invocation and its committed `uv.lock`; local checkout changes are not used,
+and no GitHub release or Actions artifact is required.
 
-For authenticated GitHub access, install [GitHub CLI](https://cli.github.com/),
-run `gh auth login` and `gh auth setup-git`, then add `--github-client gh` to
-the installer command. The installer does not fall back to anonymous access if
-GitHub CLI authentication fails.
+`--main` requires GitHub access. Public downloads use anonymous requests;
+authenticated access uses GitHub CLI and requires `gh auth login` and
+`gh auth setup-git`. Main may contain unreleased code whose CI has not passed.
+The installed version comes from `pyproject.toml` and may match a release; the
+installer prints the source commit SHA to identify the snapshot. Omit `--main`,
+or use `--version`, to install a release again. These options cannot be combined.
+
+Public installation is the default: curl on Linux and macOS, and native
+PowerShell HTTP on Windows. Private VCS dependencies still need working Git
+credentials independently.
+
+### For Linux & macOS
+
+Public:
+
+```shell
+installer="$(curl -fsSL https://raw.githubusercontent.com/<github_username>/<my_project>/main/src/<my_project>_dev/distribution/install-linux-macos.sh)" && test -n "$installer" && bash -c "$installer" -- --main
+```
+
+Authenticated:
+
+```shell
+installer="$(gh api -H 'Accept: application/vnd.github.raw+json' 'repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" -- --github-client gh --main
+```
+
+### For Windows
+
+Public:
+
+```powershell
+$url = 'https://raw.githubusercontent.com/<github_username>/<my_project>/main/src/<my_project>_dev/distribution/install-windows.ps1'; $installer = Invoke-RestMethod -Uri $url; if ([string]::IsNullOrWhiteSpace(($installer -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($installer -join "`n"))) '--main'
+```
+
+Authenticated:
+
+```powershell
+$s = gh api -H 'Accept: application/vnd.github.raw+json' 'repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-windows.ps1'; if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n"))) '--github-client' 'gh' '--main'
+```
+See the [installer reference](References.md#installer-reference) for all
+supported options and release selection details.
 
 ### For Linux & macOS
 

@@ -59,6 +59,10 @@ This project follows Semantic Versioning.
 
 ### ➕ Added
 
+- Added `--main` to the terminal installers and generated-project installers.
+  It installs one captured GitHub main commit with that snapshot's committed
+  `uv.lock`; published stable releases remain the default.
+
 <br>
 
 ### 💔 Changed
@@ -74,6 +78,9 @@ This project follows Semantic Versioning.
 <br>
 
 ### 🔨 Fixed
+
+- Fixed the Unix BuildBen installer attempting to run a configuration command
+  that BuildBen does not provide. Generated applications retain their setup wizard.
 
 <br>
 

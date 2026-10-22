@@ -78,19 +78,30 @@ before starting its installer.
 | `prepare-powershell-windows.cmd` | Handles RemoteSigned policy and downloaded-file marks for the Windows entry point. |
 | `install-macos.command` | macOS double-click wrapper that forwards to the Bash installer. |
 
-The scripts fetch their installer from the repository's default branch, then
-resolve a published stable release. The default transport downloads public
-release assets anonymously: curl on Unix and native PowerShell HTTP on Windows.
-Use `--github-client gh` to request GitHub resources with the authenticated
-GitHub CLI; a failed gh request is not retried anonymously. Install
-[GitHub CLI](https://cli.github.com/), then run `gh auth login` and
-`gh auth setup-git` when authenticated GitHub or private VCS access is needed.
-Public release downloads and curl do not inherit gh credentials.
+The scripts bootstrap from the repository's default branch in both modes.
+Without a source option, they install the latest published stable source
+distribution; `--version VERSION` selects a specific stable release. Release
+installation uses the published release artifact. `--main` instead resolves
+the current remote `main` branch once and downloads that commit's source
+snapshot, including its committed `uv.lock`. It does not use local checkout
+changes and requires no GitHub release or Actions artifact.
 
-| Option | Effect |
-| --- | --- |
-| *(no version option)* | Install the latest published non-prerelease release source archive. |
-| `--version VERSION` | Select a stable release version, accepting `X.Y.Z` or `vX.Y.Z`. |
+`--main` requires GitHub access: public requests use anonymous transport, while
+`--github-client gh` uses authenticated GitHub CLI requests without anonymous
+fallback. Install [GitHub CLI](https://cli.github.com/), then run `gh auth
+login` and `gh auth setup-git` when authenticated GitHub or private VCS access
+is needed. Public release downloads and curl do not inherit gh credentials;
+private VCS dependencies separately need working Git credentials.
+
+Main is unreleased code, and its CI may not have passed. The installed package
+version comes from `pyproject.toml` and may match a release; the printed source
+commit SHA identifies the selected snapshot. Omit `--main` or pass
+`--version VERSION` to return to a release; `--main` and `--version` are
+mutually exclusive.
+
+| *(no source option)* | Install the latest published stable release source archive. |
+| `--version VERSION` | Select a stable release version, accepting `X.Y.Z` or `vX.Y.Z`; cannot be combined with `--main`. |
+| `--main` | Install the current remote `main` snapshot pinned to one resolved commit and its committed lock file; requires GitHub access. |
 | `--github-client curl` | Use anonymous public download transport (the default); Windows uses native PowerShell HTTP. |
 | `--github-client gh` | Use authenticated GitHub CLI requests without anonymous fallback. |
 | `--uv PATH` | Use a specific uv executable. |
