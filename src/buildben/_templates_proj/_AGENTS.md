@@ -51,6 +51,7 @@
 - Update CHANGELOG.md for user-visible changes. Add TODO.md entries only for actionable unresolved work, after checking for duplicates.
 
 ## Installation rules
+- Keep the root README concise and put installation before usage. Under `Installation`, put the H3 heading `One-line install` before `Install from a cloned repository`. Under each, label platform commands with `For Linux & macOS` and `For Windows` headings.
 - By default, the one-line installer selects the latest stable GitHub release source archive; `--version VERSION` selects a release. `--main` selects the current remote `main` snapshot pinned to one commit and its committed `uv.lock`; it requires GitHub access but no release or Actions artifact, and may install unreleased code whose CI has not passed. See the [installer reference](docs/References.md#installer-reference).
 - Public release downloads use curl on Unix or native PowerShell HTTP on Windows and do not require GitHub CLI. `--github-client gh` uses authenticated requests without fallback.
 - BuildBen and generated installers accept `--github-client gh` for authenticated GitHub requests. Link https://cli.github.com/ and document `gh auth login` plus `gh auth setup-git` when authenticated access is relevant.

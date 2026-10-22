@@ -88,9 +88,7 @@ changes and requires no GitHub release or Actions artifact.
 
 `--main` requires GitHub access: public requests use anonymous transport, while
 `--github-client gh` uses authenticated GitHub CLI requests without anonymous
-fallback. Install [GitHub CLI](https://cli.github.com/), then run `gh auth
-login` and `gh auth setup-git` when authenticated GitHub or private VCS access
-is needed. Public release downloads and curl do not inherit gh credentials;
+fallback. Install [GitHub CLI](https://cli.github.com/), then run `gh auth login` and `gh auth setup-git` when authenticated GitHub or private VCS access is needed. Public release downloads and curl do not inherit gh credentials.
 private VCS dependencies separately need working Git credentials.
 
 Main is unreleased code, and its CI may not have passed. The installed package
@@ -99,6 +97,8 @@ commit SHA identifies the selected snapshot. Omit `--main` or pass
 `--version VERSION` to return to a release; `--main` and `--version` are
 mutually exclusive.
 
+| Option | Effect |
+| --- | --- |
 | *(no source option)* | Install the latest published stable release source archive. |
 | `--version VERSION` | Select a stable release version, accepting `X.Y.Z` or `vX.Y.Z`; cannot be combined with `--main`. |
 | `--main` | Install the current remote `main` snapshot pinned to one resolved commit and its committed lock file; requires GitHub access. |
