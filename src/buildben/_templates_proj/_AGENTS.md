@@ -22,7 +22,9 @@
   - complete application examples in `docs/EXAMPLES.md`
 - Put CLI behavior in `<my_project>.cli.app`; keep `<my_project>.main` as a
   thin public entry point wrapper.
-- Check the TODO.md and assess if your task is related to any issues and should be resolved as part of your pass.
+- Check `BACKLOG.md` for durable actionable work not being handled now and assess whether related issues belong in your pass.
+- Keep an active pass's `TODO.md` execution checklist beside its `PLAN.md`; do not create empty active artifacts or use TODO as a second backlog.
+- Keep one authoritative checklist per action. Before closing or archiving a pass, explicitly transfer unfinished work to the backlog or another pass.
 
 ## Project rules
 - Do not duplicate helpers or re-implement existing utilities without checking first.
@@ -48,7 +50,7 @@
 - In all six `docs/` pages, put every H2 under a topical H1. Nest every H2 under that H1 in the table of contents, and put a standalone `<br>` before each topical H1. The generated documentation test enforces this rule.
 - Use sentence-case headings and GitHub callouts for their stated purposes.
 - Preserve Graphigs figure standards and regenerate assets through their source builders.
-- Update CHANGELOG.md for user-visible changes. Add TODO.md entries only for actionable unresolved work, after checking for duplicates.
+- Update CHANGELOG.md for user-visible changes. Add BACKLOG.md entries only for actionable unresolved work, after checking for duplicates.
 
 ## Installation rules
 - Keep the root README concise and put installation before usage. Under `Installation`, put the H3 heading `One-line install` before `Install from a cloned repository`. Under each, label platform commands with `For Linux & macOS` and `For Windows` headings.

@@ -55,6 +55,13 @@ This project follows Semantic Versioning.
 
 ### 💥 Breaking changes
 
+- Breaking: New scaffolds use root `BACKLOG.md` instead of `TODO.md` for deferred
+  work. Consumers linking to the old path must rename their existing durable
+  backlog and update those links, preserving all entries. Do not rerun
+  `init-proj` to migrate an existing project: template copying may overwrite
+  project files. Reserve `TODO.md` for an active pass's checklist beside
+  `PLAN.md`; the scaffold generates neither active artifact.
+
 <br>
 
 ### ➕ Added

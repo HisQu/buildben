@@ -25,7 +25,7 @@
 | --- | --- |
 | [README.md](../README.md) | Installation and first use. |
 | [CHANGELOG.md](../CHANGELOG.md) | Release history and migration notes. |
-| [TODO.md](../TODO.md) | Actionable work deferred from a change. |
+| [BACKLOG.md](../BACKLOG.md) | Actionable work deferred from a change. |
 | [AGENTS.md](../AGENTS.md) | Local coding and documentation rules. |
 | [pyproject.toml](../pyproject.toml) | Package metadata, dependencies, and tool settings. |
 | [justfile](../justfile) | Commands for [development and releases](Development.md#releases). |
