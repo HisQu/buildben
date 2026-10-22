@@ -32,14 +32,16 @@ Options:
 }
 
 function Invoke-Checked {
-    param([Parameter(Mandatory)][string] $FilePath, [string[]] $Arguments = @(), [string] $Description = "Command")
-    & $FilePath @Arguments
+    param([Parameter(Mandatory)][string] $FilePath, [string[]] $Arguments = @(), [string] $Description = "Command", [AllowEmptyString()][string] $InputText)
+    if ($PSBoundParameters.ContainsKey("InputText")) { $InputText | & $FilePath @Arguments }
+    else { & $FilePath @Arguments }
     if ($LASTEXITCODE -ne 0) { throw "$Description failed with exit code $LASTEXITCODE." }
 }
 
 function Invoke-Captured {
-    param([Parameter(Mandatory)][string] $FilePath, [string[]] $Arguments = @(), [string] $Description = "Command")
-    $Output = & $FilePath @Arguments
+    param([Parameter(Mandatory)][string] $FilePath, [string[]] $Arguments = @(), [string] $Description = "Command", [AllowEmptyString()][string] $InputText)
+    if ($PSBoundParameters.ContainsKey("InputText")) { $Output = $InputText | & $FilePath @Arguments }
+    else { $Output = & $FilePath @Arguments }
     if ($LASTEXITCODE -ne 0) { throw "$Description failed with exit code $LASTEXITCODE." }
     return ($Output | Out-String).Trim()
 }
@@ -200,7 +202,7 @@ subprocess.run([uv, "export", "--locked", "--no-dev", "--no-default-groups", "--
 subprocess.run([uv, "tool", "install", "--force", "--refresh", "--python", sys.executable, "--with-requirements", str(root / "runtime-requirements.txt"), str(project_root)], check=True)
 '@
     try {
-        Invoke-Checked -FilePath $InstallPython -Arguments @("-c", $PythonCode, $Uv, $GithubClient, $Repository, [string]$Version, $TemporaryDirectory, $AppDistribution) -Description "$AppDistribution source installation"
+        Invoke-Checked -FilePath $InstallPython -Arguments @("-", $Uv, $GithubClient, $Repository, [string]$Version, $TemporaryDirectory, $AppDistribution) -InputText $PythonCode -Description "$AppDistribution source installation"
         Update-ToolPath
     }
     finally { Remove-Item -LiteralPath $TemporaryDirectory -Recurse -Force -ErrorAction SilentlyContinue }
