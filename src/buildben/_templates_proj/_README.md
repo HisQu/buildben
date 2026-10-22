@@ -128,6 +128,12 @@ the snapshot. Omit `--main`, or use `--version`, to install a release again.
 | `--version X.Y.Z` | Install the selected published stable release. |
 | `--main` | Install one captured commit from remote `main` with its committed `uv.lock`. |
 
+For authenticated access, install [GitHub CLI](https://cli.github.com/), then run
+`gh auth login` and `gh auth setup-git`. Pass `--github-client gh` to use it;
+public downloads and curl do not inherit gh credentials. Private VCS
+dependencies independently require Git credentials. Windows installation does
+not require administrator privileges.
+
 Public and authenticated installer commands for Linux, macOS, and Windows are
 shown below for reference; the examples remain commented out.
 
