@@ -203,8 +203,8 @@ def _install_smoke_fixture(
     (tmp_path / "release.json").write_text(release_json, encoding="utf-8")
     (tmp_path / "latest-release.json").write_text(latest_release_json, encoding="utf-8")
     if os.name == "nt":
-        environment["PSModulePath"] = os.pathsep.join(
-            [str(shim_dir), environment.get("PSModulePath", "")]
+        environment["PSMODULEPATH"] = os.pathsep.join(
+            [str(shim_dir), environment.get("PSMODULEPATH", "")]
         )
     else:
         real_curl = shutil.which("curl")
