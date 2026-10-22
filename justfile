@@ -362,7 +362,7 @@ release-install-smoke:
     fi
     if [[ ! -f "$INSTALLER_SMOKE_SOURCE" ]]; then echo "Source archive does not exist: $INSTALLER_SMOKE_SOURCE" >&2; exit 1; fi
     export INSTALLER_SMOKE_CLIENT="${INSTALLER_SMOKE_CLIENT:-curl}"
-    python -m pytest -n 0 tests/test_release_install.py -k source_install_smoke
+    uv run --locked python -m pytest -n 0 tests/test_release_install.py -k source_install_smoke
 
 # Rehearse the complete local release gate without publishing anything.
 [group('Release')]
