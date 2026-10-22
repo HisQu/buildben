@@ -22,6 +22,7 @@ This project follows Semantic Versioning.
 
 1. [Buildben Changelog](#buildben-changelog)
 2. [\[Unreleased\]](#unreleased)
+3. [\[0.11.1\] - 2026-10-21](#0111---2026-10-21)
 3. [\[0.11.0\] - 2026-10-21](#0110---2026-10-21)
 3. [\[0.10.3\] - 2026-10-21](#0103---2026-10-21)
 4. [\[0.10.2\] - 2026-10-21](#0102---2026-10-21)
@@ -75,6 +76,23 @@ This project follows Semantic Versioning.
 <br>
 
 ### 🔒 Security
+
+<br>
+
+---
+
+<br>
+
+<!-- ======================================================== -->
+
+# [0.11.1] - 2026-10-21
+
+<br>
+
+### 🔨 Fixed
+
+- Run the source-install verification recipe in the locked uv project
+  environment instead of the host Python, where `pytest` may be unavailable.
 
 <br>
 
