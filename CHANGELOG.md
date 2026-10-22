@@ -22,6 +22,7 @@ This project follows Semantic Versioning.
 
 1. [Buildben Changelog](#buildben-changelog)
 2. [\[Unreleased\]](#unreleased)
+3. [\[0.11.2\] - 2026-10-22](#0112---2026-10-22)
 3. [\[0.11.1\] - 2026-10-21](#0111---2026-10-21)
 3. [\[0.11.0\] - 2026-10-21](#0110---2026-10-21)
 3. [\[0.10.3\] - 2026-10-21](#0103---2026-10-21)
@@ -76,6 +77,33 @@ This project follows Semantic Versioning.
 <br>
 
 ### 🔒 Security
+
+<br>
+
+---
+
+<br>
+
+<!-- ======================================================== -->
+
+# [0.11.2] - 2026-10-22
+
+<br>
+
+### 💥 Breaking changes
+
+- Breaking: Upgrading from 0.10.3 or earlier replaces custom installation
+  payloads with a wheel and locked source distribution; installer `--git` and
+  `--dev` modes are removed. Affected: Users of those modes or payload assets.
+  Migration: Use the README one-liner or an ordinary clone/venv/editable install.
+  See [0.11.0](#0110---2026-10-21) for transport and source-lock details.
+
+<br>
+
+### 🔨 Fixed
+
+- Preserve Python program quotes when the Windows installer runs under Windows
+  PowerShell 5.1 by passing program text through stdin.
 
 <br>
 

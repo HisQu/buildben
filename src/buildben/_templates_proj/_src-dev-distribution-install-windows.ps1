@@ -32,14 +32,16 @@ Options:
 }
 
 function Invoke-Checked {
-    param([Parameter(Mandatory)][string] $FilePath, [string[]] $Arguments = @(), [string] $Description = "Command")
-    & $FilePath @Arguments
+    param([Parameter(Mandatory)][string] $FilePath, [string[]] $Arguments = @(), [string] $Description = "Command", [AllowEmptyString()][string] $InputText)
+    if ($PSBoundParameters.ContainsKey("InputText")) { $InputText | & $FilePath @Arguments }
+    else { & $FilePath @Arguments }
     if ($LASTEXITCODE -ne 0) { throw "$Description failed with exit code $LASTEXITCODE." }
 }
 
 function Invoke-Captured {
-    param([Parameter(Mandatory)][string] $FilePath, [string[]] $Arguments = @(), [string] $Description = "Command")
-    $Output = & $FilePath @Arguments
+    param([Parameter(Mandatory)][string] $FilePath, [string[]] $Arguments = @(), [string] $Description = "Command", [AllowEmptyString()][string] $InputText)
+    if ($PSBoundParameters.ContainsKey("InputText")) { $Output = $InputText | & $FilePath @Arguments }
+    else { $Output = & $FilePath @Arguments }
     if ($LASTEXITCODE -ne 0) { throw "$Description failed with exit code $LASTEXITCODE." }
     return ($Output | Out-String).Trim()
 }
@@ -137,7 +139,8 @@ function Install-FromRelease {
     $PythonCode = @'
 import json, os, re, subprocess, sys, tarfile
 from pathlib import Path, PurePosixPath
-uv, client, repo, requested, temp, distribution = sys.argv[1:]
+uv, client, repo, temp, distribution, *requested = sys.argv[1:]
+requested = requested[0] if requested else ""
 root = Path(temp)
 version_re = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 def normalize(value): return re.sub(r"[-_.]+", "_", value).lower()
@@ -200,7 +203,9 @@ subprocess.run([uv, "export", "--locked", "--no-dev", "--no-default-groups", "--
 subprocess.run([uv, "tool", "install", "--force", "--refresh", "--python", sys.executable, "--with-requirements", str(root / "runtime-requirements.txt"), str(project_root)], check=True)
 '@
     try {
-        Invoke-Checked -FilePath $InstallPython -Arguments @("-c", $PythonCode, $Uv, $GithubClient, $Repository, [string]$Version, $TemporaryDirectory, $AppDistribution) -Description "$AppDistribution source installation"
+        $PythonArguments = @("-", $Uv, $GithubClient, $Repository, $TemporaryDirectory, $AppDistribution)
+        if ($null -ne $Version) { $PythonArguments += $Version }
+        Invoke-Checked -FilePath $InstallPython -Arguments $PythonArguments -InputText $PythonCode -Description "$AppDistribution source installation"
         Update-ToolPath
     }
     finally { Remove-Item -LiteralPath $TemporaryDirectory -Recurse -Force -ErrorAction SilentlyContinue }
