@@ -139,7 +139,8 @@ function Install-FromRelease {
 $PythonCode = @'
 import json, os, re, subprocess, sys, tarfile
 from pathlib import Path, PurePosixPath
-uv, client, repo, requested, temp, distribution = sys.argv[1:]
+uv, client, repo, temp, distribution, *requested = sys.argv[1:]
+requested = requested[0] if requested else ""
 root = Path(temp)
 version_re = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 def normalize(value): return re.sub(r"[-_.]+", "_", value).lower()
@@ -202,7 +203,9 @@ subprocess.run([uv, "export", "--locked", "--no-dev", "--no-default-groups", "--
 subprocess.run([uv, "tool", "install", "--force", "--refresh", "--python", sys.executable, "--with-requirements", str(root / "runtime-requirements.txt"), str(project_root)], check=True)
 '@
     try {
-        Invoke-Checked -FilePath $InstallPython -Arguments @("-", $Uv, $GithubClient, $Repository, [string]$Version, $TemporaryDirectory, $AppDistribution) -InputText $PythonCode -Description "$AppDistribution source installation"
+        $PythonArguments = @("-", $Uv, $GithubClient, $Repository, $TemporaryDirectory, $AppDistribution)
+        if ($null -ne $Version) { $PythonArguments += $Version }
+        Invoke-Checked -FilePath $InstallPython -Arguments $PythonArguments -InputText $PythonCode -Description "$AppDistribution source installation"
         Update-ToolPath
     }
     finally { Remove-Item -LiteralPath $TemporaryDirectory -Recurse -Force -ErrorAction SilentlyContinue }
