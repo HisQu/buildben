@@ -108,7 +108,7 @@ def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path
         "_justfile": project_root / "justfile",
         "_AGENTS.md": project_root / "AGENTS.md",
         "_CHANGELOG.md": project_root / "CHANGELOG.md",
-        "_TODO.md": project_root / "TODO.md",
+        "_BACKLOG.md": project_root / "BACKLOG.md",
         "_docs-README.md": project_root / "docs" / "README.md",
         "_docs-EXAMPLES.md": project_root / "docs" / "EXAMPLES.md",
         "_docs-How-To-User-Guides.md": project_root / "docs" / "How-To-User-Guides.md",

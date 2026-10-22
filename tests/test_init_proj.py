@@ -705,18 +705,37 @@ def test_scaffolded_project_includes_project_changelog(
     assert "{bb_today}" not in changelog_text
 
 
-def test_scaffolded_project_includes_project_todo(
+def test_scaffold_copy_preserves_active_pass_artifacts(tmp_path: Path) -> None:
+    """Keep active pass artifacts unchanged when copying scaffold templates."""
+    import buildben.init_proj as scaffolder
+
+    project_root = tmp_path / "active project"
+    project_root.mkdir()
+    todo = project_root / "TODO.md"
+    plan = project_root / "PLAN.md"
+    todo_bytes = b"# Active pass\n\n- [ ] Complete the selected work\n"
+    plan_bytes = b"# Plan\n\nComplete the selected work without losing tasks.\n"
+    todo.write_bytes(todo_bytes)
+    plan.write_bytes(plan_bytes)
+
+    transfers = scaffolder._project_template_transfers(project_root, "sample_project")
+    for destination in transfers.values():
+        destination.parent.mkdir(parents=True, exist_ok=True)
+    scaffolder.utils.copy_templates(
+        transfers, Path(scaffolder.__file__).resolve().parent / "_templates_proj"
+    )
+
+    assert todo.read_bytes() == todo_bytes
+    assert plan.read_bytes() == plan_bytes
+
+
+def test_scaffolded_project_includes_project_backlog(
     bube_test_project: Path,
 ) -> None:
-    """Assert generated projects include the root TODO parking lot."""
-    todo_path = bube_test_project / "TODO.md"
-
-    assert todo_path.is_file()
-
-    todo_text = todo_path.read_text(encoding="utf-8")
-    assert "# Todo list" in todo_text
-    assert "parking lot for actionable problems" in todo_text
-    assert "CHANGELOG.md" in todo_text
+    """Generate a durable backlog without creating active pass artifacts."""
+    assert (bube_test_project / "BACKLOG.md").is_file()
+    assert not (bube_test_project / "TODO.md").exists()
+    assert not (bube_test_project / "PLAN.md").exists()
 
 
 def test_scaffolded_project_includes_typer_cli_scaffold(

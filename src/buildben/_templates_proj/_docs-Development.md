@@ -109,10 +109,17 @@ docstrings for public behavior.
 
 ## Before editing
 
-Read [AGENTS.md](../AGENTS.md), [TODO.md](../TODO.md), and the relevant component
+Read [AGENTS.md](../AGENTS.md), [BACKLOG.md](../BACKLOG.md), and the relevant component
 in [Explanations](Explanations.md). Inspect `git status --short` and nearby
 source before editing. Keep unrelated user changes untouched. Explain the
 intended change before editing several files.
+
+`BACKLOG.md` holds durable actionable work not being handled now. Keep an active
+pass's `TODO.md` execution checklist beside its `PLAN.md`; do not create empty
+active artifacts or use TODO as a second backlog. Keep one authoritative
+checklist per action, rather than duplicate editable checkboxes in the plan.
+Before closing or archiving a pass, explicitly transfer unfinished work to the
+backlog or another pass.
 
 Update docs when setup, commands, APIs, environment variables, or saved file
 formats change. Record the final behavior in [CHANGELOG.md](../CHANGELOG.md),
