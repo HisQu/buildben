@@ -7,6 +7,7 @@ $Repository = "<github_username>/<my_project>"
 $UvVersion = "0.12.18"
 $ConfigureApp = "<configure_app>"
 $GithubClient = "curl"
+$Version = $null
 $VersionExplicit = $false
 $SourceMode = "release"
 $ExplicitUv = $null

@@ -7,6 +7,7 @@ $Repository = "HisQu/buildben"
 $UvVersion = "0.12.18"
 $ConfigureApp = "false"
 $GithubClient = "curl"
+$Version = $null
 $VersionExplicit = $false
 $SourceMode = "release"
 $ExplicitUv = $null
