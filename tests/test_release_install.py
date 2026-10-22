@@ -14,6 +14,7 @@ import threading
 import tomllib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PurePosixPath
+from urllib.parse import quote
 
 import pytest
 
@@ -38,6 +39,7 @@ def _write_sdist(path: Path, members: dict[str, bytes]) -> None:
             info = tarfile.TarInfo(f"buildben-0.10.3/{name}")
             info.size = len(data)
             archive.addfile(info, io.BytesIO(data))
+
 
 def _archive_bytes(members: dict[str, bytes]) -> bytes:
     stream = io.BytesIO()
@@ -103,9 +105,7 @@ def _install_smoke_fixture(
         def log_message(self, format: str, *args: object) -> None:
             return
 
-        def _send(
-            self, data: bytes, content_type: str, status: int = 200
-        ) -> None:
+        def _send(self, data: bytes, content_type: str, status: int = 200) -> None:
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(data)))
@@ -119,7 +119,8 @@ def _install_smoke_fixture(
             if self.path == f"/api/repos/{repository}/commits/main":
                 type(self).commit_requests += 1
                 self._send(
-                    commit_response if type(self).commit_requests == 1
+                    commit_response
+                    if type(self).commit_requests == 1
                     else json.dumps({"sha": second_commit}).encode(),
                     "application/json",
                     main_commit_status,
@@ -127,7 +128,9 @@ def _install_smoke_fixture(
                 return
             if self.path == f"/api/repos/{repository}/tarball/{main_commit}":
                 self._send(
-                    source.read_bytes() if main_archive_bytes is None else main_archive_bytes,
+                    source.read_bytes()
+                    if main_archive_bytes is None
+                    else main_archive_bytes,
                     "application/gzip",
                     main_archive_status,
                 )
@@ -273,6 +276,7 @@ def _install_smoke_fixture(
     if uv is None:
         pytest.fail("The source-installer tests require the runner's uv executable.")
     real_gh = shutil.which("gh")
+    gh_called = tmp_path / "gh-called"
     environment = {
         key: value
         for key, value in os.environ.items()
@@ -295,7 +299,9 @@ def _install_smoke_fixture(
             "INSTALLER_SMOKE_MAIN_COMMIT": main_commit or "",
             "INSTALLER_SMOKE_CLIENT": client,
             "INSTALLER_SMOKE_RELEASE_JSON": str(tmp_path / "release.json"),
-            "INSTALLER_SMOKE_LATEST_RELEASE_JSON": str(tmp_path / "latest-release.json"),
+            "INSTALLER_SMOKE_LATEST_RELEASE_JSON": str(
+                tmp_path / "latest-release.json"
+            ),
             "INSTALLER_SMOKE_REPOSITORY": repository,
             "INSTALLER_SMOKE_RELEASE_TAG": f"v{version}",
             "INSTALLER_SMOKE_ASSET_URL": asset_url,
@@ -336,9 +342,7 @@ def _install_smoke_fixture(
     )
 
 
-def _installer_command(
-    uv: str, *arguments: str, skip_config: bool = True
-) -> list[str]:
+def _installer_command(uv: str, *arguments: str, skip_config: bool = True) -> list[str]:
     prefix = ["--yes"]
     if skip_config:
         prefix.append("--skip-config")
@@ -371,7 +375,7 @@ def _installer_command(
         ["--version", "0.1.0", "--main"],
         ["--main", "-v", ""],
         ["-v", "", "--main"],
-    ]
+    ],
 )
 def test_rejected_options_do_not_run_uv(arguments: list[str], tmp_path: Path) -> None:
     if os.name == "nt":
@@ -602,18 +606,15 @@ def _run_main_failure(
 def test_main_rejects_missing_or_invalid_commit_sha(
     tmp_path: Path, response: bytes
 ) -> None:
-    output, gh_called, _ = _run_main_failure(
-        tmp_path, main_commit_response=response
-    )
+    output, gh_called, _ = _run_main_failure(tmp_path, main_commit_response=response)
     assert "invalid main commit SHA" in output
     assert not gh_called.exists()
+
 
 def test_main_commit_transport_failure_does_not_install(
     tmp_path: Path,
 ) -> None:
-    output, gh_called, _ = _run_main_failure(
-        tmp_path, main_commit_status=500
-    )
+    output, gh_called, _ = _run_main_failure(tmp_path, main_commit_status=500)
     assert (
         "500" in output
         if os.name == "nt"
@@ -621,12 +622,11 @@ def test_main_commit_transport_failure_does_not_install(
     )
     assert not gh_called.exists()
 
+
 def test_main_archive_transport_failure_does_not_install(
     tmp_path: Path,
 ) -> None:
-    output, gh_called, _ = _run_main_failure(
-        tmp_path, main_archive_status=404
-    )
+    output, gh_called, _ = _run_main_failure(tmp_path, main_archive_status=404)
     assert (
         "404" in output
         if os.name == "nt"
@@ -635,14 +635,11 @@ def test_main_archive_transport_failure_does_not_install(
     assert not gh_called.exists()
 
 
-
 @pytest.mark.parametrize("archive_bytes", [b"", b"truncated gzip bytes"])
 def test_main_rejects_empty_or_invalid_archive(
     tmp_path: Path, archive_bytes: bytes
 ) -> None:
-    output, _, _ = _run_main_failure(
-        tmp_path, main_archive_bytes=archive_bytes
-    )
+    output, _, _ = _run_main_failure(tmp_path, main_archive_bytes=archive_bytes)
     lower_output = output.lower()
     assert (
         "source archive download is empty" in lower_output
@@ -726,6 +723,7 @@ def test_main_rejects_invalid_archive_metadata_and_members(
     )
     assert error in output
 
+
 @pytest.mark.parametrize("member_type", [tarfile.SYMTYPE, tarfile.FIFOTYPE])
 def test_main_rejects_links_and_special_members(
     tmp_path: Path, member_type: bytes
@@ -744,10 +742,9 @@ def test_main_rejects_links_and_special_members(
         if member_type == tarfile.SYMTYPE:
             special.linkname = "pyproject.toml"
         archive.addfile(special)
-    output, _, _ = _run_main_failure(
-        tmp_path, main_archive_bytes=stream.getvalue()
-    )
+    output, _, _ = _run_main_failure(tmp_path, main_archive_bytes=stream.getvalue())
     assert "links or special files" in output
+
 
 def test_main_stale_lock_fails_before_installation(tmp_path: Path) -> None:
     stale_lock = (Path(__file__).resolve().parents[1] / "uv.lock").read_bytes()
@@ -763,7 +760,6 @@ def test_main_stale_lock_fails_before_installation(tmp_path: Path) -> None:
         preserve_installed_sentinel=True,
     )
     assert "lock" in output.lower()
-
 
 
 def test_main_gh_failure_does_not_fall_back_to_public_transport(
