@@ -44,15 +44,33 @@ Public installation is the default: curl on Linux and macOS, and native
 PowerShell HTTP on Windows. Private VCS dependencies still need working Git
 credentials independently.
 
+| Selection | Installer behavior |
+| --- | --- |
+| *(no source option)* | Install the latest published stable source archive. |
+| `--version X.Y.Z` | Install the selected published stable release. |
+| `--main` | Install one captured commit from remote `main` with its committed `uv.lock`. |
+
 ### For Linux & macOS
 
-Public:
+Latest stable release, public:
+
+```shell
+installer="$(curl -fsSL https://raw.githubusercontent.com/<github_username>/<my_project>/main/src/<my_project>_dev/distribution/install-linux-macos.sh)" && test -n "$installer" && bash -c "$installer" --
+```
+
+Latest stable release, authenticated:
+
+```shell
+installer="$(gh api -H 'Accept: application/vnd.github.raw+json' 'repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" -- --github-client gh
+```
+
+Current remote `main`, public:
 
 ```shell
 installer="$(curl -fsSL https://raw.githubusercontent.com/<github_username>/<my_project>/main/src/<my_project>_dev/distribution/install-linux-macos.sh)" && test -n "$installer" && bash -c "$installer" -- --main
 ```
 
-Authenticated:
+Current remote `main`, authenticated:
 
 ```shell
 installer="$(gh api -H 'Accept: application/vnd.github.raw+json' 'repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" -- --github-client gh --main
@@ -60,47 +78,32 @@ installer="$(gh api -H 'Accept: application/vnd.github.raw+json' 'repos/<github_
 
 ### For Windows
 
-Public:
-
-```powershell
-$url = 'https://raw.githubusercontent.com/<github_username>/<my_project>/main/src/<my_project>_dev/distribution/install-windows.ps1'; $installer = Invoke-RestMethod -Uri $url; if ([string]::IsNullOrWhiteSpace(($installer -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($installer -join "`n"))) '--main'
-```
-
-Authenticated:
-
-```powershell
-$s = gh api -H 'Accept: application/vnd.github.raw+json' 'repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-windows.ps1'; if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n"))) '--github-client' 'gh' '--main'
-```
-See the [installer reference](References.md#installer-reference) for all
-supported options and release selection details.
-
-### For Linux & macOS
-
-Public:
-
-```shell
-installer="$(curl -fsSL https://raw.githubusercontent.com/<github_username>/<my_project>/main/src/<my_project>_dev/distribution/install-linux-macos.sh)" && test -n "$installer" && bash -c "$installer" --
-```
-
-Authenticated:
-
-```shell
-installer="$(gh api -H 'Accept: application/vnd.github.raw+json' 'repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" -- --github-client gh
-```
-
-### For Windows
-
-Public:
+Latest stable release, public:
 
 ```powershell
 $url = 'https://raw.githubusercontent.com/<github_username>/<my_project>/main/src/<my_project>_dev/distribution/install-windows.ps1'; $installer = Invoke-RestMethod -Uri $url; if ([string]::IsNullOrWhiteSpace(($installer -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($installer -join "`n")))
 ```
 
-Authenticated:
+Latest stable release, authenticated:
 
 ```powershell
 $s = gh api -H 'Accept: application/vnd.github.raw+json' 'repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-windows.ps1'; if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n"))) '--github-client' 'gh'
 ```
+
+Current remote `main`, public:
+
+```powershell
+$url = 'https://raw.githubusercontent.com/<github_username>/<my_project>/main/src/<my_project>_dev/distribution/install-windows.ps1'; $installer = Invoke-RestMethod -Uri $url; if ([string]::IsNullOrWhiteSpace(($installer -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($installer -join "`n"))) '--main'
+```
+
+Current remote `main`, authenticated:
+
+```powershell
+$s = gh api -H 'Accept: application/vnd.github.raw+json' 'repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-windows.ps1'; if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n"))) '--github-client' 'gh' '--main'
+```
+
+See the [installer reference](References.md#installer-reference) for supported
+options and release selection details.
 
 If uv is missing, the installer asks before installing the pinned version. See
 the [installer reference](References.md#installer-reference) for supported

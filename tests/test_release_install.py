@@ -183,17 +183,20 @@ def _install_smoke_fixture(
             "if os.environ.get('INSTALLER_SMOKE_GH_FAIL') == '1': raise SystemExit(88)\n"
             "args=sys.argv[1:]\n"
             "if args[:1] == ['api']:\n"
-            " endpoint=args[1]\n"
-            " if '/commits/main' in endpoint:\n"
+            " endpoint=next((arg for arg in args[1:] if not arg.startswith('-')), '')\n"
+            " repository=os.environ['INSTALLER_SMOKE_REPOSITORY']\n"
+            " if endpoint == '/repos/'+repository+'/commits/main':\n"
             "  print(urllib.request.urlopen(os.environ['INSTALLER_SMOKE_API_URL']+endpoint).read().decode()); raise SystemExit(0)\n"
-            " if '/tarball/' in endpoint:\n"
+            " if endpoint in ['/repos/'+repository+'/tarball/'+sha for sha in (os.environ['INSTALLER_SMOKE_MAIN_COMMIT'], 'b'*40) if sha]:\n"
             "  sys.stdout.buffer.write(urllib.request.urlopen(os.environ['INSTALLER_SMOKE_API_URL']+endpoint).read()); raise SystemExit(0)\n"
-            " release_path=os.environ['INSTALLER_SMOKE_LATEST_RELEASE_JSON'] if endpoint.endswith('/latest') else os.environ['INSTALLER_SMOKE_RELEASE_JSON']\n"
-            " print(pathlib.Path(release_path).read_text()); raise SystemExit(0)\n"
-            "if args[:2] == ['release','download']:\n"
+            " if endpoint == '/repos/'+repository+'/releases/latest' or endpoint == '/repos/'+repository+'/releases/tags/'+os.environ['INSTALLER_SMOKE_RELEASE_TAG']:\n"
+            "  release_path=os.environ['INSTALLER_SMOKE_LATEST_RELEASE_JSON'] if endpoint.endswith('/latest') else os.environ['INSTALLER_SMOKE_RELEASE_JSON']\n"
+            "  print(pathlib.Path(release_path).read_text()); raise SystemExit(0)\n"
+            "if args[:2] == ['release','download'] and '--repo' in args and args[args.index('--repo')+1] == os.environ['INSTALLER_SMOKE_REPOSITORY']:\n"
             " name=args[args.index('--pattern')+1]; dest=pathlib.Path(args[args.index('--dir')+1]); dest.mkdir(parents=True,exist_ok=True)\n"
             " output=dest/name\n"
             " subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-Command','Invoke-WebRequest -Uri $env:INSTALLER_SMOKE_ASSET_URL -OutFile $env:INSTALLER_SMOKE_GH_OUTPUT'],env=os.environ | {'INSTALLER_SMOKE_GH_OUTPUT':str(output)},check=True)\n"
+            " raise SystemExit(0)\n"
             "real=os.environ.get('INSTALLER_SMOKE_REAL_GH')\n"
             "if not real: raise SystemExit(87)\n"
             "raise SystemExit(subprocess.run([real,*args],check=False).returncode)\n",
@@ -231,16 +234,19 @@ def _install_smoke_fixture(
             "if os.environ.get('INSTALLER_SMOKE_GH_FAIL') == '1': raise SystemExit(88)\n"
             "args=sys.argv[1:]\n"
             "if args[:1] == ['api']:\n"
-            " endpoint=args[1]\n"
-            " if '/commits/main' in endpoint:\n"
+            " endpoint=next((arg for arg in args[1:] if not arg.startswith('-')), '')\n"
+            " repository=os.environ['INSTALLER_SMOKE_REPOSITORY']\n"
+            " if endpoint == '/repos/'+repository+'/commits/main':\n"
             "  print(urllib.request.urlopen(os.environ['INSTALLER_SMOKE_API_URL']+endpoint).read().decode()); raise SystemExit(0)\n"
-            " if '/tarball/' in endpoint:\n"
+            " if endpoint in ['/repos/'+repository+'/tarball/'+sha for sha in (os.environ['INSTALLER_SMOKE_MAIN_COMMIT'], 'b'*40) if sha]:\n"
             "  sys.stdout.buffer.write(urllib.request.urlopen(os.environ['INSTALLER_SMOKE_API_URL']+endpoint).read()); raise SystemExit(0)\n"
-            " release_path=os.environ['INSTALLER_SMOKE_LATEST_RELEASE_JSON'] if endpoint.endswith('/latest') else os.environ['INSTALLER_SMOKE_RELEASE_JSON']\n"
-            " print(pathlib.Path(release_path).read_text()); raise SystemExit(0)\n"
-            "if args[:2] == ['release','download']:\n"
+            " if endpoint == '/repos/'+repository+'/releases/latest' or endpoint == '/repos/'+repository+'/releases/tags/'+os.environ['INSTALLER_SMOKE_RELEASE_TAG']:\n"
+            "  release_path=os.environ['INSTALLER_SMOKE_LATEST_RELEASE_JSON'] if endpoint.endswith('/latest') else os.environ['INSTALLER_SMOKE_RELEASE_JSON']\n"
+            "  print(pathlib.Path(release_path).read_text()); raise SystemExit(0)\n"
+            "if args[:2] == ['release','download'] and '--repo' in args and args[args.index('--repo')+1] == os.environ['INSTALLER_SMOKE_REPOSITORY']:\n"
             " name=args[args.index('--pattern')+1]; dest=pathlib.Path(args[args.index('--dir')+1]); dest.mkdir(parents=True,exist_ok=True)\n"
             " subprocess.run([os.environ['INSTALLER_SMOKE_REAL_CURL'],'-fsSL',os.environ['INSTALLER_SMOKE_ASSET_URL'],'-o',str(dest/name)],check=True)\n"
+            " raise SystemExit(0)\n"
             "real=os.environ.get('INSTALLER_SMOKE_REAL_GH')\n"
             "if not real: raise SystemExit(87)\n"
             "raise SystemExit(subprocess.run([real,*args],check=False).returncode)\n",
@@ -290,6 +296,8 @@ def _install_smoke_fixture(
             "INSTALLER_SMOKE_CLIENT": client,
             "INSTALLER_SMOKE_RELEASE_JSON": str(tmp_path / "release.json"),
             "INSTALLER_SMOKE_LATEST_RELEASE_JSON": str(tmp_path / "latest-release.json"),
+            "INSTALLER_SMOKE_REPOSITORY": repository,
+            "INSTALLER_SMOKE_RELEASE_TAG": f"v{version}",
             "INSTALLER_SMOKE_ASSET_URL": asset_url,
             "INSTALLER_SMOKE_API_URL": api_url,
             "INSTALLER_SMOKE_GH_CALLED": str(gh_called),
@@ -584,6 +592,8 @@ def _run_main_failure(
     "response",
     [
         b"not-json",
+        b"[]",
+        b'{"sha":42}',
         b"{}",
         json.dumps({"sha": "not-a-full-sha"}).encode(),
         json.dumps({"sha": "A" * 40}).encode(),
@@ -604,7 +614,11 @@ def test_main_commit_transport_failure_does_not_install(
     output, gh_called, _ = _run_main_failure(
         tmp_path, main_commit_status=500
     )
-    assert output
+    assert (
+        "500" in output
+        if os.name == "nt"
+        else "returned non-zero exit status 22" in output
+    )
     assert not gh_called.exists()
 
 def test_main_archive_transport_failure_does_not_install(
@@ -613,7 +627,11 @@ def test_main_archive_transport_failure_does_not_install(
     output, gh_called, _ = _run_main_failure(
         tmp_path, main_archive_status=404
     )
-    assert output
+    assert (
+        "404" in output
+        if os.name == "nt"
+        else "returned non-zero exit status 22" in output
+    )
     assert not gh_called.exists()
 
 
@@ -626,7 +644,11 @@ def test_main_rejects_empty_or_invalid_archive(
         tmp_path, main_archive_bytes=archive_bytes
     )
     lower_output = output.lower()
-    assert "empty file" in lower_output or "not a gzip file" in lower_output
+    assert (
+        "source archive download is empty" in lower_output
+        if not archive_bytes
+        else "not a gzip file" in lower_output
+    )
 
 
 @pytest.mark.parametrize(

@@ -122,6 +122,12 @@ and may match a release; the installer prints the source commit SHA to identify
 the snapshot. Omit `--main`, or use `--version`, to install a release again.
 `--main` and `--version` cannot be combined.
 
+| Selection | Installer behavior |
+| --- | --- |
+| *(no source option)* | Install the latest published stable source archive. |
+| `--version X.Y.Z` | Install the selected published stable release. |
+| `--main` | Install one captured commit from remote `main` with its committed `uv.lock`. |
+
 Public and authenticated installer commands for Linux, macOS, and Windows are
 shown below for reference; the examples remain commented out.
 

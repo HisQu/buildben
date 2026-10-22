@@ -133,6 +133,13 @@ from `pyproject.toml` and may match a release; the installer prints the source
 commit SHA to identify the snapshot. Omit `--main`, or use `--version`, to
 install a release again.
 
+| Selection | Installer behavior |
+| --- | --- |
+| *(no source option)* | Install the latest published stable source archive. |
+| `--version X.Y.Z` | Install the selected published stable release. |
+| `--main` | Install one captured commit from remote `main` with its committed `uv.lock`. |
+
+
 #### Linux & macOS
 
 Latest stable release:
@@ -169,7 +176,7 @@ Latest stable release:
 $s = Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/HisQu/buildben/main/src/buildben_dev/distribution/install-windows.ps1'; if ([string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n")))
 ```
 
-Specific stable release: append `'-Version' 'X.Y.Z'` to the scriptblock invocation.
+Specific stable release: append `'--version' 'X.Y.Z'` to the scriptblock invocation.
 
 Current remote `main` snapshot:
 
@@ -195,31 +202,6 @@ access; `curl` does not inherit gh credentials. Private VCS dependencies still
 need Git authentication independently of release visibility. BuildBen and
 generated applications do not require administrator privileges.
 
-#### Linux & macOS
-
-```sh
-installer="$(curl -fsSL 'https://raw.githubusercontent.com/HisQu/buildben/main/src/buildben_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" --
-```
-
-```sh
-installer="$(gh api -H 'Accept: application/vnd.github.raw+json' 'repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" -- --github-client gh
-```
-
-#### Windows
-
-```powershell
-$s = Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/HisQu/buildben/main/src/buildben_dev/distribution/install-windows.ps1'; if ([string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n")))
-```
-
-```powershell
-$s = gh api -H 'Accept: application/vnd.github.raw+json' 'repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-windows.ps1'; if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n"))) '--github-client' 'gh'
-```
-
-For authenticated access, install [GitHub CLI](https://cli.github.com/), then
-run `gh auth login` and `gh auth setup-git`. Public downloads use anonymous
-access; `curl` does not inherit gh credentials. Private VCS dependencies still
-need Git authentication independently of release visibility. BuildBen and
-generated applications do not require administrator privileges.
 
 ### Install from a cloned repository
 
