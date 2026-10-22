@@ -361,6 +361,15 @@ release-install-smoke:
         export INSTALLER_SMOKE_SOURCE="$smoke_source"
     fi
     if [[ ! -f "$INSTALLER_SMOKE_SOURCE" ]]; then echo "Source archive does not exist: $INSTALLER_SMOKE_SOURCE" >&2; exit 1; fi
+    smoke_main_commit="$(git rev-parse HEAD)"
+    smoke_main_archive_dir="$(mktemp -d)"
+    smoke_main_archive_file="$smoke_main_archive_dir/main-source.tar.gz"
+    trap 'rm -rf "$smoke_main_archive_dir"' EXIT
+    git archive --format=tar.gz --prefix="installer-main-${smoke_main_commit}/" --output="$smoke_main_archive_file" "$smoke_main_commit"
+    smoke_main_archive="$(realpath "$smoke_main_archive_file")"
+    if command -v cygpath >/dev/null 2>&1; then smoke_main_archive="$(cygpath -m "$smoke_main_archive")"; fi
+    export INSTALLER_SMOKE_MAIN_SOURCE="$smoke_main_archive"
+    export INSTALLER_SMOKE_MAIN_COMMIT="$smoke_main_commit"
     export INSTALLER_SMOKE_CLIENT="${INSTALLER_SMOKE_CLIENT:-curl}"
     uv run --locked python -m pytest -n 0 tests/test_release_install.py -k source_install_smoke
 

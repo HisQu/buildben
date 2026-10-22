@@ -107,13 +107,35 @@ Use Python 3.12 or newer.
 
 ### One-line install
 
-The installer downloads the latest published source distribution. Public
-downloads use anonymous HTTPS and do not require GitHub CLI. For authenticated
-access, install [GitHub CLI](https://cli.github.com/), then run `gh auth login`
-and `gh auth setup-git`. Select authenticated transport by passing
-`--github-client gh`; public downloads and `curl` do not inherit gh credentials.
-Private VCS dependencies independently require Git credentials. Windows
-installation does not require administrator privileges.
+The installer bootstraps from the current `main` branch in both modes. By
+default it installs the latest stable release source distribution; append
+`--version X.Y.Z` to select a specific stable release. Release installation
+uses the published release artifact. `--main` instead installs one snapshot of
+the current remote `main`, pinned to the commit resolved for that invocation
+and its committed `uv.lock`; it does not install local or uncommitted checkout
+changes, and requires no GitHub release or Actions artifact.
+
+`--main` requires GitHub access. Public access uses anonymous HTTPS; authenticated
+access uses GitHub CLI and requires the setup below. Main may contain unreleased
+code whose CI has not passed. The installed version comes from `pyproject.toml`
+and may match a release; the installer prints the source commit SHA to identify
+the snapshot. Omit `--main`, or use `--version`, to install a release again.
+`--main` and `--version` cannot be combined.
+
+| Selection | Installer behavior |
+| --- | --- |
+| *(no source option)* | Install the latest published stable source archive. |
+| `--version X.Y.Z` | Install the selected published stable release. |
+| `--main` | Install one captured commit from remote `main` with its committed `uv.lock`. |
+
+For authenticated access, install [GitHub CLI](https://cli.github.com/), then run
+`gh auth login` and `gh auth setup-git`. Pass `--github-client gh` to use it;
+public downloads and curl do not inherit gh credentials. Private VCS
+dependencies independently require Git credentials. Windows installation does
+not require administrator privileges.
+
+Public and authenticated installer commands for Linux, macOS, and Windows are
+shown below for reference; the examples remain commented out.
 
 <!--
 #### For Linux & macOS
@@ -134,6 +156,21 @@ $url = 'https://raw.githubusercontent.com/<github_username>/<my_project>/main/sr
 
 ```powershell
 $s = gh api -H 'Accept: application/vnd.github.raw+json' 'repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-windows.ps1'; if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n"))) '--github-client' 'gh'
+```
+```shell
+installer="$(curl -fsSL 'https://raw.githubusercontent.com/<github_username>/<my_project>/main/src/<my_project>_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" -- --main
+```
+
+```shell
+installer="$(gh api -H 'Accept: application/vnd.github.raw+json' 'repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" -- --github-client gh --main
+```
+
+```powershell
+$url = 'https://raw.githubusercontent.com/<github_username>/<my_project>/main/src/<my_project>_dev/distribution/install-windows.ps1'; $s = Invoke-RestMethod -Uri $url; if ([string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n"))) '--main'
+```
+
+```powershell
+$s = gh api -H 'Accept: application/vnd.github.raw+json' 'repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-windows.ps1'; if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n"))) '--github-client' 'gh' '--main'
 ```
 -->
 

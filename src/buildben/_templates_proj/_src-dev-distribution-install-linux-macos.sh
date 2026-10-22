@@ -8,9 +8,12 @@ GITHUB_REPOSITORY="<github_username>/<my_project>"
 UV_VERSION="0.12.18"
 GITHUB_CLIENT="curl"
 VERSION=""
+VERSION_EXPLICIT=false
+SOURCE_MODE="release"
 EXPLICIT_UV=""
 ASSUME_YES=false
 SKIP_CONFIG=false
+CONFIGURE_APP="<configure_app>"
 UV=""
 UV_ORIGIN="missing"
 INSTALL_PYTHON=""
@@ -20,10 +23,12 @@ usage() {
     cat <<EOF
 Usage: install-linux-macos.sh [OPTIONS]
 
-Install the latest published stable source distribution, or select one version.
+Install the latest published stable source distribution by default.
+Use --version for a published release or --main for an unreleased snapshot.
 
 Options:
-  -v, --version VERSION Install a published release (0.1.0 becomes v0.1.0).
+  -v, --version VERSION Select a published release (0.1.0 becomes v0.1.0).
+  --main                Install the current main branch snapshot.
   --github-client CLIENT Use public curl or authenticated gh (default: curl).
   --uv PATH             Use a specific uv executable.
   -y, --yes             Skip the installer confirmation.
@@ -43,16 +48,18 @@ trap on_exit EXIT
 parse_args() {
     while (($#)); do
         case "$1" in
-            -v|--version) (($# >= 2)) || { fail "$1 requires a version."; return 1; }; VERSION="$2"; shift 2 ;;
+            -v|--version) (($# >= 2)) || { fail "$1 requires a version."; return 1; }; VERSION="$2"; VERSION_EXPLICIT=true; shift 2 ;;
             --github-client) (($# >= 2)) || { fail "--github-client requires curl or gh."; return 1; }; GITHUB_CLIENT="$2"; shift 2 ;;
             --uv) (($# >= 2)) || { fail "--uv requires a path."; return 1; }; EXPLICIT_UV="$2"; shift 2 ;;
             -y|--yes) ASSUME_YES=true; shift ;;
             --skip-config) SKIP_CONFIG=true; shift ;;
+            --main) SOURCE_MODE=main; shift ;;
             -h|--help) usage; exit 0 ;;
             *) fail "Unknown argument: $1"; return 1 ;;
         esac
     done
     [[ "$GITHUB_CLIENT" == curl || "$GITHUB_CLIENT" == gh ]] || { fail "Invalid --github-client '$GITHUB_CLIENT'; choose curl or gh."; return 1; }
+    if [[ "$SOURCE_MODE" == main && "$VERSION_EXPLICIT" == true ]]; then fail "--main cannot be combined with --version."; return 1; fi
     if [[ -n "$VERSION" ]]; then
         VERSION="${VERSION#v}"
         [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || { fail "Invalid release version: $VERSION"; return 1; }
@@ -81,8 +88,10 @@ install_permanent_uv() {
     set_uv_path "$install_dir/uv"; UV_ORIGIN=per-user
 }
 confirm_plan() {
-    printf '\n%s installation plan\nMode: published stable source distribution\nTransport: %s\nuv: %s\n' "$APP_DISTRIBUTION" "$GITHUB_CLIENT" "$UV_ORIGIN"
-    [[ -z "$VERSION" ]] || printf 'Version: %s\n' "$VERSION"
+    local mode="latest published release"
+    [[ "$SOURCE_MODE" != main ]] || mode="main (unreleased snapshot)"
+    [[ -z "$VERSION" || "$SOURCE_MODE" == main ]] || mode="published release $VERSION"
+    printf '\n%s installation plan\nSource: %s\nTransport: %s\nuv: %s\n' "$APP_DISTRIBUTION" "$mode" "$GITHUB_CLIENT" "$UV_ORIGIN"
     if [[ "$ASSUME_YES" == true ]]; then return; fi
     [[ -r /dev/tty ]] || { fail "Interactive confirmation requires a terminal. Use --yes to continue."; return 1; }
     local response
@@ -102,46 +111,64 @@ find_install_python() {
     fail "uv could not provide its managed Python 3.12 interpreter."
 }
 
-install_from_release() {
+install_from_source() {
     find_install_python || return 1
     TEMPORARY_DIRECTORY="$(mktemp -d)"
-    "$INSTALL_PYTHON" - "$UV" "$GITHUB_CLIENT" "$GITHUB_REPOSITORY" "$VERSION" "$TEMPORARY_DIRECTORY" "$APP_DISTRIBUTION" <<'PY'
+    local arguments=("$UV" "$GITHUB_CLIENT" "$GITHUB_REPOSITORY" "$TEMPORARY_DIRECTORY" "$APP_DISTRIBUTION" "$SOURCE_MODE")
+    [[ -z "$VERSION" ]] || arguments+=("$VERSION")
+    "$INSTALL_PYTHON" - "${arguments[@]}" <<'PY'
 import json, re, subprocess, sys, tarfile
 from pathlib import Path, PurePosixPath
-uv, client, repo, requested, temp, distribution = sys.argv[1:]
+uv, client, repo, temp, distribution, source_mode, *requested = sys.argv[1:]
+requested = requested[0] if requested else ""
 root = Path(temp)
 version_re = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 def normalize(value): return re.sub(r"[-_.]+", "_", value).lower()
 def gh_api(path): return subprocess.run(["gh", "api", path], check=True, text=True, capture_output=True).stdout
 def public_json(url): return subprocess.run(["curl", "-fsSL", url], check=True, text=True, capture_output=True).stdout
-if requested:
-    if not re.fullmatch(r"v" + version_re.pattern[1:-1], requested): raise SystemExit("Malformed release tag")
-    endpoint = f"/repos/{repo}/releases/tags/{requested}"
+if source_mode == "main":
+    endpoint = f"/repos/{repo}/commits/main"
     response = gh_api(endpoint) if client == "gh" else public_json(f"https://api.github.com{endpoint}")
+    try: commit = json.loads(response).get("sha")
+    except (ValueError, TypeError, AttributeError) as exc: raise SystemExit("GitHub returned an invalid main commit SHA.") from exc
+    if not isinstance(commit, str) or not re.fullmatch(r"[0-9a-f]{40}", commit): raise SystemExit("GitHub returned an invalid main commit SHA.")
+    print(f"Source: main ({commit})")
+    archive = root / "main-source.tar.gz"
+    endpoint = f"/repos/{repo}/tarball/{commit}"
+    if client == "gh":
+        with archive.open("wb") as output: subprocess.run(["gh", "api", endpoint], stdout=output, check=True)
+    else:
+        subprocess.run(["curl", "-fsSL", f"https://api.github.com{endpoint}", "--output", str(archive)], check=True)
+    version = None
 else:
-    endpoint = f"/repos/{repo}/releases/latest"
-    response = gh_api(endpoint) if client == "gh" else public_json(f"https://api.github.com{endpoint}")
-try: release = json.loads(response)
-except (ValueError, TypeError) as exc: raise SystemExit("GitHub returned invalid release JSON") from exc
-if not isinstance(release, dict) or release.get("draft") is not False or release.get("prerelease") is not False: raise SystemExit("Selected GitHub release is not a published stable release")
-tag = release.get("tag_name")
-if not isinstance(tag, str) or not re.fullmatch(r"v" + version_re.pattern[1:-1], tag): raise SystemExit("GitHub release has a malformed tag")
-if requested and tag != requested: raise SystemExit("GitHub returned a different release tag")
-version = tag[1:]
-assets = release.get("assets")
-if not isinstance(assets, list): raise SystemExit("GitHub release has no asset list")
-matching = []
-for asset in assets:
-    if not isinstance(asset, dict): continue
-    name, url = asset.get("name"), asset.get("browser_download_url")
-    if not isinstance(name, str) or not isinstance(url, str): continue
-    if name.endswith(".tar.gz") and name[:-7].endswith("-" + version) and normalize(name[:-7][:-(len(version)+1)]) == normalize(distribution): matching.append((name, url))
-if len(matching) != 1: raise SystemExit(f"Expected exactly one matching source distribution, found {len(matching)}")
-name, url = matching[0]
-archive = root / name
-if client == "gh": subprocess.run(["gh", "release", "download", tag, "--repo", repo, "--pattern", name, "--dir", temp], check=True)
-else: subprocess.run(["curl", "-fsSL", url, "--output", str(archive)], check=True)
-if not archive.is_file() or archive.stat().st_size == 0: raise SystemExit("Source distribution download is empty")
+    if requested:
+        if not re.fullmatch(r"v" + version_re.pattern[1:-1], requested): raise SystemExit("Malformed release tag")
+        endpoint = f"/repos/{repo}/releases/tags/{requested}"
+        response = gh_api(endpoint) if client == "gh" else public_json(f"https://api.github.com{endpoint}")
+    else:
+        endpoint = f"/repos/{repo}/releases/latest"
+        response = gh_api(endpoint) if client == "gh" else public_json(f"https://api.github.com{endpoint}")
+    try: release = json.loads(response)
+    except (ValueError, TypeError) as exc: raise SystemExit("GitHub returned invalid release JSON") from exc
+    if not isinstance(release, dict) or release.get("draft") is not False or release.get("prerelease") is not False: raise SystemExit("Selected GitHub release is not a published stable release")
+    tag = release.get("tag_name")
+    if not isinstance(tag, str) or not re.fullmatch(r"v" + version_re.pattern[1:-1], tag): raise SystemExit("GitHub release has a malformed tag")
+    if requested and tag != requested: raise SystemExit("GitHub returned a different release tag")
+    version = tag[1:]
+    assets = release.get("assets")
+    if not isinstance(assets, list): raise SystemExit("GitHub release has no asset list")
+    matching = []
+    for asset in assets:
+        if not isinstance(asset, dict): continue
+        name, url = asset.get("name"), asset.get("browser_download_url")
+        if not isinstance(name, str) or not isinstance(url, str): continue
+        if name.endswith(".tar.gz") and name[:-7].endswith("-" + version) and normalize(name[:-7][:-(len(version)+1)]) == normalize(distribution): matching.append((name, url))
+    if len(matching) != 1: raise SystemExit(f"Expected exactly one matching source distribution, found {len(matching)}")
+    name, url = matching[0]
+    archive = root / name
+    if client == "gh": subprocess.run(["gh", "release", "download", tag, "--repo", repo, "--pattern", name, "--dir", temp], check=True)
+    else: subprocess.run(["curl", "-fsSL", url, "--output", str(archive)], check=True)
+if not archive.is_file() or archive.stat().st_size == 0: raise SystemExit("Source archive download is empty")
 with tarfile.open(archive, "r:gz") as package:
     members = package.getmembers()
     roots = set()
@@ -155,10 +182,11 @@ with tarfile.open(archive, "r:gz") as package:
     package.extractall(root / "source", filter="data")
 project_root = root / "source" / next(iter(roots))
 pyproject, lock = project_root / "pyproject.toml", project_root / "uv.lock"
-if not pyproject.is_file() or not lock.is_file(): raise SystemExit("Release source must contain pyproject.toml and uv.lock; this release is not installable")
+if not pyproject.is_file() or not lock.is_file(): raise SystemExit("Source must contain pyproject.toml and uv.lock; this source is not installable")
 import tomllib
 with pyproject.open("rb") as stream: project = tomllib.load(stream).get("project", {})
-if normalize(project.get("name", "")) != normalize(distribution) or project.get("version") != version: raise SystemExit("Source project metadata does not match selected release")
+project_version = project.get("version")
+if normalize(project.get("name", "")) != normalize(distribution) or not isinstance(project_version, str) or not project_version or (source_mode == "release" and project_version != version): raise SystemExit("Source project metadata does not match selected source")
 subprocess.run([uv, "export", "--locked", "--no-dev", "--no-default-groups", "--no-emit-project", "--format", "requirements.txt", "--output-file", str(root / "runtime-requirements.txt")], cwd=project_root, check=True)
 subprocess.run([uv, "tool", "install", "--force", "--refresh", "--python", sys.executable, "--with-requirements", str(root / "runtime-requirements.txt"), str(project_root)], check=True)
 PY
@@ -171,7 +199,7 @@ installed_application() {
     printf '%s' "$executable"
 }
 configure_installed_application() {
-    [[ "$SKIP_CONFIG" == true ]] && return
+    [[ "$SKIP_CONFIG" == true || "$CONFIGURE_APP" != true ]] && return
     local executable; executable="$(installed_application)"; printf '\nRunning configuration setup...\n'; "$executable" config setup
 }
 
@@ -180,7 +208,7 @@ main() {
     discover_uv
     confirm_plan
     [[ "$UV_ORIGIN" != missing ]] || install_permanent_uv
-    install_from_release
+    install_from_source
     configure_installed_application
     printf '\n%s setup completed successfully.\n' "$APP_DISTRIBUTION"
     printf 'Open a new shell if `%s` is not available immediately.\n' "$APP_COMMAND"
