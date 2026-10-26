@@ -15,7 +15,7 @@ ASSUME_YES=false
 SKIP_CONFIG=false
 CONFIGURE_APP="false"
 UV=""
-UV_ORIGIN="missing"
+UV_BOOTSTRAPPED=false
 INSTALL_PYTHON=""
 TEMPORARY_DIRECTORY=""
 
@@ -72,6 +72,7 @@ set_uv_path() {
     if [[ "$candidate" != */* ]]; then candidate="$(command -v -- "$candidate" || true)"; fi
     [[ -n "$candidate" && -x "$candidate" ]] || { fail "uv executable does not exist or is not executable: $1"; return 1; }
     "$candidate" --version >/dev/null 2>&1 || { fail "The supplied executable does not appear to be uv: $candidate"; return 1; }
+    candidate="$(cd -- "$(dirname -- "$candidate")" && pwd)/$(basename -- "$candidate")"
     UV="$candidate"
 }
 discover_uv() {
@@ -85,7 +86,9 @@ install_permanent_uv() {
     mkdir -p "$install_dir"
     printf '\nInstalling uv %s permanently in %s...\n' "$UV_VERSION" "$install_dir"
     curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
-    set_uv_path "$install_dir/uv"; UV_ORIGIN=per-user
+    set_uv_path "$install_dir/uv"
+    UV_ORIGIN=per-user
+    UV_BOOTSTRAPPED=true
 }
 confirm_plan() {
     local mode="latest published release"
@@ -104,26 +107,28 @@ update_tool_path() { if ! "$UV" tool update-shell; then printf '\nWARNING: uv co
 find_install_python() {
     local version candidate
     for version in 3.13 3.12; do
-        if candidate="$("$UV" python find --no-project --no-python-downloads "$version" 2>/dev/null)"; then INSTALL_PYTHON="$candidate"; return 0; fi
+        if candidate="$("$UV" python find --system --no-project --no-python-downloads "$version" 2>/dev/null)"; then INSTALL_PYTHON="$candidate"; return 0; fi
     done
     "$UV" python install 3.12 || return 1
-    if candidate="$("$UV" python find --no-project 3.12 2>/dev/null)"; then INSTALL_PYTHON="$candidate"; return 0; fi
+    if candidate="$("$UV" python find --system --no-project 3.12 2>/dev/null)"; then INSTALL_PYTHON="$candidate"; return 0; fi
     fail "uv could not provide its managed Python 3.12 interpreter."
 }
 
 install_from_source() {
     find_install_python || return 1
     TEMPORARY_DIRECTORY="$(mktemp -d)"
-    local arguments=("$UV" "$GITHUB_CLIENT" "$GITHUB_REPOSITORY" "$TEMPORARY_DIRECTORY" "$APP_DISTRIBUTION" "$SOURCE_MODE")
+    local bootstrap_flag="false"
+    [[ "$UV_BOOTSTRAPPED" == true ]] && bootstrap_flag="true"
+    local arguments=("$UV" "$GITHUB_CLIENT" "$GITHUB_REPOSITORY" "$TEMPORARY_DIRECTORY" "$APP_DISTRIBUTION" "$SOURCE_MODE" "$bootstrap_flag")
     [[ -z "$VERSION" ]] || arguments+=("$VERSION")
     "$INSTALL_PYTHON" - "${arguments[@]}" <<'PY'
 import json, re, subprocess, sys, tarfile
 from pathlib import Path, PurePosixPath
-uv, client, repo, temp, distribution, source_mode, *requested = sys.argv[1:]
+uv, client, repo, temp, distribution, source_mode, bootstrap, *requested = sys.argv[1:]
 requested = requested[0] if requested else ""
 root = Path(temp)
 version_re = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
-def normalize(value): return re.sub(r"[-_.]+", "_", value).lower()
+def normalize(value): return re.sub(r"[-_.]+", "-", value).lower()
 def gh_api(path): return subprocess.run(["gh", "api", path], check=True, text=True, capture_output=True).stdout
 def public_json(url): return subprocess.run(["curl", "-fsSL", url], check=True, text=True, capture_output=True).stdout
 if source_mode == "main":
@@ -140,6 +145,7 @@ if source_mode == "main":
     else:
         subprocess.run(["curl", "-fsSL", f"https://api.github.com{endpoint}", "--output", str(archive)], check=True)
     version = None
+    source_ref = commit
 else:
     if requested:
         if not re.fullmatch(r"v" + version_re.pattern[1:-1], requested): raise SystemExit("Malformed release tag")
@@ -155,6 +161,7 @@ else:
     if not isinstance(tag, str) or not re.fullmatch(r"v" + version_re.pattern[1:-1], tag): raise SystemExit("GitHub release has a malformed tag")
     if requested and tag != requested: raise SystemExit("GitHub returned a different release tag")
     version = tag[1:]
+    source_ref = tag
     assets = release.get("assets")
     if not isinstance(assets, list): raise SystemExit("GitHub release has no asset list")
     matching = []
@@ -187,14 +194,24 @@ import tomllib
 with pyproject.open("rb") as stream: project = tomllib.load(stream).get("project", {})
 project_version = project.get("version")
 if normalize(project.get("name", "")) != normalize(distribution) or not isinstance(project_version, str) or not project_version or (source_mode == "release" and project_version != version): raise SystemExit("Source project metadata does not match selected source")
+version = project_version
+lifecycle = project_root / "src" / "buildben_dev" / "distribution" / "lifecycle.py"
+if lifecycle.is_file():
+    record = [sys.executable, str(lifecycle), "record", "--uv", uv, "--version", version, "--source-ref", source_ref]
+    if bootstrap == "true": record.append("--uv-bootstrapped")
+    subprocess.run([*record, "--check"], cwd=project_root, check=True)
+else:
+    print("WARNING: this older source has no lifecycle helper; only direct uv tool uninstall is available.")
 subprocess.run([uv, "export", "--locked", "--no-dev", "--no-default-groups", "--no-emit-project", "--format", "requirements.txt", "--output-file", str(root / "runtime-requirements.txt")], cwd=project_root, check=True)
 subprocess.run([uv, "tool", "install", "--force", "--refresh", "--python", sys.executable, "--with-requirements", str(root / "runtime-requirements.txt"), str(project_root)], check=True)
+if lifecycle.is_file():
+    subprocess.run(record, cwd=project_root, check=True)
 PY
     update_tool_path
 }
 
 installed_application() {
-    local tool_bin executable; tool_bin="$($UV tool dir --bin)"; executable="$tool_bin/$APP_COMMAND"
+    local tool_bin executable; tool_bin="$("$UV" tool dir --bin)"; executable="$tool_bin/$APP_COMMAND"
     [[ -x "$executable" ]] || { fail "Installed command was not found: $executable"; return 1; }
     printf '%s' "$executable"
 }

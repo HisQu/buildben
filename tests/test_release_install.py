@@ -266,7 +266,18 @@ def _install_smoke_fixture(
     tool_dir = isolated / "uv tools"
     tool_bin = isolated / "uv bin"
     uv_cache = isolated / "uv cache"
-    for directory in (config, data, cache, tool_dir, tool_bin, uv_cache):
+    state = isolated / "state"
+    local_appdata = isolated / "local appdata"
+    for directory in (
+        config,
+        data,
+        cache,
+        tool_dir,
+        tool_bin,
+        uv_cache,
+        state,
+        local_appdata,
+    ):
         directory.mkdir(parents=True, exist_ok=True)
     config_sentinel = config / "sentinel"
     data_sentinel = data / "sentinel"
@@ -287,10 +298,11 @@ def _install_smoke_fixture(
             "HOME": str(isolated),
             "XDG_CONFIG_HOME": str(config),
             "XDG_DATA_HOME": str(data),
+            "XDG_STATE_HOME": str(state),
+            "LOCALAPPDATA": str(local_appdata),
             "XDG_CACHE_HOME": str(cache),
             "UV_TOOL_DIR": str(tool_dir),
             "UV_TOOL_BIN_DIR": str(tool_bin),
-            "UV_CACHE_DIR": str(uv_cache),
             "TMPDIR": str(installer_temp),
             "TMP": str(installer_temp),
             "TEMP": str(installer_temp),
@@ -426,6 +438,20 @@ def test_source_install_smoke(tmp_path: Path, source_mode: str) -> None:
                 "INSTALLER_SMOKE_MAIN_COMMIT must contain a full lowercase 40-character SHA."
             )
     client = os.environ.get("INSTALLER_SMOKE_CLIENT", "curl")
+    with tarfile.open(source, "r:gz") as archive:
+        archive_names = {
+            PurePosixPath(*PurePosixPath(member.name).parts[1:]).as_posix()
+            for member in archive.getmembers()
+        }
+    assert {
+        "src/buildben_dev/distribution/lifecycle.py",
+        "src/buildben_dev/distribution/uninstall.sh",
+        "src/buildben_dev/distribution/uninstall.cmd",
+        "src/buildben_dev/distribution/uninstall.ps1",
+        "src/buildben_dev/distribution/prepare-powershell-windows.cmd",
+        "uninstall.sh",
+        "uninstall.cmd",
+    }.issubset(archive_names)
     if client not in {"curl", "gh"}:
         pytest.fail("INSTALLER_SMOKE_CLIENT must be curl or gh.")
 
@@ -512,16 +538,53 @@ def test_source_install_smoke(tmp_path: Path, source_mode: str) -> None:
         assert Path(origin).resolve().is_relative_to((tool_dir / "buildben").resolve())
         assert config_sentinel.read_text(encoding="utf-8") == "keep config"
         assert data_sentinel.read_text(encoding="utf-8") == "keep data"
+        state = Path(environment["XDG_STATE_HOME"])
+        local_appdata = Path(environment["LOCALAPPDATA"])
+        lifecycle_state = local_appdata if os.name == "nt" else state
+        saved_launcher = (
+            local_appdata / "buildben" / "installation" / "uninstall.cmd"
+            if os.name == "nt"
+            else state / "buildben" / "installation" / "uninstall.sh"
+        )
+        assert saved_launcher.is_file()
+        if os.name == "nt":
+            uninstall_command = ["cmd.exe", "/d", "/c", str(saved_launcher), "--yes"]
+        else:
+            uninstall_command = [str(saved_launcher), "--yes"]
+        misleading_environment = installed_environment | {
+            "UV_TOOL_DIR": str(tmp_path / "misleading tools"),
+            "UV_TOOL_BIN_DIR": str(tmp_path / "misleading bins"),
+        }
         uninstall = subprocess.run(
-            [uv, "tool", "uninstall", "buildben"],
+            uninstall_command,
             check=False,
             capture_output=True,
             text=True,
-            env=installed_environment,
+            env=misleading_environment,
+            timeout=120,
         )
         assert uninstall.returncode == 0, uninstall.stdout + uninstall.stderr
         assert config_sentinel.read_text(encoding="utf-8") == "keep config"
         assert data_sentinel.read_text(encoding="utf-8") == "keep data"
+        receipt = json.loads(
+            (lifecycle_state / "buildben" / "installation" / "receipt.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert receipt["package_removed"] is True
+        assert Path(uv).is_file()
+        repeated = subprocess.run(
+            uninstall_command,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=installed_environment,
+            timeout=120,
+        )
+        assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+        assert (
+            lifecycle_state / "buildben" / "installation" / "lifecycle.py"
+        ).is_file()
     finally:
         server.shutdown()
         thread.join()
