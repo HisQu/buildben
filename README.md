@@ -221,6 +221,8 @@ must be absolute. On Windows it is under `%LOCALAPPDATA%\buildben\installation`;
 3.12+ interpreter, not Buildben's removable environment or Python from PATH.
 Keep that interpreter available. The saved helper and private `receipt.json`
 remain after removal for recovery and safe repeated invocation.
+Its receipt stays bound to that saved directory even if a later shell changes
+`XDG_STATE_HOME` or `LOCALAPPDATA`; it does not switch to another installation.
 
 `--dry-run` previews without mutation or downloads. `--yes` confirms package
 removal only; without a terminal it is required for mutation. Default removal

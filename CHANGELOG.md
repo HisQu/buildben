@@ -77,6 +77,8 @@ This project follows Semantic Versioning.
   lifecycle helper, and native offline uninstaller outside the application
   environment. Removal preserves data and uv by default, records completion for
   safe repeats, and supports explicit package-only recovery for legacy installs.
+  Saved launchers keep their original receipt even when later shell state
+  directory variables point elsewhere.
 - Generated applications mount AppRC's `appdata paths` and `appdata clean`
   commands. Optional uninstall-time cleanup previews managed targets and rejects
   overlap with saved recovery files before removing the package.
