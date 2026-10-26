@@ -74,6 +74,14 @@ This project follows Semantic Versioning.
 
 ### 💔 Changed
 
+- New scaffolds treat the existing README as the project's chosen document
+  design: agents must adapt it in place and obtain approval before substantially
+  restructuring it. The reformatted README uses top-level topic headings, and
+  the scaffold's documentation rules preserve that layout. Project badges use
+  generated repository/package names, and the MIT badge links to package metadata.
+  The title's table-of-contents link uses a stable anchor that survives project
+  name substitution.
+
 <br>
 
 ### ⚠️ Deprecated

@@ -48,12 +48,19 @@
 - Do not use generic further-reading lists or related-link callouts.
 - Give each guide explicit prerequisites, complete files or labeled excerpts, commands, and expected results. Keep examples independent.
 - In all six `docs/` pages, put every H2 under a topical H1. Nest every H2 under that H1 in the table of contents, and put a standalone `<br>` before each topical H1. The generated documentation test enforces this rule.
-- Use sentence-case headings and GitHub callouts for their stated purposes.
+- Use sentence-case headings in new documentation, but preserve the existing README's heading capitalization and style. Use GitHub callouts for their stated purposes.
 - Preserve Graphigs figure standards and regenerate assets through their source builders.
 - Update CHANGELOG.md for user-visible changes. Add BACKLOG.md entries only for actionable unresolved work, after checking for duplicates.
 
+## README maintenance
+- Treat the existing README as the project's chosen design, not disposable boilerplate. Adapt it in place; never replace it with a generic README or regenerate it from scratch.
+- Read the full README before editing. Preserve its section order, heading hierarchy, HTML layout, badges, spacing, and useful content.
+- Replace placeholders and starter descriptions with project-specific information, and correct stale facts, commands, and links within the existing design.
+- Fit new information into existing sections unless those sections are unsuitable. Never delete useful content merely for brevity or style.
+- Substantial structural changes require a concrete project need and explicit user approval before editing. Explain the obstacle in the existing design and propose the smallest change that resolves it. Personal preference, generic best practices, and "cleaner formatting" are not sufficient reasons.
+
 ## Installation rules
-- Keep the root README concise and put installation before usage. Under `Installation`, put the H3 heading `One-line install` before `Install from a cloned repository`. Under each, label platform commands with `For Linux & macOS` and `For Windows` headings.
+- Put installation before usage. Under `Installation`, keep `One-Line Install` before `Install from a Cloned Repository`, preserving the README's existing heading hierarchy and layout. Keep platform labels such as `For Linux & macOS` and `For Windows` with their commands; installer examples may remain commented out. Follow README maintenance rather than deleting useful content to make the README concise.
 - By default, the one-line installer selects the latest stable GitHub release source archive; `--version VERSION` selects a release. `--main` selects the current remote `main` snapshot pinned to one commit and its committed `uv.lock`; it requires GitHub access but no release or Actions artifact, and may install unreleased code whose CI has not passed. See the [installer reference](docs/References.md#installer-reference).
 - Public release downloads use curl on Unix or native PowerShell HTTP on Windows and do not require GitHub CLI. `--github-client gh` uses authenticated requests without fallback.
 - BuildBen and generated installers accept `--github-client gh` for authenticated GitHub requests. Link https://cli.github.com/ and document `gh auth login` plus `gh auth setup-git` when authenticated access is relevant.

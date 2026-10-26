@@ -66,7 +66,7 @@ package descriptions. Contributors and coding agents must follow them.
 
 ### Installation instructions
 
-- Keep the root README concise and put installation before usage. Under `Installation`, put the H3 heading `One-line install` before `Install from a cloned repository`. Under each, label platform commands with `For Linux & macOS` and `For Windows` headings.
+- Put installation before usage. Under `Installation`, keep `One-Line Install` before `Install from a Cloned Repository`, preserving the root README's existing heading hierarchy and layout. Keep platform labels such as `For Linux & macOS` and `For Windows` with their commands; installer examples may remain commented out. Follow `AGENTS.md`'s README maintenance rules rather than deleting useful content to make the README concise.
 - The one-line installer bootstraps from the repository's default branch. It installs the latest stable release by default; `--version VERSION` selects a release and `--main` selects a single pinned commit from remote `main` with its committed `uv.lock`. Main requires GitHub access but no release or Actions artifact; it may be unreleased code whose CI has not passed. See the [installer reference](References.md#installer-reference).
 - Public installation uses curl on Unix or native PowerShell HTTP on Windows and does not require GitHub CLI. `--github-client gh` uses authenticated GitHub CLI requests without fallback.
 - Link https://cli.github.com/ and document `gh auth login` and `gh auth setup-git` where authenticated access is needed. Private VCS dependencies require separate working Git credentials.
