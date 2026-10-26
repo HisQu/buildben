@@ -193,8 +193,9 @@ shows how `APP_RC.resolve()` and `ResolvedConfig.build()` construct them. The
 `apprc` installs the matching `apprc-core` and terminal libraries. Buildben itself
 has no runtime dependency on AppRC. The generated application's
 [package explanation](Explanations.md#package-layout-and-dependencies) describes
-why each dependency is needed. [Development](Development.md#maintainer-environment)
-provides both pip and uv commands.
+why each dependency is needed. [Contributing](../CONTRIBUTING.md#set-up-development)
+provides the normal pip setup; [Development](Development.md#maintainer-environment)
+covers uv and optional extras.
 
 ## Figure visual tokens
 

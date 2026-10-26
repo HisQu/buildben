@@ -69,6 +69,10 @@ This project follows Semantic Versioning.
 - Added `--main` to the terminal installers and generated-project installers.
   It installs one captured GitHub main commit with that snapshot's committed
   `uv.lock`; published stable releases remain the default.
+- New projects include a root `CONTRIBUTING.md` for shared contributor/agent
+  conventions and quick-start commands, with README-style headings and spacing.
+- Generated documentation tests validate local navigation across README,
+  CONTRIBUTING, AGENTS, and the detailed documentation pages.
 
 <br>
 
@@ -81,6 +85,10 @@ This project follows Semantic Versioning.
   generated repository/package names, and the MIT badge links to package metadata.
   The title's table-of-contents link uses a stable anchor that survives project
   name substitution.
+- The generated README now uses audience-grouped documentation navigation.
+  CONTRIBUTING owns shared rules and everyday setup/checks; Development retains
+  deeper guides. Agent instructions link to these canonical rules rather than
+  maintaining duplicate copies.
 
 <br>
 
