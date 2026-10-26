@@ -219,6 +219,8 @@ def _install_smoke_fixture(
             "args=sys.argv[1:]\n"
             "pathlib.Path(os.environ['INSTALLER_SMOKE_CURL_CALLED']).write_text('called')\n"
             "url=next((arg for arg in args if arg.startswith(('http://','https://'))), '')\n"
+            "if url.startswith('https://astral.sh/uv/') and os.environ.get('INSTALLER_SMOKE_BOOTSTRAP_UV'):\n"
+            ' print(\'mkdir -p "$HOME/.local/bin"\\ncp "$INSTALLER_SMOKE_BOOTSTRAP_UV" "$HOME/.local/bin/uv"\\ncp "$INSTALLER_SMOKE_BOOTSTRAP_UV" "$HOME/.local/bin/uvx"\\nchmod 700 "$HOME/.local/bin/uv" "$HOME/.local/bin/uvx"\'); raise SystemExit(0)\n'
             "if '/releases/' in url:\n"
             " release_path=os.environ['INSTALLER_SMOKE_LATEST_RELEASE_JSON'] if url.endswith('/latest') else os.environ['INSTALLER_SMOKE_RELEASE_JSON']\n"
             " print(pathlib.Path(release_path).read_text()); raise SystemExit(0)\n"
@@ -303,6 +305,7 @@ def _install_smoke_fixture(
             "XDG_CACHE_HOME": str(cache),
             "UV_TOOL_DIR": str(tool_dir),
             "UV_TOOL_BIN_DIR": str(tool_bin),
+            "UV_CACHE_DIR": str(uv_cache),
             "TMPDIR": str(installer_temp),
             "TMP": str(installer_temp),
             "TEMP": str(installer_temp),
@@ -1057,6 +1060,128 @@ def test_gh_transport_failure_does_not_fall_back_to_public_transport(
         assert expected_error in output, output
         assert gh_called.is_file()
         assert list(tool_dir.iterdir()) == []
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="This exercises the Unix bootstrap transport."
+)
+def test_source_install_smoke_bootstrap_owned_uv_removal(
+    tmp_path: Path,
+) -> None:
+    """Run the real missing-uv installer branch and saved offline uninstaller."""
+    source_value = os.environ.get("INSTALLER_SMOKE_SOURCE")
+    if not source_value:
+        pytest.skip("INSTALLER_SMOKE_SOURCE is unset; source-install smoke is opt-in.")
+    fixture = _install_smoke_fixture(tmp_path, Path(source_value), "curl")
+    server, thread, environment, uv, tool_dir, _, config, data, _, _ = fixture
+    shim_dir = Path(environment["PATH"].split(os.pathsep)[0])
+    isolated_bin = tmp_path / "bootstrap commands"
+    isolated_bin.mkdir()
+    for name in (
+        "bash",
+        "sh",
+        "env",
+        "mkdir",
+        "dirname",
+        "basename",
+        "mktemp",
+        "rm",
+        "cp",
+        "chmod",
+        "python3",
+    ):
+        executable = shutil.which(name)
+        assert executable is not None, f"Bootstrap fixture requires {name}."
+        (isolated_bin / name).symlink_to(executable)
+    for version in ("3.13", "3.12"):
+        discovery = subprocess.run(
+            [
+                uv,
+                "python",
+                "find",
+                "--system",
+                "--no-project",
+                "--no-python-downloads",
+                version,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if discovery.returncode == 0:
+            (isolated_bin / f"python{version}").symlink_to(discovery.stdout.strip())
+            break
+    else:
+        pytest.fail("Bootstrap fixture requires an existing base Python 3.12 or 3.13.")
+    environment.update(
+        {
+            "PATH": os.pathsep.join((str(shim_dir), str(isolated_bin))),
+            "INSTALLER_SMOKE_BOOTSTRAP_UV": uv,
+            "UV_PYTHON_DOWNLOADS": "never",
+        }
+    )
+    saved = Path(environment["XDG_STATE_HOME"]) / "buildben" / "installation"
+    disposable_uv = Path(environment["HOME"]) / ".local" / "bin" / "uv"
+    disposable_uvx = disposable_uv.with_name("uvx")
+    cache_sentinel = Path(environment["UV_CACHE_DIR"]) / "retained-cache"
+    cache_sentinel.write_text("shared cache", encoding="utf-8")
+    thread.start()
+    try:
+        installed = subprocess.run(
+            [
+                str(isolated_bin / "bash"),
+                str(INSTALLER_DIR / "install-linux-macos.sh"),
+                "--yes",
+                "--skip-config",
+                "--github-client",
+                "curl",
+            ],
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+        assert installed.returncode == 0, installed.stdout + installed.stderr
+        receipt = json.loads((saved / "receipt.json").read_text(encoding="utf-8"))
+        assert receipt["uv_bootstrapped"] is True
+        assert receipt["uv"] == str(disposable_uv)
+        assert {item["path"] for item in receipt["uv_binaries"]} == {
+            str(disposable_uv),
+            str(disposable_uvx),
+        }
+        removed = subprocess.run(
+            [str(saved / "uninstall.sh"), "--remove-uv", "--yes"],
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+        assert removed.returncode == 0, removed.stdout + removed.stderr
+        assert not disposable_uv.exists()
+        assert not disposable_uvx.exists()
+        assert not (tool_dir / "buildben").exists()
+        assert Path(uv).is_file()
+        assert config.read_text(encoding="utf-8") == "keep config"
+        assert data.read_text(encoding="utf-8") == "keep data"
+        assert cache_sentinel.read_text(encoding="utf-8") == "shared cache"
+        completed = (saved / "receipt.json").read_bytes()
+        assert json.loads(completed)["package_removed"] is True
+        repeated = subprocess.run(
+            [str(saved / "uninstall.sh"), "--yes"],
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+        assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+        assert (saved / "receipt.json").read_bytes() == completed
     finally:
         server.shutdown()
         thread.join()
