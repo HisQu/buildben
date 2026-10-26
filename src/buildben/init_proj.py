@@ -200,6 +200,28 @@ def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path
         / f"{name}_dev"
         / "distribution"
         / "install-macos.command",
+        "_src-dev-distribution-lifecycle.py.tmpl": project_root
+        / "src"
+        / f"{name}_dev"
+        / "distribution"
+        / "lifecycle.py",
+        "_src-dev-distribution-uninstall.sh": project_root
+        / "src"
+        / f"{name}_dev"
+        / "distribution"
+        / "uninstall.sh",
+        "_src-dev-distribution-uninstall.cmd": project_root
+        / "src"
+        / f"{name}_dev"
+        / "distribution"
+        / "uninstall.cmd",
+        "_src-dev-distribution-uninstall.ps1": project_root
+        / "src"
+        / f"{name}_dev"
+        / "distribution"
+        / "uninstall.ps1",
+        "_uninstall.sh": project_root / "uninstall.sh",
+        "_uninstall.cmd": project_root / "uninstall.cmd",
         "_install-linux-macos.sh": project_root / "install-linux-macos.sh",
         "_install-windows.cmd": project_root / "install-windows.cmd",
         "_install-macos.command": project_root / "install-macos.command",
@@ -237,7 +259,7 @@ def _project_placeholders(name: str, github_user: str) -> dict[str, str]:
     """
     scaffold_date = dt.date.today().isoformat()
     pascal_name = _pascal_project_name(name)
-    distribution = name.replace("_", "-")
+    distribution = re.sub(r"[-_.]+", "-", name).lower()
     return {
         "<my_project>": name,
         "{my_project}": name,

@@ -105,6 +105,10 @@ explains check selection and how to validate changed documentation and examples.
   in `config.bundle`, and declare the shared `APP_RC` in `config.app`. Import
   declarations and classes directly from their modules. Mount configuration
   commands with `rc.cli.mount_config_cli`; runtime values come from `state.resolved`.
+  Mount managed-data commands separately with `rc.cli.mount_appdata_cli`.
+  Keep `appdata paths` and `appdata clean` runtime-independent using
+  `RuntimeIndependentCommand(action_prefixes={("paths",), ("clean",)}, skip_empty=True)`;
+  they must work with trailing options even when ordinary runtime config is broken.
 - CLI behavior belongs in `{my_project}.cli.app`; keep `{my_project}.main` as a
   thin public entry point wrapper. Add minimal `__main__` demo code only when it
   improves discoverability or manual testing.

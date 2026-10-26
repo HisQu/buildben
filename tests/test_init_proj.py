@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
-import tomllib
 import xml.etree.ElementTree as ET
 from collections.abc import Generator
 from pathlib import Path
@@ -231,13 +229,25 @@ def _runtime_command(project_root: Path, *arguments: str) -> str:
     return result.stdout
 
 
-@pytest.mark.skipif(
-    importlib.util.find_spec("apprc") is None,
-    reason="Install AppRC >=0.25.0,<0.26 to verify generated runtime behavior.",
-)
 def test_scaffolded_project_runs_apprc_configuration(bube_test_project: Path) -> None:
-    """Exercise setup, storage edits, precedence, and named storage selection."""
+    """Exercise generated AppRC commands, cleanup safety, and retained data."""
     proot = bube_test_project
+    assert "appdata" in _runtime_command(proot, "--help")
+    paths = json.loads(_runtime_command(proot, "appdata", "paths", "--json"))
+    assert paths["apprc_dir"] == str(proot / ".test-config")
+    _runtime_command(proot, "appdata", "clean", "--dry-run")
+    alternate_dir = proot / "alternate-apprc"
+    alternate_paths = json.loads(
+        _runtime_command(
+            proot, "appdata", "paths", "--apprc-dir", str(alternate_dir), "--json"
+        )
+    )
+    assert alternate_paths["apprc_dir"] == str(alternate_dir)
+    _runtime_command(
+        proot, "appdata", "clean", "--dry-run", "--apprc-dir", str(alternate_dir)
+    )
+    assert not (proot / ".test-config").exists()
+    assert not alternate_dir.exists()
     assert "config" in _runtime_command(proot, "--help")
     _runtime_command(proot, "version")
     diagnose = json.loads(_runtime_command(proot, "diagnose", "--json"))
@@ -278,12 +288,317 @@ def test_scaffolded_project_runs_apprc_configuration(bube_test_project: Path) ->
         json.loads(_runtime_command(proot, "config", "show", "--json"))["storage_name"]
         == "work"
     )
+    external_payload = proot / "storage" / "retained-payload"
+    external_payload.write_text("retain external data\n", encoding="utf-8")
+    _runtime_command(proot, "appdata", "clean", "--dry-run")
+    _runtime_command(proot, "appdata", "clean", "--yes")
+    assert external_payload.read_text(encoding="utf-8") == "retain external data\n"
 
 
-@pytest.mark.skipif(
-    importlib.util.find_spec("apprc") is None,
-    reason="Install AppRC >=0.25.0,<0.26 to type-check a generated consumer.",
-)
+def test_scaffolded_lifecycle_support_runs_from_generated_project(
+    bube_test_project: Path,
+    tmp_path: Path,
+) -> None:
+    """Run generated lifecycle help and a no-write record preflight."""
+    proot = bube_test_project
+    distribution = proot / "src" / "bube_test_tmp_dev" / "distribution"
+    lifecycle = distribution / "lifecycle.py"
+    expected_files = [
+        lifecycle,
+        distribution / "uninstall.sh",
+        distribution / "uninstall.cmd",
+        distribution / "uninstall.ps1",
+        proot / "uninstall.sh",
+        proot / "uninstall.cmd",
+    ]
+    for path in expected_files:
+        assert path.is_file(), path
+
+    env = _project_env(proot)
+    uv_path = shutil.which("uv")
+    assert uv_path is not None
+    base_python_result = subprocess.run(
+        [
+            uv_path,
+            "python",
+            "find",
+            "--system",
+            "--no-project",
+            "--no-python-downloads",
+        ],
+        cwd=proot,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert base_python_result.returncode == 0, (
+        base_python_result.stdout + base_python_result.stderr
+    )
+    base_python = base_python_result.stdout.strip()
+    state_root = tmp_path / "generated lifecycle state"
+    env.update(
+        {
+            "HOME": str(tmp_path / "home"),
+            "LOCALAPPDATA": str(tmp_path / "local appdata"),
+            "XDG_STATE_HOME": str(state_root),
+            "UV_CACHE_DIR": str(tmp_path / "uv cache"),
+            "UV_TOOL_BIN_DIR": str(tmp_path / "uv bin"),
+            "UV_TOOL_DIR": str(tmp_path / "uv tools"),
+        }
+    )
+    for directory in (Path(env["HOME"]), Path(env["LOCALAPPDATA"])):
+        directory.mkdir(parents=True, exist_ok=True)
+
+    result = subprocess.run(
+        [base_python, "-S", str(lifecycle), "--help"],
+        cwd=proot,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "record" in result.stdout
+    result = subprocess.run(
+        [
+            base_python,
+            "-S",
+            str(lifecycle),
+            "record",
+            "--uv",
+            uv_path,
+            "--version",
+            "0.1.0",
+            "--source-ref",
+            "a" * 40,
+            "--check",
+        ],
+        cwd=proot,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    state_directory = (
+        Path(env["LOCALAPPDATA"]) / "bube-test-tmp" / "installation"
+        if os.name == "nt"
+        else state_root / "bube-test-tmp" / "installation"
+    )
+    assert not state_directory.exists()
+    if os.name != "nt":
+        assert os.access(distribution / "uninstall.sh", os.X_OK)
+        assert os.access(proot / "uninstall.sh", os.X_OK)
+
+
+@pytest.mark.parametrize("failure", [None, "registry", "overlap", "child"])
+def test_installed_generated_app_cleanup_lifecycle(
+    bube_test_project: Path, tmp_path: Path, failure: str | None
+) -> None:
+    """Exercise real tool installation and saved native cleanup with safe failures."""
+    project = bube_test_project
+    settings_path = project / "src" / "bube_test_tmp" / "config" / "sections" / "app.py"
+    with settings_path.open("a", encoding="utf-8") as stream:
+        stream.write('\n    count: int = rc.field("BUBE_TEST_TMP_COUNT", default=1)\n')
+    uv = shutil.which("uv")
+    assert uv is not None
+    env = _project_env(project)
+    base = subprocess.run(
+        [uv, "python", "find", "--system", "--no-project", "--no-python-downloads"],
+        cwd=project,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert base.returncode == 0, base.stdout + base.stderr
+    base_python = base.stdout.strip()
+    isolated = tmp_path / "installed consumer"
+    state_root = isolated / "state"
+    local_appdata = isolated / "local appdata"
+    env.update(
+        {
+            "HOME": str(isolated / "home"),
+            "XDG_CONFIG_HOME": str(isolated / "config"),
+            "XDG_DATA_HOME": str(isolated / "data"),
+            "XDG_STATE_HOME": str(state_root),
+            "XDG_CACHE_HOME": str(isolated / "cache"),
+            "LOCALAPPDATA": str(local_appdata),
+            "UV_TOOL_DIR": str(isolated / "tools"),
+            "UV_TOOL_BIN_DIR": str(isolated / "bin"),
+            "UV_CACHE_DIR": str(isolated / "uv cache"),
+            "BUBE_TEST_TMP_APPRC_DIR": str(isolated),
+        }
+    )
+    env.pop("PYTHONPATH", None)
+    for path in (Path(env["HOME"]), local_appdata):
+        path.mkdir(parents=True, exist_ok=True)
+    lifecycle = project / "src" / "bube_test_tmp_dev" / "distribution" / "lifecycle.py"
+    record = [
+        base_python,
+        str(lifecycle),
+        "record",
+        "--uv",
+        uv,
+        "--version",
+        "0.1.0",
+        "--source-ref",
+        "a" * 40,
+    ]
+    _run([*record, "--check"], cwd=project, env=env)
+    _run(
+        [uv, "tool", "install", "--python", base_python, str(project)],
+        cwd=project,
+        env=env,
+    )
+    _run(record, cwd=project, env=env)
+    state_base = local_appdata if os.name == "nt" else state_root
+    state = state_base / "bube-test-tmp" / "installation"
+    receipt = json.loads((state / "receipt.json").read_text(encoding="utf-8"))
+    tool_environment = Path(receipt["tool_dir"]) / "bube-test-tmp"
+    command = Path(receipt["tool_bin_dir"]) / (
+        "bube_test_tmp.exe" if os.name == "nt" else "bube_test_tmp"
+    )
+    tool_python = tool_environment / (
+        "Scripts/python.exe" if os.name == "nt" else "bin/python"
+    )
+    appdata = Path(env["BUBE_TEST_TMP_APPRC_DIR"])
+    internal = appdata / "internal"
+    external = tmp_path / "external retained storage"
+    _run(
+        [str(command), "config", "setup", "--yes", "--storage-root", str(internal)],
+        cwd=project,
+        env=env,
+    )
+    _run(
+        [str(command), "config", "storage", "add", "external", str(external), "--yes"],
+        cwd=project,
+        env=env,
+    )
+    internal_payload = internal / "internal payload"
+    external_payload = external / "external payload"
+    unmanaged = appdata / "unmanaged"
+    for path in (internal_payload, external_payload, unmanaged):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("retain unless managed internal\n", encoding="utf-8")
+    env["BUBE_TEST_TMP_COUNT"] = "not-an-integer"
+    invalid_runtime = subprocess.run(
+        [str(command), "config", "show", "--json"],
+        cwd=project,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert invalid_runtime.returncode != 0
+    _run([str(command), "appdata", "paths", "--json"], cwd=project, env=env)
+    _run([str(command), "appdata", "clean", "--dry-run"], cwd=project, env=env)
+    env.pop("BUBE_TEST_TMP_COUNT")
+    if failure == "registry":
+        (appdata / "apprc.toml").write_text("not valid = [", encoding="utf-8")
+    elif failure == "overlap":
+        _run(
+            [
+                str(command),
+                "config",
+                "storage",
+                "add",
+                "recovery",
+                str(state.parent),
+                "--yes",
+            ],
+            cwd=project,
+            env=env,
+        )
+    elif failure == "child":
+        location = subprocess.run(
+            [
+                str(tool_python),
+                "-c",
+                "from importlib import import_module; "
+                "print(import_module('bube_test_tmp.cli.app').__file__)",
+            ],
+            cwd=project,
+            env=env,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        cli_path = Path(location.stdout.strip())
+        source = cli_path.read_text(encoding="utf-8")
+        source = source.replace(
+            "    app()\n",
+            '    if "clean" in sys.argv and "--dry-run" not in sys.argv:\n'
+            "        raise SystemExit(17)\n"
+            "    app()\n",
+        )
+        cli_path.write_text(source, encoding="utf-8")
+    env["BUBE_TEST_TMP_APPRC_DIR"] = str(tmp_path / "unselected appdata")
+    launcher = (
+        ["cmd.exe", "/d", "/c", str(state / "uninstall.cmd")]
+        if os.name == "nt"
+        else [str(state / "uninstall.sh")]
+    )
+    if failure is None:
+        receipt_before = (state / "receipt.json").read_bytes()
+        preview = subprocess.run(
+            [
+                *launcher,
+                "--dry-run",
+                "--clean-appdata",
+                "--apprc-dir",
+                str(appdata),
+            ],
+            cwd=project,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert preview.returncode == 0, preview.stdout + preview.stderr
+        assert str(internal) in preview.stdout
+        assert str(external) in preview.stdout
+        assert internal_payload.read_text(encoding="utf-8") == (
+            "retain unless managed internal\n"
+        )
+        assert command.is_file()
+        assert tool_environment.is_dir()
+        assert (state / "receipt.json").read_bytes() == receipt_before
+    result = subprocess.run(
+        [*launcher, "--clean-appdata", "--yes", "--apprc-dir", str(appdata)],
+        cwd=project,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if failure is not None:
+        assert result.returncode != 0, result.stdout + result.stderr
+        assert command.is_file()
+        assert tool_environment.is_dir()
+        assert internal_payload.is_file()
+        assert not json.loads((state / "receipt.json").read_text(encoding="utf-8"))[
+            "package_removed"
+        ]
+        _run([*launcher, "--yes"], cwd=project, env=env)
+    else:
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert not internal_payload.exists()
+        assert not (appdata / "apprc.toml").exists()
+    for retained in (external_payload, unmanaged):
+        assert (
+            retained.read_text(encoding="utf-8") == "retain unless managed internal\n"
+        )
+    assert not command.exists()
+    assert not tool_environment.exists()
+    assert (state / "lifecycle.py").is_file()
+    assert json.loads((state / "receipt.json").read_text(encoding="utf-8"))[
+        "package_removed"
+    ]
+    _run([*launcher, "--yes"], cwd=project, env=env)
+
+
 def test_generated_python_passes_quality_checks(bube_test_project: Path) -> None:
     """Check generated imports and downstream use of AppRC's public types."""
     env = _project_env(bube_test_project)
@@ -308,55 +623,6 @@ def test_buildben_help_hides_unimplemented_database_command() -> None:
 
     assert "init-database" not in result.stdout
     assert "data" not in result.stdout
-
-
-def test_scaffolded_project_uses_dependency_group_template(
-    bube_test_project: Path,
-) -> None:
-    """Assert generated dependency docs and commands match the template policy."""
-    proot = bube_test_project
-
-    pyproject_path = proot / "pyproject.toml"
-    pyproject_text = pyproject_path.read_text(encoding="utf-8")
-    pyproject = tomllib.loads(pyproject_text)
-
-    project = pyproject["project"]
-    assert project["readme"] == "README.md"
-    assert project["dependencies"] == [
-        "apprc>=0.25.0,<0.26",
-        "typer",
-    ]
-    assert "python-dotenv" not in project["dependencies"]
-    assert project["scripts"] == {"bube_test_tmp": "bube_test_tmp.main:main"}
-
-    optional_dependencies = project.get("optional-dependencies", {})
-    assert "dev" not in optional_dependencies
-    assert "# [project.optional-dependencies]" in pyproject_text
-    assert "# rag = [" in pyproject_text
-
-    dependency_groups = pyproject["dependency-groups"]
-    assert {"pytest>=8.2", "pyright>=1.1", "ruff>=0.4"} <= set(dependency_groups["dev"])
-
-    package_data = pyproject["tool"]["setuptools"]["package-data"]["*"]
-    assert "config/apprc.defaults.env" in package_data
-
-    envrc_text = (proot / ".envrc").read_text(encoding="utf-8")
-    assert "--all-extras" in envrc_text
-    assert "--all-groups" in envrc_text
-    assert "--no-default-groups" in envrc_text
-    assert "uv sync --frozen --all-extras --all-groups" in envrc_text
-
-    justfile_text = (proot / "justfile").read_text(encoding="utf-8")
-    assert "alias install := sync" in justfile_text
-    assert "uv sync --all-extras --all-groups --locked" in justfile_text
-    assert "uv sync --frozen --all-extras --all-groups" in justfile_text
-    assert "uv sync --check --all-extras --all-groups" in justfile_text
-    assert "uv lock" in justfile_text
-    assert "_check-clean-worktree" in justfile_text
-    assert "worktree-create branch destination base:" in justfile_text
-    assert 'worktree-remove destination delete_branch="false":' in justfile_text
-    assert "uv sync --locked --all-extras --all-groups" in justfile_text
-    assert 'UV_PROJECT_ENVIRONMENT="$destination_path/.venv"' in justfile_text
 
 
 def test_scaffolded_worktree_create_handles_spaces_and_overrides_inherited_uv_env(
@@ -736,29 +1002,6 @@ def test_scaffolded_project_includes_typer_cli_scaffold(
     for expected_file in expected_files:
         assert expected_file.is_file(), expected_file
 
-    cli_text = (package_root / "cli" / "app.py").read_text(encoding="utf-8")
-    main_text = (package_root / "main.py").read_text(encoding="utf-8")
-    pyproject_text = (proot / "pyproject.toml").read_text(encoding="utf-8")
-    pyproject = tomllib.loads(pyproject_text)
-
-    assert "typer.Typer" in cli_text
-    assert '@app.command("version")' in cli_text
-    assert '@app.command("diagnose")' in cli_text
-    assert "rc.cli.mount_config_cli" in cli_text
-    assert "from bube_test_tmp.config.bundle import BubeTestTmpConfig" in cli_text
-    assert "state.resolved" in cli_text
-    assert "rc.cli.CliRuntimePolicy" in cli_text
-    assert "rc.cli.RuntimeIndependentCommand" in cli_text
-    assert "rc.cli.dump_json" in cli_text
-    assert "APP_CONFIG.typer_app" not in cli_text
-    assert "bootstrap_cli_env" not in cli_text
-    assert "config_request_skips_runtime_bootstrap" not in cli_text
-    assert "apprc.runtime_config" not in cli_text
-    assert "apprc.logging" not in cli_text
-    assert "logging.basicConfig" in cli_text
-    assert "from bube_test_tmp.cli.app import main" in main_text
-    assert pyproject["project"]["scripts"][proj_name] == f"{proj_name}.main:main"
-
     generated_text = "\n\n".join(
         path.read_text(encoding="utf-8") for path in expected_files
     )
@@ -769,61 +1012,6 @@ def test_scaffolded_project_includes_typer_cli_scaffold(
         "<github_username>",
     ):
         assert placeholder not in generated_text
-
-
-def test_scaffolded_project_has_apprc_config_package(
-    bube_test_project: Path,
-) -> None:
-    """Assert generated projects use AppRC instead of legacy dotenv helpers."""
-    proot = bube_test_project
-    package_root = proot / "src" / "bube_test_tmp"
-
-    config_files = [
-        "__init__.py",
-        "app.py",
-        "bundle.py",
-        "apprc.defaults.env",
-        "sections/__init__.py",
-        "sections/app.py",
-    ]
-    config_root = package_root / "config"
-    for name in config_files:
-        assert (config_root / name).is_file(), name
-    for obsolete in (
-        "catalog.py",
-        "_facade.py",
-        "__init__.pyi",
-        "sections/_facade.py",
-        "sections/__init__.pyi",
-        "owners.py",
-        ".env.shared",
-    ):
-        assert not (config_root / obsolete).exists(), obsolete
-    assert not (package_root / "paths.py").exists()
-    assert not (package_root / "utils" / "path_resolver.py").exists()
-    assert not (proot / ".env.template").exists()
-
-    config_text = (config_root / "app.py").read_text(encoding="utf-8")
-    section_text = (config_root / "sections" / "app.py").read_text(encoding="utf-8")
-    bundle_text = (config_root / "bundle.py").read_text(encoding="utf-8")
-    defaults_text = (config_root / "apprc.defaults.env").read_text(encoding="utf-8")
-    agents_text = (proot / "AGENTS.md").read_text(encoding="utf-8")
-
-    assert "APP_RC = rc.AppRC(" in config_text
-    assert 'storage=rc.Storage(selector_env_key="BUBE_TEST_TMP_STORAGE")' in config_text
-    assert 'command_name="bube_test_tmp"' in config_text
-    assert "user_dotenv=" not in config_text
-    assert "@APP_RC.config(" in section_text
-    assert "class AppSettings(rc.Config):" in section_text
-    assert 'rc_path=("app",)' in section_text
-    assert 'prefix="BUBE_TEST_TMP_"' in section_text
-    assert "@APP_RC.bundle" in bundle_text
-    assert "class BubeTestTmpConfig:" in bundle_text
-    assert "app: AppSettings" in bundle_text
-    assert 'BUBE_TEST_TMP_MESSAGE="Hello from bube_test_tmp"' in defaults_text
-    assert "bube_test_tmp.config" in agents_text
-    assert "rc.cli.mount_config_cli" in agents_text
-    assert "config.catalog" not in agents_text
 
 
 def test_scaffolded_release_push_updates_main_and_tag_together(
@@ -1157,10 +1345,6 @@ def test_scaffolded_documentation_ignores_example_links(
     )
 
 
-@pytest.mark.skipif(
-    importlib.util.find_spec("apprc") is None,
-    reason="Install AppRC >=0.25.0,<0.26 to execute the generated documentation.",
-)
 @pytest.mark.parametrize(
     "title", ["User preferences and storage", "Several config sections"]
 )

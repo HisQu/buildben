@@ -88,6 +88,8 @@ def _setup_app_logging(level: str | int = "INFO", **_: object) -> None:
     logging.basicConfig(level=level)
 
 
+rc.cli.mount_appdata_cli(app, APP_RC)
+
 rc.cli.mount_config_cli(
     app,
     APP_RC,
@@ -96,6 +98,10 @@ rc.cli.mount_config_cli(
         runtime_independent_commands={
             "version": rc.cli.RuntimeIndependentCommand(skip_empty=True),
             "diagnose": rc.cli.RuntimeIndependentCommand(skip_empty=True),
+            "appdata": rc.cli.RuntimeIndependentCommand(
+                action_prefixes={("paths",), ("clean",)},
+                skip_empty=True,
+            ),
         },
         extra_cli_flag_options={"--json"},
     ),

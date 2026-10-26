@@ -528,22 +528,35 @@ release-install-smoke:
     sdists=(dist/*.tar.gz)
     if [[ "${#sdists[@]}" -ne 1 ]]; then echo "Expected exactly one source archive in dist/." >&2; exit 1; fi
     version="$(uv version --short)"
+    if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+        echo "Generated project version is not a validated release version." >&2
+        exit 1
+    fi
+    base_python="$(uv python find --system --no-project --no-python-downloads)"
+    source_ref="$(git rev-parse HEAD)"
+    if [[ ! "$source_ref" =~ ^[0-9a-f]{40,64}$ ]]; then
+        echo "Source reference is not a full Git commit SHA." >&2
+        exit 1
+    fi
     smoke_root="$(mktemp -d)"
     trap 'rm -rf "$smoke_root"' EXIT
     export HOME="$smoke_root/home"
     export XDG_CONFIG_HOME="$smoke_root/config"
     export XDG_DATA_HOME="$smoke_root/data"
+    export XDG_STATE_HOME="$smoke_root/state"
     export XDG_CACHE_HOME="$smoke_root/cache"
+    export LOCALAPPDATA="$smoke_root/local-appdata"
     export UV_CACHE_DIR="$smoke_root/uv-cache"
     export UV_TOOL_DIR="$smoke_root/uv-tools"
     export UV_TOOL_BIN_DIR="$smoke_root/uv-bin"
     source_root="$smoke_root/source"
-    mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME" "$source_root"
+    mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_STATE_HOME" "$XDG_CACHE_HOME" "$LOCALAPPDATA" "$source_root"
     tool_dir_fs="$UV_TOOL_DIR"
     if command -v cygpath >/dev/null 2>&1; then
         export UV_TOOL_DIR="$(cygpath -m "$UV_TOOL_DIR")"
         export UV_TOOL_BIN_DIR="$(cygpath -m "$UV_TOOL_BIN_DIR")"
         export UV_CACHE_DIR="$(cygpath -m "$UV_CACHE_DIR")"
+        export LOCALAPPDATA="$(cygpath -m "$LOCALAPPDATA")"
         tool_dir_fs="$(cygpath -u "$UV_TOOL_DIR")"
     fi
     config_sentinel="$XDG_CONFIG_HOME/{my_project}-sentinel"
@@ -556,12 +569,22 @@ release-install-smoke:
         echo "Generated source archive must contain pyproject.toml and uv.lock." >&2
         exit 1
     fi
+    if [[ "$(basename "${sdists[0]}")" != "{my_project}-${version}.tar.gz" ]]; then
+        echo "Source archive version does not match generated project metadata." >&2
+        exit 1
+    fi
+    "$base_python" -c 'import pathlib, sys, tomllib; metadata = tomllib.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))["project"]; assert metadata["version"] == sys.argv[2], "Extracted source version differs from archive version"' "$project_root/pyproject.toml" "$version"
     runtime_requirements="$smoke_root/runtime-requirements.txt"
+    lifecycle="$project_root/src/{my_project}_dev/distribution/lifecycle.py"
+    uv_path="$(command -v uv)"
+    if command -v cygpath >/dev/null 2>&1; then uv_path="$(cygpath -m "$uv_path")"; fi
+    "$base_python" "$lifecycle" record --uv "$uv_path" --version "$version" --source-ref "$source_ref" --check
     (
         cd "$project_root"
         uv export --locked --no-dev --no-default-groups --no-emit-project --format requirements.txt --output-file "$runtime_requirements"
-        uv tool install --force --refresh --python "$(command -v python)" --with-requirements "$runtime_requirements" "$project_root"
+        uv tool install --force --refresh --python "$base_python" --with-requirements "$runtime_requirements" "$project_root"
     )
+    "$base_python" "$lifecycle" record --uv "$uv_path" --version "$version" --source-ref "$source_ref"
     export PATH="$UV_TOOL_BIN_DIR:$PATH"
     tool_project="{my_project}"
     tool_env="$tool_dir_fs/$tool_project"
@@ -581,7 +604,19 @@ release-install-smoke:
     "$tool_python" -m {my_project}_dev.packaging.install_smoke --expected-version "$version"
     test "$(cat "$config_sentinel")" = "preserve config"
     test "$(cat "$data_sentinel")" = "preserve data"
-    uv tool uninstall "{my_project}"
+    if [[ -x "$tool_env/Scripts/python.exe" ]]; then
+        state_dir="$LOCALAPPDATA/<distribution_name>/installation"
+        launcher_cmd="$(cygpath -w "$state_dir/uninstall.cmd")"
+        cmd.exe /c "\"$launcher_cmd\" --yes"
+    else
+        state_dir="$XDG_STATE_HOME/<distribution_name>/installation"
+        "$state_dir/uninstall.sh" --yes
+    fi
+    test ! -d "$tool_env"
+    test -f "$state_dir/receipt.json"
+    test -f "$state_dir/lifecycle.py"
+    test ! -e "$UV_TOOL_BIN_DIR/{my_project}"
+    test ! -e "$UV_TOOL_BIN_DIR/{my_project}.exe"
     test "$(cat "$config_sentinel")" = "preserve config"
     test "$(cat "$data_sentinel")" = "preserve data"
 

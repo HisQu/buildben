@@ -10,9 +10,20 @@ import subprocess
 from dataclasses import dataclass
 
 REQUIRED_RESOURCES = (
-    "_templates_proj/_justfile",
-    "_templates_proj/_github-ci.yml",
-    "_templates_proj/_github-release.yml",
+    "buildben/_templates_proj/_justfile",
+    "buildben/_templates_proj/_github-ci.yml",
+    "buildben/_templates_proj/_github-release.yml",
+    "buildben/_templates_proj/_src-dev-distribution-lifecycle.py.tmpl",
+    "buildben/_templates_proj/_src-dev-distribution-uninstall.sh",
+    "buildben/_templates_proj/_src-dev-distribution-uninstall.cmd",
+    "buildben/_templates_proj/_src-dev-distribution-uninstall.ps1",
+    "buildben/_templates_proj/_uninstall.sh",
+    "buildben/_templates_proj/_uninstall.cmd",
+    "buildben_dev.distribution/lifecycle.py",
+    "buildben_dev.distribution/uninstall.sh",
+    "buildben_dev.distribution/uninstall.cmd",
+    "buildben_dev.distribution/uninstall.ps1",
+    "buildben_dev.distribution/prepare-powershell-windows.cmd",
 )
 
 
@@ -43,11 +54,18 @@ def capture_install_snapshot() -> InstallSnapshot:
     """
     import buildben
 
-    package_files = importlib.resources.files("buildben")
+    package_files = {
+        package: importlib.resources.files(package)
+        for package in ("buildben", "buildben_dev.distribution")
+    }
     resources = tuple(
         resource
         for resource in REQUIRED_RESOURCES
-        if package_files.joinpath(*resource.split("/")).is_file()
+        if (
+            package_files[resource.split("/", 1)[0]]
+            .joinpath(*resource.split("/")[1:])
+            .is_file()
+        )
     )
     console_path = shutil.which("bube")
     if console_path is None:

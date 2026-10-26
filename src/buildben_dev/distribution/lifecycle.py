@@ -1,0 +1,1040 @@
+"""Record and remove a single uv installation without runtime dependencies.
+
+The saved helper runs under a base Python outside the removable environment.
+Receipts establish target layout and ownership; missing evidence never authorizes
+application-data or uv removal.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import shlex
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from typing import Sequence, TypedDict, cast
+
+APP_DISTRIBUTION = "buildben"
+APP_COMMAND = "buildben"
+APPDATA_SUPPORTED = False
+SCHEMA_VERSION = 1
+
+
+class UvBinary(TypedDict):
+    """Recorded identity of one installer-owned uv executable."""
+
+    path: str
+    sha256: str
+
+
+class Receipt(TypedDict):
+    """Persisted metadata needed to target one installation safely."""
+
+    schema_version: int
+    distribution: str
+    command: str
+    version: str
+    source_ref: str
+    python: str
+    uv: str
+    tool_dir: str
+    tool_bin_dir: str
+    appdata_supported: bool
+    uv_bootstrapped: bool
+    uv_binaries: list[UvBinary]
+    package_removed: bool
+
+
+class LifecycleError(Exception):
+    """An unsafe or incomplete lifecycle operation."""
+
+
+def normalize(value: str) -> str:
+    """Return the canonical package distribution spelling.
+
+    :param value: Distribution name from package metadata or uv inventory.
+    :return: Lowercase name with punctuation runs normalized to hyphens.
+    """
+    return re.sub(r"[-_.]+", "-", value).lower()
+
+
+def state_dir() -> Path:
+    """Locate private lifecycle state without creating directories.
+
+    :return: The current user's absolute application installation-state directory.
+    :raises LifecycleError: If the platform state root is missing or relative.
+    """
+    if os.name == "nt":
+        root = os.environ.get("LOCALAPPDATA")
+        if not root:
+            raise LifecycleError(
+                "LOCALAPPDATA is required to locate the per-user lifecycle state."
+            )
+        if not Path(root).is_absolute():
+            raise LifecycleError("LOCALAPPDATA must be an absolute path.")
+        return Path(root) / normalize(APP_DISTRIBUTION) / "installation"
+    root = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+    if not Path(root).is_absolute():
+        raise LifecycleError("XDG_STATE_HOME must be an absolute path.")
+    return Path(root) / normalize(APP_DISTRIBUTION) / "installation"
+
+
+def _absolute(value: str) -> Path:
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        raise LifecycleError(f"Expected an absolute path: {value}")
+    return path
+
+
+def _run(
+    argv: list[str], *, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(argv, text=True, capture_output=True, env=env, check=False)
+
+
+def _must_run(argv: list[str], *, env: dict[str, str] | None = None) -> str:
+    result = _run(argv, env=env)
+    if result.returncode:
+        raise LifecycleError(
+            f"Command failed ({result.returncode}): {argv[0]} {argv[1:]}\n{result.stderr.strip()}"
+        )
+    return result.stdout.strip()
+
+
+def _tool_env(receipt: Receipt, *, default: bool = False) -> dict[str, str]:
+    env = os.environ.copy()
+    env.pop("UV_TOOL_DIR", None)
+    env.pop("UV_TOOL_BIN_DIR", None)
+    if not default:
+        env["UV_TOOL_DIR"] = str(receipt["tool_dir"])
+        env["UV_TOOL_BIN_DIR"] = str(receipt["tool_bin_dir"])
+    return env
+
+
+def _reject_link(path: Path) -> None:
+    current = path
+    while True:
+        if current.is_symlink():
+            raise LifecycleError(
+                f"Lifecycle support path must not be a link or reparse point: {current}"
+            )
+        if os.name == "nt":
+            try:
+                if (
+                    getattr(current.lstat(), "st_file_attributes", 0)
+                    & stat.FILE_ATTRIBUTE_REPARSE_POINT
+                ):
+                    raise LifecycleError(
+                        f"Lifecycle support path must not be a link or reparse point: {current}"
+                    )
+            except FileNotFoundError:
+                pass
+        if current.parent == current:
+            break
+        current = current.parent
+
+
+def _receipt_path() -> Path:
+    return state_dir() / "receipt.json"
+
+
+def _validate_receipt(data: object) -> Receipt:
+    """Validate receipt JSON before trusting stored executable or removal paths.
+
+    :param data: Decoded receipt JSON.
+    :return: Receipt for this distribution with validated binary identities.
+    :raises LifecycleError: If the receipt is malformed or claims unsafe ownership.
+    """
+    if not isinstance(data, dict):
+        raise LifecycleError("Lifecycle receipt is malformed.")
+    receipt = cast(dict[str, object], data)
+    expected = {
+        "schema_version",
+        "distribution",
+        "command",
+        "version",
+        "source_ref",
+        "python",
+        "uv",
+        "tool_dir",
+        "tool_bin_dir",
+        "appdata_supported",
+        "uv_bootstrapped",
+        "uv_binaries",
+        "package_removed",
+    }
+    if (
+        set(receipt) != expected
+        or type(receipt.get("schema_version")) is not int
+        or receipt.get("schema_version") != SCHEMA_VERSION
+        or receipt.get("distribution") != normalize(APP_DISTRIBUTION)
+        or receipt.get("command") != APP_COMMAND
+        or receipt.get("appdata_supported") is not APPDATA_SUPPORTED
+    ):
+        raise LifecycleError(
+            "Lifecycle receipt is malformed or belongs to a different distribution."
+        )
+    for key in ("python", "uv", "tool_dir", "tool_bin_dir"):
+        value = receipt.get(key)
+        if not isinstance(value, str) or not Path(value).is_absolute():
+            raise LifecycleError(f"Lifecycle receipt has an invalid {key} path.")
+    if (
+        not isinstance(receipt.get("version"), str)
+        or not receipt["version"]
+        or not isinstance(receipt.get("source_ref"), str)
+        or not receipt["source_ref"]
+    ):
+        raise LifecycleError("Lifecycle receipt has invalid source metadata.")
+    if any(
+        type(receipt.get(key)) is not bool
+        for key in ("appdata_supported", "uv_bootstrapped", "package_removed")
+    ):
+        raise LifecycleError("Lifecycle receipt has invalid boolean fields.")
+    binaries = receipt.get("uv_binaries")
+    if not isinstance(binaries, list):
+        raise LifecycleError("Lifecycle receipt has invalid uv binary inventory.")
+    normalized_binaries: list[UvBinary] = []
+    paths: set[Path] = set()
+    allowed = {"uv.exe", "uvx.exe", "uvw.exe"} if os.name == "nt" else {"uv", "uvx"}
+    for item in binaries:
+        if not isinstance(item, dict) or set(item) != {"path", "sha256"}:
+            raise LifecycleError("Lifecycle receipt has invalid uv binary identity.")
+        path, sha256 = item.get("path"), item.get("sha256")
+        if (
+            not isinstance(path, str)
+            or not Path(path).is_absolute()
+            or not isinstance(sha256, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", sha256)
+        ):
+            raise LifecycleError("Lifecycle receipt has invalid uv binary identity.")
+        binary_path = Path(path)
+        if (
+            binary_path in paths
+            or binary_path.parent != Path(str(receipt["uv"])).parent
+            or binary_path.name.lower() not in allowed
+        ):
+            raise LifecycleError(
+                "Lifecycle receipt has duplicate or unowned uv binary paths."
+            )
+        paths.add(binary_path)
+        normalized_binaries.append({"path": path, "sha256": sha256})
+    uv_path = Path(str(receipt["uv"]))
+    if not receipt["uv_bootstrapped"] and normalized_binaries:
+        raise LifecycleError("Lifecycle receipt claims unowned uv binaries.")
+    if receipt["uv_bootstrapped"] and (not normalized_binaries or uv_path not in paths):
+        raise LifecycleError(
+            "Lifecycle receipt has bootstrap ownership without a recorded uv executable."
+        )
+    receipt["uv_binaries"] = normalized_binaries
+    return cast(Receipt, receipt)
+
+
+def _load_receipt(*, allow_invalid: bool = False) -> Receipt | None:
+    path = _receipt_path()
+    _reject_link(path.parent)
+    if not path.exists():
+        return None
+    _reject_link(path)
+    try:
+        return _validate_receipt(json.loads(path.read_text(encoding="utf-8")))
+    except (OSError, ValueError, TypeError, LifecycleError) as exc:
+        if allow_invalid:
+            return None
+        raise LifecycleError(f"Cannot use lifecycle receipt {path}: {exc}") from exc
+
+
+def _interpreter_check(python: str, tool_dir: Path) -> None:
+    if Path(sys.executable).resolve() != Path(python).resolve():
+        raise LifecycleError(
+            "Recording must run under the selected base Python interpreter."
+        )
+    if sys.prefix != sys.base_prefix:
+        raise LifecycleError(
+            "Lifecycle recording requires a non-virtual-environment base Python."
+        )
+    if sys.version_info < (3, 12):
+        raise LifecycleError("Lifecycle recording requires Python 3.12 or newer.")
+    try:
+        Path(python).resolve().relative_to(tool_dir.resolve())
+    except ValueError:
+        return
+    raise LifecycleError(
+        "The lifecycle interpreter must be outside the target uv tool environment."
+    )
+
+
+def _binary_inventory(uv: Path) -> list[UvBinary]:
+    names = ("uv.exe", "uvx.exe", "uvw.exe") if os.name == "nt" else ("uv", "uvx")
+    bin_dir = uv.parent
+    result: list[UvBinary] = []
+    for name in names:
+        path = bin_dir / name
+        if path.exists():
+            _reject_link(path)
+            if not path.is_file():
+                raise LifecycleError(
+                    f"Bootstrap candidate is not a regular file: {path}"
+                )
+            result.append(
+                {
+                    "path": str(path.resolve()),
+                    "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                }
+            )
+    required = "uv.exe" if os.name == "nt" else "uv"
+    if not any(Path(item["path"]).name.lower() == required for item in result):
+        raise LifecycleError(
+            "Standalone bootstrap did not provide its uv executable in the bootstrap directory."
+        )
+    return result
+
+
+def _launcher_texts(directory: Path) -> dict[str, str]:
+    python_path = str(Path(sys.executable).resolve())
+    python = shlex.quote(python_path)
+    helper_path = str((directory / "lifecycle.py").resolve())
+    helper = shlex.quote(helper_path)
+    return {
+        "uninstall.sh": "#!/bin/sh\nexec " + python + " " + helper + ' "$@"\n',
+        "uninstall.cmd": '@echo off\r\nsetlocal DisableDelayedExpansion\r\nset "PAUSE_WINDOW=1"\r\nif not "%~1"=="" set "PAUSE_WINDOW=0"\r\nset "PSModulePath="\r\nset "BUILDBEN_PREPARED_SCRIPT="\r\nset "BUILDBEN_STAGED_SCRIPT="\r\ncall "%~dp0prepare-powershell-windows.cmd" "%~dp0uninstall.ps1"\r\nset "CHECK_EXIT_CODE=%ERRORLEVEL%"\r\nif not "%CHECK_EXIT_CODE%"=="0" goto :failed\r\npowershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%BUILDBEN_PREPARED_SCRIPT%" %*\r\nset "EXIT_CODE=%ERRORLEVEL%"\r\nif defined BUILDBEN_STAGED_SCRIPT del /f /q "%BUILDBEN_STAGED_SCRIPT%" >nul 2>&1\r\nif "%PAUSE_WINDOW%"=="1" pause\r\nexit /b %EXIT_CODE%\r\n:failed\r\nif defined BUILDBEN_STAGED_SCRIPT del /f /q "%BUILDBEN_STAGED_SCRIPT%" >nul 2>&1\r\nif "%PAUSE_WINDOW%"=="1" pause\r\nexit /b %CHECK_EXIT_CODE%\r\n',
+        "prepare-powershell-windows.cmd": "",
+        "uninstall.ps1": "$ErrorActionPreference = 'Stop'\n$env:PSModulePath = ''\n& "
+        + _ps_quote(python_path)
+        + " "
+        + _ps_quote(helper_path)
+        + " @args\nexit $LASTEXITCODE\n",
+    }
+
+
+def _ps_quote(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _direct_uninstall_command(uv: str) -> str:
+    executable = f'"{uv}"' if os.name == "nt" else shlex.quote(uv)
+    return f"{executable} tool uninstall {APP_DISTRIBUTION}"
+
+
+def _record(args: argparse.Namespace) -> int:
+    """Prepare or persist lifecycle support for an installed package.
+
+    :param args: Parsed internal installer recording request.
+    :return: Zero after validation-only checking or successful receipt persistence.
+    :raises LifecycleError: If state paths, interpreter identity, or uv layout are unsafe.
+    """
+    directory = state_dir()
+    _reject_link(directory.parent)
+    _reject_link(directory)
+    support_names = {
+        "receipt.json",
+        "lifecycle.py",
+        "uninstall.sh",
+        "uninstall.cmd",
+        "uninstall.ps1",
+        "prepare-powershell-windows.cmd",
+    }
+    for name in support_names:
+        target = directory / name
+        _reject_link(target)
+        if target.exists() and not target.is_file():
+            raise LifecycleError(f"Lifecycle support target is not a file: {target}")
+    preflight = Path(__file__).with_name("prepare-powershell-windows.cmd")
+    _reject_link(preflight)
+    if not preflight.is_file():
+        raise LifecycleError("Required Windows PowerShell policy preflight is missing.")
+    if directory.exists():
+        occupied = {entry.name for entry in directory.iterdir()}
+        if occupied - support_names or (occupied and "receipt.json" not in occupied):
+            raise LifecycleError(
+                f"Lifecycle directory contains unrecognized files or has no valid receipt: {directory}"
+            )
+    if args.uv_bootstrapped:
+        _reject_link(_absolute(args.uv))
+    uv = _absolute(args.uv).resolve()
+    python = Path(sys.executable).resolve()
+    tool_dir = _absolute(_must_run([str(uv), "tool", "dir"])).resolve()
+    tool_bin_dir = _absolute(_must_run([str(uv), "tool", "dir", "--bin"])).resolve()
+    if (
+        _inside(directory, tool_dir)
+        or _inside(tool_dir, directory)
+        or _inside(directory, tool_bin_dir)
+        or _inside(tool_bin_dir, directory)
+    ):
+        raise LifecycleError(
+            "Lifecycle state must be outside the recorded uv tool and binary directories."
+        )
+    existing = _load_receipt() if (directory / "receipt.json").exists() else None
+    if existing and (
+        Path(existing["tool_dir"]).resolve() != tool_dir
+        or Path(existing["tool_bin_dir"]).resolve() != tool_bin_dir
+    ):
+        raise LifecycleError(
+            "Existing lifecycle receipt belongs to a different uv tool layout."
+        )
+    _interpreter_check(str(python), tool_dir)
+    previous = _load_receipt(allow_invalid=True)
+    bootstrapped = args.uv_bootstrapped
+    binaries: list[UvBinary] = []
+    if bootstrapped:
+        binaries = _binary_inventory(uv)
+    elif (
+        previous
+        and previous["uv_bootstrapped"]
+        and Path(previous["uv"]).resolve() == uv
+        and Path(previous["tool_dir"]).resolve() == tool_dir
+        and Path(previous["tool_bin_dir"]).resolve() == tool_bin_dir
+    ):
+        old = previous["uv_binaries"]
+        if all(_same_binary(item) for item in old):
+            bootstrapped, binaries = True, old
+    data: Receipt = {
+        "schema_version": SCHEMA_VERSION,
+        "distribution": normalize(APP_DISTRIBUTION),
+        "command": APP_COMMAND,
+        "version": args.version,
+        "source_ref": args.source_ref,
+        "python": str(python),
+        "uv": str(uv),
+        "tool_dir": str(tool_dir),
+        "tool_bin_dir": str(tool_bin_dir),
+        "appdata_supported": APPDATA_SUPPORTED,
+        "uv_bootstrapped": bootstrapped,
+        "uv_binaries": binaries,
+        "package_removed": False,
+    }
+    _validate_receipt(data)
+    if args.check:
+        return 0
+    directory.mkdir(parents=True, exist_ok=True)
+    if os.name != "nt":
+        directory.chmod(0o700)
+    helper_target = directory / "lifecycle.py"
+    source = Path(__file__).resolve()
+    if source != helper_target.resolve():
+        shutil.copyfile(source, helper_target)
+    if os.name != "nt":
+        helper_target.chmod(0o600)
+    for name, content in _launcher_texts(directory).items():
+        target = directory / name
+        if name == "prepare-powershell-windows.cmd":
+            if preflight.resolve() != target.resolve():
+                shutil.copyfile(preflight, target)
+        else:
+            target.write_text(content, encoding="utf-8", newline="")
+        if os.name != "nt":
+            target.chmod(0o700 if name == "uninstall.sh" else 0o600)
+    receipt_path = directory / "receipt.json"
+    fd, temp_name = tempfile.mkstemp(prefix=".receipt-", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(data, stream, sort_keys=True, indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        if os.name != "nt":
+            os.chmod(temp_name, 0o600)
+        os.replace(temp_name, receipt_path)
+    except OSError:
+        try:
+            os.unlink(temp_name)
+        except OSError:
+            pass
+        raise
+    native_launcher = "uninstall.cmd" if os.name == "nt" else "uninstall.sh"
+    print(f"Lifecycle support saved at {directory}")
+    print(f"Native uninstaller: {directory / native_launcher}")
+    return 0
+
+
+def _same_binary(item: UvBinary) -> bool:
+    path = Path(str(item["path"]))
+    try:
+        _reject_link(path)
+        return (
+            path.is_file()
+            and hashlib.sha256(path.read_bytes()).hexdigest() == item["sha256"]
+        )
+    except (OSError, LifecycleError):
+        return False
+
+
+def _validate_recorded_interpreter(receipt: Receipt) -> None:
+    python = str(receipt["python"])
+    try:
+        result = _run(
+            [
+                python,
+                "-c",
+                "import json,sys; print(json.dumps([sys.prefix,sys.base_prefix,list(sys.version_info[:2])]))",
+            ]
+        )
+    except OSError as exc:
+        raise LifecycleError(
+            f"The recorded base Python is unavailable; recover directly with: {_direct_uninstall_command(str(receipt['uv']))}"
+        ) from exc
+    if result.returncode:
+        raise LifecycleError(
+            f"The recorded base Python failed; recover directly with: {_direct_uninstall_command(receipt['uv'])}"
+        )
+    try:
+        metadata = json.loads(result.stdout)
+        if not isinstance(metadata, list) or len(metadata) != 3:
+            raise ValueError("expected three interpreter metadata fields")
+        prefix, base_prefix, version = metadata
+        if not isinstance(prefix, str) or not isinstance(base_prefix, str):
+            raise ValueError("invalid interpreter prefixes")
+        if (
+            not isinstance(version, list)
+            or len(version) != 2
+            or any(type(part) is not int for part in version)
+        ):
+            raise ValueError("invalid interpreter version")
+        if prefix != base_prefix or tuple(version) < (3, 12):
+            raise ValueError("interpreter is not a Python 3.12+ base interpreter")
+    except (ValueError, TypeError) as exc:
+        raise LifecycleError(
+            f"The recorded base Python returned invalid interpreter metadata: {exc}"
+        ) from exc
+    if _inside(Path(python), Path(str(receipt["tool_dir"]))):
+        raise LifecycleError(
+            "The recorded lifecycle interpreter is inside the target tool environment."
+        )
+
+
+def parse_inventory(stdout: str, stderr: str = "", returncode: int = 0) -> set[str]:
+    """Parse the bounded uv inventory grammar, rejecting unknown output.
+
+    :param stdout: Captured output of ``uv tool list``.
+    :param stderr: Captured diagnostic output.
+    :param returncode: Exit status of the inventory command.
+    :return: Normalized distribution names, not executable names.
+    :raises LifecycleError: If inventory cannot be established reliably.
+    """
+    if returncode != 0 or stderr not in (
+        "",
+        "No tools installed",
+        "No tools installed\n",
+    ):
+        raise LifecycleError(
+            "uv tool inventory is unknown; refusing package or uv removal."
+        )
+    inventory: set[str] = set()
+    current: str | None = None
+    for line in stdout.splitlines():
+        if not line:
+            continue
+        match = re.fullmatch(
+            r"([A-Za-z0-9][A-Za-z0-9._-]*) v(\S+)(?: \([^\r\n]*\))?", line
+        )
+        if match:
+            current = normalize(match.group(1))
+            if current in inventory:
+                raise LifecycleError(
+                    "uv tool inventory contains duplicate package headers."
+                )
+            inventory.add(current)
+        elif re.fullmatch(r"- [^\r\n]+", line) and current is not None:
+            continue
+        else:
+            raise LifecycleError(
+                "uv tool inventory format is unknown; refusing removal."
+            )
+    return inventory
+
+
+def _inventory(receipt: Receipt, *, default: bool = False) -> set[str]:
+    result = _run(
+        [
+            str(receipt["uv"]),
+            "tool",
+            "list",
+            "--color",
+            "never",
+            "--offline",
+            "--no-config",
+        ],
+        env=_tool_env(receipt, default=default),
+    )
+    return parse_inventory(result.stdout, result.stderr, result.returncode)
+
+
+def _receipt_update(receipt: Receipt, *, package_removed: bool) -> None:
+    """Atomically update the package-removal completion marker.
+
+    :param receipt: Valid receipt being updated in place after disk persistence.
+    :param package_removed: Whether uv confirmed that the package is absent.
+    :raises OSError: If the replacement cannot be persisted.
+    """
+    path = _receipt_path()
+    _reject_link(path)
+    updated = cast(Receipt, dict(receipt))
+    updated["package_removed"] = package_removed
+    _validate_receipt(updated)
+    fd, temporary = tempfile.mkstemp(prefix=".receipt-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(updated, stream, sort_keys=True, indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        if os.name != "nt":
+            os.chmod(temporary, 0o600)
+        os.replace(temporary, path)
+    except OSError:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
+    receipt["package_removed"] = package_removed
+
+
+def _inside(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _clean_appdata(
+    receipt: Receipt, args: argparse.Namespace, cleanup_yes: bool, *, apply: bool = True
+) -> None:
+    """Validate and preview AppRC cleanup before optionally applying it.
+
+    :param receipt: Recorded installed application command and protected recovery paths.
+    :param args: Explicit appdata directory and public uninstall options.
+    :param cleanup_yes: Whether separate cleanup consent was already given.
+    :param apply: False to return after validated human-readable preview only.
+    :raises LifecycleError: If inventory, overlap protection, preview, or cleanup fails.
+    """
+    if not receipt["appdata_supported"]:
+        raise LifecycleError(
+            "This application does not support AppRC-managed data cleanup."
+        )
+    app_name = str(receipt["command"]) + (".exe" if os.name == "nt" else "")
+    command = Path(str(receipt["tool_bin_dir"])) / app_name
+    options = ["--apprc-dir", args.apprc_dir] if args.apprc_dir else []
+    env = _tool_env(receipt)
+    paths = _run([str(command), "appdata", "paths", "--json", *options], env=env)
+    if paths.returncode:
+        raise LifecycleError(
+            "AppRC data inventory failed; package remains installed. "
+            + paths.stderr.strip()
+        )
+    try:
+        inventory = json.loads(paths.stdout)
+        expected = {
+            "apprc_dir",
+            "managed_files",
+            "internal_storage_roots",
+            "external_storage_roots",
+            "stale_storage",
+            "stale_user_dotenv",
+        }
+        if set(inventory) != expected:
+            raise ValueError("unexpected or missing inventory fields")
+        if any(
+            not isinstance(inventory[key], list)
+            for key in (
+                "managed_files",
+                "internal_storage_roots",
+                "external_storage_roots",
+            )
+        ):
+            raise ValueError("invalid arrays")
+        if (
+            not isinstance(inventory["apprc_dir"], str)
+            or not Path(inventory["apprc_dir"]).is_absolute()
+        ):
+            raise ValueError("invalid appdata directory")
+        if any(
+            type(inventory[key]) is not bool
+            for key in ("stale_storage", "stale_user_dotenv")
+        ):
+            raise ValueError("invalid status fields")
+        internal_roots = inventory["internal_storage_roots"]
+        all_paths = [
+            *inventory["managed_files"],
+            *internal_roots,
+            *inventory["external_storage_roots"],
+        ]
+        if any(
+            not isinstance(target, str) or not Path(target).is_absolute()
+            for target in all_paths
+        ):
+            raise ValueError("invalid absolute path entries")
+        recovery = state_dir()
+        support_files = [
+            recovery,
+            recovery / "receipt.json",
+            recovery / "lifecycle.py",
+            recovery / "uninstall.sh",
+            recovery / "uninstall.cmd",
+            recovery / "uninstall.ps1",
+            recovery / "prepare-powershell-windows.cmd",
+        ]
+        for target in inventory["managed_files"]:
+            managed = Path(target)
+            _reject_link(managed)
+            if any(
+                managed.resolve() == support.resolve() or _inside(support, managed)
+                for support in support_files
+            ):
+                raise LifecycleError(
+                    "AppRC cleanup would remove saved lifecycle recovery support; refusing cleanup."
+                )
+        for target in internal_roots:
+            root = Path(target)
+            _reject_link(root)
+            if _inside(root, recovery) or _inside(recovery, root):
+                raise LifecycleError(
+                    "AppRC cleanup would remove saved lifecycle recovery support; refusing cleanup."
+                )
+        # > External roots are deliberately not deletion targets.
+    except (ValueError, TypeError, KeyError) as exc:
+        raise LifecycleError(
+            "AppRC returned a malformed cleanup inventory; package remains installed."
+        ) from exc
+    preview = _run([str(command), "appdata", "clean", "--dry-run", *options], env=env)
+    if preview.returncode:
+        raise LifecycleError(
+            "AppRC cleanup preview failed; package remains installed. "
+            + preview.stderr.strip()
+        )
+    print(preview.stdout, end="")
+    if not apply:
+        return
+    clean_args = [str(command), "appdata", "clean", *options]
+    if cleanup_yes:
+        clean_args.append("--yes")
+    cleaned = subprocess.run(clean_args, env=env, check=False)
+    if cleaned.returncode:
+        raise LifecycleError(
+            f"AppRC cleanup failed or was cancelled; package remains installed (exit {cleaned.returncode})."
+        )
+
+
+def _eligible(receipt: Receipt, before: set[str]) -> str | None:
+    """Explain why bootstrap uv is or is not eligible for separate removal.
+
+    :param receipt: Valid install receipt and recorded binary identities.
+    :param before: Normalized tool names found before removing the package.
+    :return: A retention reason, or ``None`` when the conservative gate passes.
+    """
+    if not receipt["uv_bootstrapped"] or not receipt["uv_binaries"]:
+        return "uv was not recorded as a standalone installer bootstrap."
+    if before != {normalize(APP_DISTRIBUTION)}:
+        return "uv has other tools in its recorded tool directory."
+    allowed = {"uv.exe", "uvx.exe", "uvw.exe"} if os.name == "nt" else {"uv", "uvx"}
+    binary_paths = [Path(item["path"]) for item in receipt["uv_binaries"]]
+    if len({path.name.lower() for path in binary_paths}) != len(binary_paths) or any(
+        path.name.lower() not in allowed for path in binary_paths
+    ):
+        return "The recorded standalone uv binary set is ambiguous."
+    uv_name = "uv.exe" if os.name == "nt" else "uv"
+    if Path(receipt["uv"]) not in binary_paths:
+        return "The recorded standalone uv binary set has no recorded uv executable."
+    if any(not _same_binary(item) for item in receipt["uv_binaries"]):
+        return "A recorded uv binary is missing, linked, or has changed identity."
+    bin_dir = Path(receipt["uv"]).parent
+    actual_paths = {
+        path.resolve() for name in allowed if (path := bin_dir / name).exists()
+    }
+    recorded_paths = {path.resolve() for path in binary_paths}
+    if actual_paths != recorded_paths or not any(
+        path.name.lower() == uv_name for path in binary_paths
+    ):
+        return "The recorded standalone uv binary set does not match the available candidates."
+    if any(path.parent.resolve() != bin_dir.resolve() for path in binary_paths):
+        return "A recorded uv binary is outside the recorded bootstrap directory."
+    try:
+        default_dir = Path(
+            _must_run(
+                [str(receipt["uv"]), "tool", "dir"],
+                env=_tool_env(receipt, default=True),
+            )
+        ).resolve()
+        default = _inventory(receipt, default=True)
+    except (OSError, LifecycleError):
+        return "The default uv tool inventory is unknown."
+    if Path(str(receipt["tool_dir"])).resolve() != default_dir and default:
+        return "uv has tools in its default tool directory."
+    return None
+
+
+def _confirm(prompt: str) -> bool:
+    if not sys.stdin.isatty():
+        return False
+    try:
+        return input(prompt).strip().lower() in {"y", "yes"}
+    except EOFError:
+        return False
+
+
+def _uninstall(args: argparse.Namespace) -> int:
+    if args.apprc_dir and not APPDATA_SUPPORTED:
+        raise LifecycleError("--apprc-dir requires an appdata-capable installation.")
+    if args.clean_appdata and not APPDATA_SUPPORTED:
+        raise LifecycleError("--clean-appdata is unavailable for this application.")
+    receipt_path = _receipt_path()
+    receipt = _load_receipt(allow_invalid=bool(args.uv))
+    legacy = receipt is None
+    if legacy:
+        if not args.uv:
+            raise LifecycleError(
+                "A valid installation receipt is required. Use --uv PATH for package-only recovery."
+            )
+        if args.clean_appdata or args.remove_uv or args.apprc_dir:
+            raise LifecycleError(
+                "Legacy recovery supports package-only removal; appdata and uv removal are unavailable."
+            )
+        uv = _absolute(args.uv)
+        tool_dir = _absolute(_must_run([str(uv), "tool", "dir"]))
+        tool_bin = _absolute(_must_run([str(uv), "tool", "dir", "--bin"]))
+        receipt = cast(
+            Receipt,
+            {
+                "schema_version": 1,
+                "distribution": normalize(APP_DISTRIBUTION),
+                "command": APP_COMMAND,
+                "version": "unknown",
+                "source_ref": "legacy recovery",
+                "python": sys.executable,
+                "uv": str(uv),
+                "tool_dir": str(tool_dir),
+                "tool_bin_dir": str(tool_bin),
+                "appdata_supported": APPDATA_SUPPORTED,
+                "uv_bootstrapped": False,
+                "uv_binaries": [],
+                "package_removed": False,
+            },
+        )
+    elif args.uv:
+        raise LifecycleError(
+            "--uv cannot override a valid receipt's recorded uv target."
+        )
+    assert receipt is not None
+    _validate_recorded_interpreter(receipt)
+    uv_path = Path(str(receipt["uv"]))
+    if receipt["package_removed"] and not uv_path.exists():
+        if args.clean_appdata:
+            raise LifecycleError(
+                "The package is already absent, so its required appdata command is unavailable."
+            )
+        print(
+            f"{APP_DISTRIBUTION} was already removed; recovery support remains at {receipt_path.parent}"
+        )
+        return 0
+    if not uv_path.is_file():
+        raise LifecycleError(
+            "Recorded uv executable is missing; package removal cannot be verified."
+        )
+    env = _tool_env(receipt)
+    before = _inventory(receipt)
+    target = normalize(APP_DISTRIBUTION)
+    if target not in before:
+        if args.clean_appdata:
+            raise LifecycleError(
+                "The package is already absent, so its required appdata command is unavailable."
+            )
+        if legacy:
+            return 0
+        print(
+            "The recorded package is already absent; no cleanup or uv removal was performed."
+        )
+        return 0
+    if receipt["package_removed"]:
+        raise LifecycleError(
+            "The receipt marks this package removed, but a package is present; rerun the installer to refresh lifecycle state."
+        )
+    eligible_reason = (
+        _eligible(receipt, before)
+        if not legacy
+        else "Legacy recovery does not establish uv ownership."
+    )
+    if args.remove_uv and eligible_reason:
+        raise LifecycleError(f"Cannot remove uv: {eligible_reason}")
+    print(f"Package: {APP_DISTRIBUTION} {receipt['version']} ({receipt['source_ref']})")
+    print(f"Tool directory: {receipt['tool_dir']}")
+    print(f"Tool binary directory: {receipt['tool_bin_dir']}")
+    print("Application data, shared Python, cache, and uv are retained by default.")
+    if args.clean_appdata:
+        print(
+            "Proposed extra action: preview and clean AppRC-managed application data before package removal."
+        )
+    if args.remove_uv:
+        print(
+            "Proposed extra action: remove only recorded eligible uv binaries after package removal."
+        )
+    if args.dry_run:
+        if args.clean_appdata:
+            _clean_appdata(receipt, args, cleanup_yes=False, apply=False)
+        print("Dry run: no changes made.")
+        return 0
+    if not args.dry_run and not args.yes and not sys.stdin.isatty():
+        raise LifecycleError(
+            "A terminal is required to confirm package removal; pass --yes for unattended removal."
+        )
+    if not args.yes:
+        if not _confirm(f"Remove {APP_DISTRIBUTION}? [y/N] "):
+            print("Package removal cancelled.")
+            return 1
+    clean = bool(args.clean_appdata)
+    cleanup_confirmed = bool(args.clean_appdata and args.yes)
+    if not clean and APPDATA_SUPPORTED and not args.yes and sys.stdin.isatty():
+        clean = _confirm("Also clean AppRC-managed application data? [y/N] ")
+        cleanup_confirmed = clean
+    if clean:
+        _clean_appdata(receipt, args, cleanup_yes=cleanup_confirmed)
+    removed = _run([str(uv_path), "tool", "uninstall", APP_DISTRIBUTION], env=env)
+    if removed.returncode:
+        raise LifecycleError(
+            f"uv package uninstall failed ({removed.returncode}); no uv binaries were removed. {removed.stderr.strip()}"
+        )
+    after = _inventory(receipt)
+    if target in after:
+        raise LifecycleError(
+            "uv still reports the package after uninstall; uv binaries were retained."
+        )
+    if not legacy:
+        try:
+            _receipt_update(receipt, package_removed=True)
+        except OSError as exc:
+            raise LifecycleError(
+                f"Package was removed, but the completion receipt could not be saved: {exc}. Keep uv; recover directly with: {_direct_uninstall_command(str(uv_path))}"
+            ) from exc
+    remove_uv = False
+    post_reason = eligible_reason
+    if not legacy and post_reason is None:
+        try:
+            if _inventory(receipt):
+                post_reason = (
+                    "uv has tools in its recorded tool directory after package removal."
+                )
+            else:
+                post_reason = _eligible(receipt, {target})
+        except (OSError, LifecycleError):
+            post_reason = "The post-removal uv tool inventory is unknown."
+    if args.remove_uv and post_reason:
+        raise LifecycleError(f"Package was removed but uv was retained: {post_reason}")
+    if not legacy and post_reason:
+        print(f"uv will be retained: {post_reason}")
+    elif not legacy:
+        if args.remove_uv and args.yes:
+            remove_uv = True
+        elif not args.yes:
+            remove_uv = _confirm(
+                "Also remove uv and its companion binaries? Other projects may still use uv. Shared Python installations, cache, and shell configuration will be kept. [y/N] "
+            )
+    if remove_uv:
+        try:
+            current_recorded = _inventory(receipt)
+            default_directory = Path(
+                _must_run(
+                    [str(uv_path), "tool", "dir"], env=_tool_env(receipt, default=True)
+                )
+            ).resolve()
+            current_default = _inventory(receipt, default=True)
+        except (OSError, LifecycleError) as exc:
+            raise LifecycleError(
+                f"Package was removed but uv inventory is unknown; uv was retained: {exc}"
+            ) from exc
+        changed = (
+            current_recorded
+            or (
+                default_directory != Path(str(receipt["tool_dir"])).resolve()
+                and current_default
+            )
+            or _eligible(receipt, {target}) is not None
+        )
+        if changed:
+            raise LifecycleError(
+                "Package was removed but uv inventory or binary identity changed; uv was retained."
+            )
+        errors = []
+        binaries = sorted(
+            receipt["uv_binaries"],
+            key=lambda item: (
+                Path(str(item["path"])).name.lower()
+                == ("uv.exe" if os.name == "nt" else "uv")
+            ),
+        )
+        for item in binaries:
+            candidate = Path(item["path"])
+            if errors and candidate == uv_path:
+                break
+            try:
+                candidate.unlink()
+            except OSError as exc:
+                errors.append(f"{candidate}: {exc}")
+        if errors:
+            raise LifecycleError(
+                "Package was removed; uv binary removal was incomplete: "
+                + "; ".join(errors)
+            )
+    print(
+        f"{APP_DISTRIBUTION} removed. Recovery support remains at {receipt_path.parent}; uv {'removed' if remove_uv else 'retained'}."
+    )
+    return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run installer recording or public uninstall options.
+
+    :param argv: Arguments without the program name, or process arguments if omitted.
+    :return: Zero on completion; nonzero for refusal, cancellation, or incomplete work.
+    """
+    parser = argparse.ArgumentParser(prog="uninstall")
+    subparsers = parser.add_subparsers(dest="operation")
+    record = subparsers.add_parser("record")
+    record.add_argument("--uv", required=True)
+    record.add_argument("--version", required=True)
+    record.add_argument("--source-ref", required=True)
+    record.add_argument("--uv-bootstrapped", action="store_true")
+    record.add_argument("--check", action="store_true")
+    uninstall = subparsers.add_parser("uninstall")
+    uninstall.add_argument("--dry-run", action="store_true")
+    uninstall.add_argument("--yes", action="store_true")
+    uninstall.add_argument("--clean-appdata", action="store_true")
+    uninstall.add_argument("--remove-uv", action="store_true")
+    uninstall.add_argument("--apprc-dir")
+    uninstall.add_argument("--uv")
+    # > Saved launchers expose public options directly; installers use record.
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if not arguments or arguments[0] not in {"record", "uninstall", "-h", "--help"}:
+        arguments.insert(0, "uninstall")
+    args = parser.parse_args(arguments)
+    if args.operation == "record":
+        try:
+            return _record(args)
+        except (LifecycleError, OSError, ValueError) as exc:
+            recovery = (
+                _direct_uninstall_command(args.uv)
+                if args.uv
+                else f"uv tool uninstall {APP_DISTRIBUTION}"
+            )
+            print(
+                f"ERROR: lifecycle support could not be persisted; installation is incomplete: {exc}. Recover with: {recovery}",
+                file=sys.stderr,
+            )
+            return 1
+    if args.operation == "uninstall":
+        try:
+            return _uninstall(args)
+        except (LifecycleError, OSError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+    parser.error("choose record or uninstall")
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

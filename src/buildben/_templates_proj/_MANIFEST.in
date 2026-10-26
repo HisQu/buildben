@@ -1,5 +1,7 @@
 include uv.lock
 include pylock.toml
+include uninstall.sh
+include uninstall.cmd
 
 recursive-include src *
 

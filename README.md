@@ -79,6 +79,7 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 
 1. [`buildben`: build-benedictions](#buildben-build-benedictions)
    1. [📦 Installation](#-installation)
+      1. [Uninstall](#uninstall)
    2. [🚀 Usage](#-usage)
    3. [❓Optional Installs](#optional-installs)
    4. [📚  Examples / Documentation](#--examples--documentation)
@@ -202,6 +203,50 @@ access; `curl` does not inherit gh credentials. Private VCS dependencies still
 need Git authentication independently of release visibility. BuildBen and
 generated applications do not require administrator privileges.
 
+### Uninstall
+
+New installer-based installations save an offline uninstaller outside the tool
+environment. Run the native path printed by the installer, or use
+`./uninstall.sh` / `.\uninstall.cmd` from this checkout to dispatch to it:
+
+```sh
+./uninstall.sh --dry-run
+./uninstall.sh --yes
+```
+
+On Unix, support is saved under
+`${XDG_STATE_HOME:-$HOME/.local/state}/buildben/installation`; `XDG_STATE_HOME`
+must be absolute. On Windows it is under `%LOCALAPPDATA%\buildben\installation`;
+`LOCALAPPDATA` is required. The saved launcher uses an absolute base Python
+3.12+ interpreter, not Buildben's removable environment or Python from PATH.
+Keep that interpreter available. The saved helper and private `receipt.json`
+remain after removal for recovery and safe repeated invocation.
+
+`--dry-run` previews without mutation or downloads. `--yes` confirms package
+removal only; without a terminal it is required for mutation. Default removal
+keeps user data, uv, shared Python, caches, and shell configuration. Buildben
+does not use AppRC itself and rejects `--clean-appdata` and `--apprc-dir`.
+Generated applications provide their own explicitly mounted `appdata` commands.
+
+`--remove-uv` is a separate request, not an override of ownership checks. uv can
+be removed only when this installer bootstrapped it, all recorded binary hashes
+still match, and both the recorded and default uv tool inventories permit it.
+Other projects may still use uv even when no tools remain; there is no global
+idle detection or lock against concurrent uv commands. Removal unlinks only
+recorded binaries, uv last; it never recursively removes uv directories.
+
+For an older installation with no receipt, use
+`./uninstall.sh --uv /absolute/path/to/uv --yes` (or the Windows equivalent).
+This explicit recovery mode removes only the package and cannot clean data or
+remove uv. A malformed receipt is retained for inspection. With a valid receipt,
+`--uv` cannot select a different installation. If its saved interpreter is no
+longer available, use `uv tool uninstall buildben` directly with the original
+`UV_TOOL_DIR` and `UV_TOOL_BIN_DIR`. Older selected releases without lifecycle
+support print this direct-removal diagnostic instead of claiming a receipt.
+
+For an editable pip installation, use that environment's
+`python -m pip uninstall buildben`; the uv lifecycle is not a pip requirement.
+
 
 ### Install from a cloned repository
 
@@ -287,17 +332,18 @@ open the terminal editor. The generated docs and `AGENTS.md` require consistent
 component names and links inside the paragraphs and tables where they are useful.
 
 > [!IMPORTANT]
-> Generated projects require `apprc>=0.25.0,<0.26`. AppRC 0.25.1 and its matching
-> `apprc-core` are available on PyPI, and the generated install command resolves
-> them from there. Buildben itself still has no runtime dependencies. Existing
-> projects are not rewritten automatically.
+> Generated projects require `apprc>=0.29.0,<0.30` and its matching `apprc-core`.
+> Buildben itself still has no runtime dependencies. Existing projects are not
+> rewritten automatically.
 
-To verify generated projects with the published version, install
-`apprc>=0.25.0,<0.26` in Buildben's development environment before running tests.
-For unreleased AppRC changes, install both locally built `apprc-core` and `apprc`
-wheels, set `APPRC_ARTIFACTS` to their directory, and run
-`UV_FIND_LINKS="$APPRC_ARTIFACTS" .venv/bin/pytest`. Without a compatible AppRC
-installation, generated-runtime checks are skipped.
+To verify generated projects with that dependency available, run
+`uv run --locked --with 'apprc>=0.29.0,<0.30' python -m pytest`.
+For local AppRC changes, install matching locally built `apprc-core` and `apprc`
+wheels, set `APPRC_ARTIFACTS` to their directory, and use
+`UV_FIND_LINKS="$APPRC_ARTIFACTS"` for generated consumer installs. Local wheel
+paths belong in the verification environment, not production requirements.
+Missing AppRC is an unmet verification prerequisite; skipped generated-runtime
+checks do not establish compatibility.
 
 #### Create virtual environment (``/.direnv``):
 

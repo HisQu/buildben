@@ -59,7 +59,7 @@ jobs:
       - name: Test
         env:
           NO_COLOR: "1"
-        run: uv run --locked pytest
+        run: uv run --locked --with 'apprc>=0.29.0,<0.30' python -m pytest
 
       - name: Compile sources
         run: uv run --locked python -m compileall -q src tests

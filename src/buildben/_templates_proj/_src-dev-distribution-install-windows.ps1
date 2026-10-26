@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$AppDistribution = "<my_project>"
+$AppDistribution = "<distribution_name>"
 $AppCommand = "<my_project>"
 $Repository = "<github_username>/<my_project>"
 $UvVersion = "0.12.18"
@@ -14,7 +14,7 @@ $ExplicitUv = $null
 $AssumeYes = $false
 $SkipConfig = $false
 $Uv = $null
-$UvOrigin = "missing"
+$UvBootstrapped = $false
 $InstallPython = $null
 
 function Show-Usage {
@@ -107,6 +107,7 @@ function Install-PermanentUv {
     Write-Host "Installing uv $UvVersion permanently in $UvDirectory..."
     Invoke-RestMethod "https://astral.sh/uv/$UvVersion/install.ps1" | Invoke-Expression
     Set-UvPath -Path (Join-Path $UvDirectory "uv.exe") -Origin "per-user"
+    $script:UvBootstrapped = $true
 }
 
 function Confirm-Plan {
@@ -127,11 +128,11 @@ function Update-ToolPath {
 
 function Find-InstallationPython {
     foreach ($PythonVersion in @("3.13", "3.12")) {
-        $Candidate = & $Uv python find --no-project --no-python-downloads $PythonVersion 2>$null
+        $Candidate = & $Uv python find --system --no-project --no-python-downloads $PythonVersion 2>$null
         if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace(($Candidate | Out-String))) { $script:InstallPython = ($Candidate | Out-String).Trim(); return }
     }
     Invoke-Checked -FilePath $Uv -Arguments @("python", "install", "3.12") -Description "Installing managed Python 3.12"
-    $Candidate = & $Uv python find --no-project 3.12
+    $Candidate = & $Uv python find --system --no-project 3.12
     if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace(($Candidate | Out-String))) { $script:InstallPython = ($Candidate | Out-String).Trim(); return }
     throw "uv could not provide its managed Python 3.12 interpreter."
 }
@@ -143,11 +144,11 @@ function Install-FromSource {
 $PythonCode = @'
 import json, os, re, shutil, subprocess, sys, tarfile
 from pathlib import Path, PurePosixPath
-uv, client, repo, temp, distribution, source_mode, *requested = sys.argv[1:]
+uv, client, repo, temp, distribution, source_mode, bootstrap, *requested = sys.argv[1:]
 requested = requested[0] if requested else ""
 root = Path(temp)
 version_re = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
-def normalize(value): return re.sub(r"[-_.]+", "_", value).lower()
+def normalize(value): return re.sub(r"[-_.]+", "-", value).lower()
 def run_powershell(script, variables):
     environment = os.environ | variables
     return subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script], check=True, text=True, capture_output=True, env=environment).stdout
@@ -176,6 +177,7 @@ if source_mode == "main":
         with archive.open("wb") as output: subprocess.run([gh, "api", endpoint], stdout=output, check=True)
     else: public_download(f"https://api.github.com{endpoint}", archive)
     version = None
+    source_ref = commit
 else:
     if requested:
         if not re.fullmatch(r"v" + version_re.pattern[1:-1], requested): raise SystemExit("Malformed release tag")
@@ -189,6 +191,7 @@ else:
     if not isinstance(tag, str) or not re.fullmatch(r"v" + version_re.pattern[1:-1], tag): raise SystemExit("GitHub release has a malformed tag")
     if requested and tag != requested: raise SystemExit("GitHub returned a different release tag")
     version = tag[1:]
+    source_ref = tag
     assets = release.get("assets")
     if not isinstance(assets, list): raise SystemExit("GitHub release has no asset list")
     matching = []
@@ -220,11 +223,21 @@ import tomllib
 with pyproject.open("rb") as stream: project = tomllib.load(stream).get("project", {})
 project_version = project.get("version")
 if normalize(project.get("name", "")) != normalize(distribution) or not isinstance(project_version, str) or not project_version or (source_mode == "release" and project_version != version): raise SystemExit("Source project metadata does not match selected source")
+version = project_version
+lifecycle = project_root / "src" / "<my_project>_dev" / "distribution" / "lifecycle.py"
+if lifecycle.is_file():
+    record = [sys.executable, str(lifecycle), "record", "--uv", uv, "--version", version, "--source-ref", source_ref]
+    if bootstrap == "true": record.append("--uv-bootstrapped")
+    subprocess.run([*record, "--check"], cwd=project_root, check=True)
+else:
+    print("WARNING: this older source has no lifecycle helper; only direct uv tool uninstall is available.")
 subprocess.run([uv, "export", "--locked", "--no-dev", "--no-default-groups", "--no-emit-project", "--format", "requirements.txt", "--output-file", str(root / "runtime-requirements.txt")], cwd=project_root, check=True)
 subprocess.run([uv, "tool", "install", "--force", "--refresh", "--python", sys.executable, "--with-requirements", str(root / "runtime-requirements.txt"), str(project_root)], check=True)
+if lifecycle.is_file(): subprocess.run(record, cwd=project_root, check=True)
 '@
     try {
-        $PythonArguments = @("-", $Uv, $GithubClient, $Repository, $TemporaryDirectory, $AppDistribution, $SourceMode)
+        $Bootstrap = if ($UvBootstrapped) { "true" } else { "false" }
+        $PythonArguments = @("-", $Uv, $GithubClient, $Repository, $TemporaryDirectory, $AppDistribution, $SourceMode, $Bootstrap)
         if ($null -ne $Version) { $PythonArguments += $Version }
         Invoke-Checked -FilePath $InstallPython -Arguments $PythonArguments -InputText $PythonCode -Description "$AppDistribution source installation"
         Update-ToolPath

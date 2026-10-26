@@ -242,30 +242,37 @@ py -m venv .venv
 
 ## Uninstall
 
-For a one-line installation, remove the application with
-`uv tool uninstall {my_project}`. For an editable install from a cloned
-repository, run `.venv/bin/python -m pip uninstall {my_project}` on Linux or
-macOS, or `& '.\.venv\Scripts\python.exe' -m pip uninstall {my_project}` in
-Windows PowerShell. Remove the clone and its `.venv` when you no longer need
-them.
+For a one-line installation, run the saved native uninstaller printed during
+installation. The checkout shortcuts `./uninstall.sh` and `.\uninstall.cmd`
+dispatch to that same offline helper. Start with `--dry-run`; use `--yes` to
+confirm package removal without a terminal. Data and uv are kept by default.
 
-If the one-line installer also installed uv in the default directory, remove
-its executables:
+The helper lives outside the removable tool environment at
+`${XDG_STATE_HOME:-$HOME/.local/state}/<distribution_name>/installation` on Unix
+or `%LOCALAPPDATA%\<distribution_name>\installation` on Windows. Unix
+`XDG_STATE_HOME` must be absolute; Windows requires `LOCALAPPDATA`.
+It uses the recorded base Python 3.12+ interpreter, which must remain available.
+The helper and receipt survive removal so repeated invocation remains safe.
 
-### For Linux and macOS
+To inspect and explicitly clean AppRC-managed data before removal:
 
 ```shell
-rm -f ~/.local/bin/uv ~/.local/bin/uvx ~/.local/bin/uvw
+{my_project} appdata paths --json
+{my_project} appdata clean --dry-run
+./uninstall.sh --clean-appdata --yes
 ```
 
-### For Windows PowerShell
+On Windows use `.\uninstall.cmd --clean-appdata --yes`. `--yes` alone never
+consents to cleanup or uv removal. `--apprc-dir PATH` explicitly selects the
+managed directory for cleanup. Cleanup retains external payloads and unmanaged
+data, and stops removal if its preview or application command fails. The helper
+rejects cleanup targets that would delete its saved recovery support.
 
-```powershell
-Remove-Item -ErrorAction SilentlyContinue "$HOME\.local\bin\uv.exe", "$HOME\.local\bin\uvx.exe", "$HOME\.local\bin\uvw.exe"
-```
-
-See Astral's [uv uninstallation guide](https://docs.astral.sh/uv/getting-started/installation/#uninstallation)
-for other install locations and optional data cleanup.
+`--remove-uv` requests a separate, conservative ownership check and confirmation.
+Even an empty tool inventory does not prove other projects no longer use uv.
+See the [removal guide](docs/How-To-User-Guides.md#remove-an-installation) for
+eligibility, legacy recovery, and editable pip installations, and the
+[uninstaller reference](docs/References.md#uninstaller-reference) for all options.
 
 
 <!-- ====================================================================== -->
