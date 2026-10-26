@@ -73,6 +73,16 @@ This project follows Semantic Versioning.
   conventions and quick-start commands, with README-style headings and spacing.
 - Generated documentation tests validate local navigation across README,
   CONTRIBUTING, AGENTS, and the detailed documentation pages.
+- Installer-based installations now save a private receipt, standalone stdlib
+  lifecycle helper, and native offline uninstaller outside the application
+  environment. Removal preserves data and uv by default, records completion for
+  safe repeats, and supports explicit package-only recovery for legacy installs.
+- Generated applications mount AppRC's `appdata paths` and `appdata clean`
+  commands. Optional uninstall-time cleanup previews managed targets and rejects
+  overlap with saved recovery files before removing the package.
+- Optional uv removal requires recorded bootstrap ownership, unchanged binary
+  hashes, eligible recorded/default tool inventories, and separate consent.
+  Shared Python, caches, shell configuration, and unrelated data remain intact.
 
 <br>
 
@@ -89,6 +99,9 @@ This project follows Semantic Versioning.
   CONTRIBUTING owns shared rules and everyday setup/checks; Development retains
   deeper guides. Agent instructions link to these canonical rules rather than
   maintaining duplicate copies.
+- New generated applications require `apprc>=0.29.0,<0.30`; Buildben retains
+  an empty runtime dependency list. Generated installation smoke and the native
+  installer matrix use saved uninstall launchers rather than direct uv removal.
 
 <br>
 

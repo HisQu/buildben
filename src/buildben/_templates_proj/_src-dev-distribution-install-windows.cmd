@@ -6,15 +6,15 @@ rem -- Let Windows PowerShell use its own modules when launched from PowerShell 
 set "PSModulePath="
 
 if not exist "%~dp0prepare-powershell-windows.cmd" goto :missing_helper
-set "<MY_PROJECT>_PREPARED_SCRIPT="
-set "<MY_PROJECT>_STAGED_SCRIPT="
+set "BUILDBEN_PREPARED_SCRIPT="
+set "BUILDBEN_STAGED_SCRIPT="
 call "%~dp0prepare-powershell-windows.cmd" "%~dp0install-windows.ps1"
 set "CHECK_EXIT_CODE=%ERRORLEVEL%"
 if not "%CHECK_EXIT_CODE%"=="0" goto :preflight_failed
 
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%<MY_PROJECT>_PREPARED_SCRIPT%" %*
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%BUILDBEN_PREPARED_SCRIPT%" %*
 set "EXIT_CODE=%ERRORLEVEL%"
-if defined <MY_PROJECT>_STAGED_SCRIPT del /f /q "%<MY_PROJECT>_STAGED_SCRIPT%" >nul 2>&1
+if defined BUILDBEN_STAGED_SCRIPT del /f /q "%BUILDBEN_STAGED_SCRIPT%" >nul 2>&1
 
 echo.
 if "%EXIT_CODE%"=="0" (
@@ -36,7 +36,7 @@ echo Cannot find prepare-powershell-windows.cmd beside this installer.
 set "CHECK_EXIT_CODE=1"
 
 :preflight_failed
-if defined <MY_PROJECT>_STAGED_SCRIPT del /f /q "%<MY_PROJECT>_STAGED_SCRIPT%" >nul 2>&1
+if defined BUILDBEN_STAGED_SCRIPT del /f /q "%BUILDBEN_STAGED_SCRIPT%" >nul 2>&1
 echo.
 if "%CHECK_EXIT_CODE%"=="2" echo Installation cancelled.
 if "%CHECK_EXIT_CODE%"=="3" echo <my_project> setup cannot continue under this PowerShell policy.

@@ -27,10 +27,15 @@ grows, explain each new component and connect it to these existing components.
 The command-line application is the Typer `app` in
 [`cli/app.py`](../src/{my_project}/cli/app.py). Both the `{my_project}` console
 script and `python -m {my_project}` run that object. The starter provides
-`version` and `diagnose`; AppRC adds the `config` commands.
+`version` and `diagnose`; the application explicitly mounts AppRC's `config`
+and `appdata` groups.
 
-`version` and `diagnose` can run before storage is configured. Runtime configuration
-commands such as `config show` need selected storage. The
+`version`, `diagnose`, `appdata paths`, and `appdata clean` can run without
+ordinary runtime settings or selected storage. The appdata actions inspect the
+managed registry directly, so they can preview or clean a broken configuration;
+malformed registries still fail closed. Their action-prefix runtime policy also
+covers trailing options such as `--json` and `--apprc-dir`.
+Runtime configuration commands such as `config show` need selected storage. The
 [first-command guide](How-To-User-Guides.md#run-the-first-command) demonstrates
 that distinction. Add application commands to this command tree rather than
 creating a second entrypoint with different configuration behavior.
@@ -158,7 +163,7 @@ commands import the declaration and bundle directly from their modules. The
 [project paths](References.md#project-paths) table identifies each source file,
 and [Development](Development.md#repository-routing) explains where to add code.
 
-`apprc>=0.25.0,<0.26` provides configuration and the terminal dependencies.
+`apprc>=0.29.0,<0.30` provides configuration, managed-data cleanup, and terminal dependencies.
 `apprc` installs the matching `apprc-core`; Typer is also a direct dependency
 because application code imports it. Test and maintainer tools belong to the
 `dev` dependency group. [Dependency declarations](References.md#dependency-declarations)

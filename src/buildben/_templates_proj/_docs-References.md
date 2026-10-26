@@ -6,6 +6,7 @@
   - [Project paths](#project-paths)
   - [Command reference](#command-reference)
   - [Installer reference](#installer-reference)
+  - [Uninstaller reference](#uninstaller-reference)
   - [Storage commands](#storage-commands)
 - [Configuration and Python interfaces](#configuration-and-python-interfaces)
   - [Environment variables](#environment-variables)
@@ -36,6 +37,8 @@
 | [distribution](../src/{my_project}_dev/distribution) | Canonical [installer scripts](#installer-reference). |
 | [install-linux-macos.sh](../install-linux-macos.sh) | Root shortcut to the canonical Unix installer. |
 | [install-windows.cmd](../install-windows.cmd) | Double-click entry point and root shortcut to the canonical Windows installer. |
+| [uninstall.sh](../uninstall.sh) | Root shortcut to the saved Unix lifecycle helper. |
+| [uninstall.cmd](../uninstall.cmd) | Native Windows shortcut to the saved lifecycle helper. |
 | [tests](../tests) | Automated checks. |
 | [examples](../examples) | Small user-facing programs, described in [Examples](EXAMPLES.md). |
 | [docs](.) | Documentation, following the [authoring rules](README.md#documentation-rules). |
@@ -57,6 +60,9 @@ Configuration commands use the AppRC directory selected by `{MY_PROJECT}_APPRC_D
 | `{my_project} config show --json` | Build the [config bundle](Explanations.md#config-bundle) and print the application's configuration payload. |
 | `{my_project} config set app.message TEXT --scope storage` | [Save a setting](How-To-User-Guides.md#edit-a-saved-setting) in the selected storage dotenv. |
 | `{my_project} config edit` | Open the [config editor](Explanations.md#configuration-tools). |
+| `{my_project} appdata paths --json` | Inventory managed files, internal roots, retained external roots, and stale registry state without creating files. |
+| `{my_project} appdata clean --dry-run` | Preview managed-file and internal-root cleanup without deletion. |
+| `{my_project} appdata clean --yes --apprc-dir PATH` | Clean the explicitly selected managed directory without resolving ordinary runtime settings; retain external payloads. |
 
 `config show --json` contains `package`, `version`, `storage_name`, `storage_root`,
 `storage_count`, and `config`. `config` holds the `AppSettings` fields. This shape
@@ -116,6 +122,58 @@ install`. A legacy source archive without `uv.lock` fails explicitly rather
 than falling back to Git or another version. The normal release workflow reuses
 one successful full CI gate for the exact tagged commit; it does not build
 platform-specific installer archives.
+
+## Uninstaller reference
+
+Root `uninstall.sh` / `uninstall.cmd` dispatch to saved native launchers.
+The canonical `src/{my_project}_dev/distribution/lifecycle.py` owns all deletion
+policy and uses only the standard library. Native wrappers locate and launch
+it; they do not duplicate removal logic. Saved launchers invoke absolute base
+Python/helper paths without the source checkout, app environment, or PATH.
+
+| Option | Effect |
+| --- | --- |
+| `--dry-run` | Preview only; never write state, download tools, clean data, or uninstall. |
+| `--yes` | Confirm package removal only; required without a terminal for mutation. |
+| `--clean-appdata` | Explicitly request application-managed cleanup before package removal, after machine-readable safety inventory and human preview. |
+| `--apprc-dir PATH` | Forward an explicit directory only to `appdata` operations. |
+| `--remove-uv` | Request separately authorized uv deletion only if every ownership, binary identity, and inventory check passes. |
+| `--uv PATH` | Explicit package-only legacy recovery when a valid receipt is unavailable; cannot override a valid receipt's installation. |
+
+Unix state is
+`${XDG_STATE_HOME:-$HOME/.local/state}/<distribution_name>/installation`;
+relative `XDG_STATE_HOME` is rejected. Windows state is
+`%LOCALAPPDATA%\<distribution_name>\installation`, and missing `LOCALAPPDATA`
+is an error. The private `receipt.json` stores distribution/command, installed
+version/source ref, absolute base Python/uv/tool directories, appdata support,
+bootstrap provenance and candidate hashes, and `package_removed` completion.
+Saved helper/native launchers, Windows policy-preflight support, and receipt
+remain after removal. Successful reinstall refreshes that same layout; a
+conflicting layout, occupied unknown state directory, or linked state target
+is rejected before package installation.
+
+uv inventory uses the recorded directories, not later shell overrides.
+Eligibility requires an owned standalone bootstrap, unchanged recorded regular
+binaries, this package as the only tool before removal, and empty recorded and
+default inventories afterward. Inventory parse/errors fail closed. Empty tool
+inventories do not prove uv is unused by projects or prevent concurrent use.
+Only enumerated binaries are unlinked, uv last; there is no recursive removal.
+
+Cleanup runs the installed application at the recorded tool-bin path. Its
+`appdata paths --json` inventory and `appdata clean --dry-run` must succeed
+before deletion. Managed targets overlapping saved recovery support are
+rejected. Failure/cancellation leaves the package installed. External payloads,
+unmanaged data, shared Python, caches, and shell configuration are retained.
+The [removal guide](How-To-User-Guides.md#remove-an-installation) covers practical
+cleanup, recovery, and editable pip removal.
+
+`appdata paths --json` returns `apprc_dir`, `managed_files`,
+`internal_storage_roots`, `external_storage_roots`, `stale_storage`, and
+`stale_user_dotenv`. `--apprc-dir` selects this managed inventory explicitly;
+root runtime dotenv/storage selectors are not inherited. `appdata clean`
+supports `--dry-run` and `--yes` / `-y`, with a separate default-No confirmation
+when neither flag bypasses mutation.
+
 
 ## Storage commands
 
@@ -186,7 +244,7 @@ shows how `APP_RC.resolve()` and `ResolvedConfig.build()` construct them. The
 
 | Declaration in `pyproject.toml` | Use |
 | --- | --- |
-| `[project].dependencies` | Runtime dependencies, initially `apprc>=0.25.0,<0.26` and `typer`. |
+| `[project].dependencies` | Runtime dependencies, initially `apprc>=0.29.0,<0.30` and `typer`. |
 | `[project.optional-dependencies]` | Published extras for optional application features. |
 | `[dependency-groups]` | Local maintainer tools such as pytest, Ruff, and Pyright. |
 

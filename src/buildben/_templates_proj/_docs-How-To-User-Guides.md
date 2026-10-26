@@ -133,8 +133,8 @@ python -m venv .venv
 Activate the environment to run the console commands below, or call
 `.venv/bin/{my_project}` on Linux or macOS and
 `& '.\.venv\Scripts\{my_project}.exe'` on Windows. Installation requires
-`apprc>=0.25.0,<0.26`; the install command
-resolves it and its dependencies from PyPI. The
+`apprc>=0.29.0,<0.30`; the install command resolves it and its dependencies
+using the configured package index. The
 [dependency reference](References.md#dependency-declarations) lists runtime
 and maintainer requirements.
 
@@ -161,30 +161,72 @@ work before [storage](Explanations.md#storage) is configured and create no files
 
 ## Remove an installation
 
-For a one-line installation, remove the application with
-`uv tool uninstall {my_project}`. For an editable install from a cloned
-repository, run `.venv/bin/python -m pip uninstall {my_project}` on Linux or
-macOS, or `& '.\.venv\Scripts\python.exe' -m pip uninstall {my_project}` in
-Windows PowerShell. Remove the clone and its `.venv` when you no longer need
-them.
-
-If the one-line installer also installed uv in the default directory, remove
-its executables:
-
-Linux and macOS:
+For a one-line installation, use the saved native launcher printed by the
+installer. It does not need the source checkout or GitHub access. The checkout
+shortcuts dispatch to it:
 
 ```shell
-rm -f ~/.local/bin/uv ~/.local/bin/uvx ~/.local/bin/uvw
+./uninstall.sh --dry-run
+./uninstall.sh --yes
 ```
 
-Windows PowerShell:
+On Windows run `.\uninstall.cmd --dry-run`, then `.\uninstall.cmd --yes`.
+The receipt records the exact tool and executable directories: later PATH or
+`UV_TOOL_DIR` changes cannot redirect a valid recorded removal. Keep the saved
+base Python 3.12+ interpreter available. See the
+[uninstaller reference](References.md#uninstaller-reference) for state locations
+and options.
 
-```powershell
-Remove-Item -ErrorAction SilentlyContinue "$HOME\.local\bin\uv.exe", "$HOME\.local\bin\uvx.exe", "$HOME\.local\bin\uvw.exe"
+Default removal keeps configuration, secrets, internal and external data, uv,
+shared Python, caches, and shell configuration. `--yes` confirms only package
+removal and is required for mutation without a terminal. Interactive cleanup
+and uv removal each have separate default-No prompts.
+
+To remove managed data as well, preview it while the application is installed:
+
+```shell
+{my_project} appdata paths --json
+{my_project} appdata clean --dry-run
+./uninstall.sh --clean-appdata --yes
 ```
 
-See Astral's [uv uninstallation guide](https://docs.astral.sh/uv/getting-started/installation/#uninstallation)
-for other install locations and optional data cleanup.
+For a custom AppRC directory, pass `--apprc-dir PATH` to each command.
+`appdata` uses the managed registry without resolving ordinary application
+settings. It does not inherit a root runtime dotenv/storage selector. Cleanup
+removes managed files, secret companions, and registered internal storage roots;
+external payloads and unmanaged files are retained. A malformed registry,
+failed cleanup, or overlap with the saved lifecycle directory stops before
+package removal. Rerun without `--clean-appdata` to remove a broken application
+while retaining its data.
+
+Request uv removal explicitly with `--remove-uv --yes` only if you no longer
+need uv for other work. Eligibility requires installer-owned standalone
+bootstrap provenance, unchanged recorded binary hashes, only this package in
+the recorded pre-removal inventory, and empty post-removal/default inventories.
+Ineligible explicit requests fail rather than bypassing those checks.
+
+> [!WARNING]
+> An empty tool list cannot prove uv is unused by other projects. Inventories
+> and hashes are rechecked immediately before deletion, but they do not lock
+> out concurrent uv commands. Only recorded binaries are unlinked, uv last;
+> shared Python, caches, shell profiles, and directories are never removed.
+
+The helper and private receipt survive removal. A completed receipt permits a
+safe repeat even after eligible uv deletion. A new installation refreshes it.
+Do not delete that recovery support before finishing removal.
+
+For older installations without a helper/receipt, use
+`./uninstall.sh --uv /absolute/path/to/uv --yes` (Windows:
+`.\uninstall.cmd --uv C:\path\to\uv.exe --yes`). This explicit recovery is
+package-only: no data cleanup or uv removal. An invalid receipt is kept for
+inspection. If no suitable existing base Python can launch recovery, run
+`uv tool uninstall <distribution_name>` directly under the original
+`UV_TOOL_DIR` and `UV_TOOL_BIN_DIR`; recovery never downloads Python.
+
+For an editable pip install, run
+`.venv/bin/python -m pip uninstall <distribution_name>` on Linux or macOS, or
+`& '.\.venv\Scripts\python.exe' -m pip uninstall <distribution_name>` in
+PowerShell. Remove the clone and its `.venv` only when no longer needed.
 
 <br>
 

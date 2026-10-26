@@ -209,6 +209,14 @@ notes in the GitHub release body. Normal CI exercises the source installer on
 all six native OS/Python cells; the release job performs one Python 3.12 wheel
 installation smoke and does not build platform installers.
 
+The generated `just release-install-smoke` isolates HOME, AppRC/state, and uv
+locations, validates the source archive version, and records its direct uv tool
+installation with the stdlib lifecycle helper. It uses the saved native
+uninstaller and verifies retained sentinels rather than deleting uv directly.
+This direct-install route does not claim bootstrap ownership of its supplied uv.
+Keep Windows coverage on Windows: Linux execution cannot establish CMD quoting,
+PowerShell preflight, or executable-in-use behavior.
+
 `just build-release-inputs` accepts an optional positional path to already
 validated release notes:
 
