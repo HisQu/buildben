@@ -66,11 +66,16 @@ def normalize(value: str) -> str:
 
 
 def state_dir() -> Path:
-    """Locate private lifecycle state without creating directories.
+    """Locate source-dispatch state or a saved helper's own installation.
 
-    :return: The current user's absolute application installation-state directory.
-    :raises LifecycleError: If the platform state root is missing or relative.
+    :return: Absolute state directory without creating directories.
+    :raises LifecycleError: If a source-dispatch state root is missing or relative.
     """
+    saved = Path(__file__).absolute().parent
+    if saved.name == "installation" and saved.parent.name == normalize(
+        APP_DISTRIBUTION
+    ):
+        return saved
     if os.name == "nt":
         root = os.environ.get("LOCALAPPDATA")
         if not root:

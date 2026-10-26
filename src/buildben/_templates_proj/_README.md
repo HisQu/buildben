@@ -253,6 +253,8 @@ or `%LOCALAPPDATA%\<distribution_name>\installation` on Windows. Unix
 `XDG_STATE_HOME` must be absolute; Windows requires `LOCALAPPDATA`.
 It uses the recorded base Python 3.12+ interpreter, which must remain available.
 The helper and receipt survive removal so repeated invocation remains safe.
+The saved helper keeps its own package-removal receipt even if a later shell
+changes `XDG_STATE_HOME` or `LOCALAPPDATA`.
 
 To inspect and explicitly clean AppRC-managed data before removal:
 

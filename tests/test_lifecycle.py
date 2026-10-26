@@ -837,3 +837,37 @@ def test_staged_source_powershell_keeps_original_helper_path(
     )
     assert installation.uv.is_file()
     assert not installation.directory.exists()
+
+
+def test_saved_launcher_keeps_its_receipt_when_state_environment_changes(
+    installation: Installation,
+) -> None:
+    """Remove the original target, not another layout selected by a later shell."""
+    assert installation.record().returncode == 0
+    original_tools = Path(installation.environment["UV_TOOL_DIR"])
+    other_state = installation.root / "different state"
+    other_tools = installation.root / "different tools"
+    other_bins = installation.root / "different bins"
+    installation.environment.update(
+        {
+            "XDG_STATE_HOME": str(other_state),
+            "LOCALAPPDATA": str(other_state),
+            "UV_TOOL_DIR": str(other_tools),
+            "UV_TOOL_BIN_DIR": str(other_bins),
+        }
+    )
+    preflight = installation.record("--check")
+    assert preflight.returncode == 0, preflight.stdout + preflight.stderr
+    installation.install()
+    recorded = installation.record()
+    assert recorded.returncode == 0, recorded.stdout + recorded.stderr
+    other_receipt = other_state / "buildben" / "installation" / "receipt.json"
+    before = other_receipt.read_bytes()
+
+    removed = installation.saved("--yes")
+
+    assert removed.returncode == 0, removed.stdout + removed.stderr
+    assert not (original_tools / "buildben").exists()
+    assert (other_tools / "buildben").is_dir()
+    assert other_receipt.read_bytes() == before
+    assert installation.receipt()["package_removed"] is True
