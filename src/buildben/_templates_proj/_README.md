@@ -3,11 +3,12 @@
 <!-- README EDITING CONTRACT
 Adapt this README in place. Preserve its structure, HTML layout, heading levels,
 spacing, and useful content. Replace placeholders and update facts within this
-design. Before editing, read "README maintenance" in AGENTS.md.
+design. Before editing, read "README maintenance" in CONTRIBUTING.md.
 -->
 
 
-<!-- --- URLs --------------------------------------------------- -->
+<!-- ====================================================================== -->
+<!-- --- URLs  -->
 [`direnv`]: https://direnv.net/
 [`just`]: https://github.com/casey/just?tab=readme-ov-file#packages
 [`uv`]: https://github.com/astral-sh/uv?tab=readme-ov-file#uv
@@ -16,7 +17,7 @@ design. Before editing, read "README maintenance" in AGENTS.md.
 
 
 
-<!-- ======================================================================= -->
+<!-- ====================================================================== -->
 <!-- == Header -->
 <div align="center">
 
@@ -109,8 +110,8 @@ persistent data. AppRC supplies configuration commands and a terminal editor.
 
 
 
-<!-- ============================================================== -->
-<!-- ============================================================== -->
+
+<!-- ====================================================================== -->
 ### Table of Contents
 
 1. [`{my_project}`: A Template](#project-overview)
@@ -123,10 +124,10 @@ persistent data. AppRC supplies configuration commands and a terminal editor.
    2. [Use Feature X](#use-feature-x)
    3. [Use Feature Y](#use-feature-y)
 4. [Documentation](#documentation)
-5. [Development](#development)
 
 ---
 
+<!-- ====================================================================== -->
 <br>
 
 # Installation
@@ -267,7 +268,9 @@ See Astral's [uv uninstallation guide](https://docs.astral.sh/uv/getting-started
 for other install locations and optional data cleanup.
 
 
+<!-- ====================================================================== -->
 <br>
+
 
 # Usage
 
@@ -317,39 +320,25 @@ lorem ipsum
 
 
 
-<br><br>
 
----
-
-<br><br>
-
-
-
+<!-- ====================================================================== -->
+<br>
 
 # Documentation
 
-| Page | Contents |
-| --- | --- |
-| [Documentation](docs/README.md) | Reading order, component names, and writing rules. |
-| [Explanations](docs/Explanations.md) | Components and how they connect. |
-| [How-to user guides](docs/How-To-User-Guides.md) | Tasks with prerequisites and expected results. |
-| [References](docs/References.md) | Exact commands, paths, keys, and Python names. |
-| [Examples](docs/EXAMPLES.md) | Complete storage, override, and multi-section examples. |
-| [Development](docs/Development.md) | Maintainer setup and release workflow. |
+- **Using the project**
+  - [Documentation](docs/README.md) — Start here and find the right guide.
+  - [How-to user guides](docs/How-To-User-Guides.md) — Complete specific tasks.
+  - [Examples](docs/EXAMPLES.md) — Follow complete, working examples.
+  - [Explanations](docs/Explanations.md) — Understand the components and their connections.
+  - [References](docs/References.md) — Look up commands, settings, and APIs.
 
-
-<br>
-
-# Development
-
-Install maintainer tools with pip 25.1 or newer:
-
-```shell
-python -m pip install -e "." --group dev
-python -m pytest
-```
-
-[Development](docs/Development.md) covers verification, optional extras, locks,
-and releases. The [config-section guide](docs/How-To-User-Guides.md#add-a-setting)
-shows where to add a setting and its help text.
+- **Contributing and maintaining**
+  - [Contributing](CONTRIBUTING.md) — Propose changes and prepare a contribution.
+  - [Development](docs/Development.md) — Work on the code and maintain the project.
+    - [Development environment](docs/Development.md#maintainer-environment)
+    - [Repository layout](docs/Development.md#repository-routing)
+    - [Documentation authoring](docs/Development.md#documentation-authoring)
+    - [Verification](docs/Development.md#verification)
+    - [Releases](docs/Development.md#releases)
 

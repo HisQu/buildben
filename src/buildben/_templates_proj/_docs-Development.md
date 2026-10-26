@@ -2,11 +2,13 @@
 
 [Documentation](README.md) · [Explanations](Explanations.md) · [How-to user guides](How-To-User-Guides.md) · [References](References.md) · [Examples](EXAMPLES.md)
 
+Read [Contributing](../CONTRIBUTING.md) for shared expectations, the normal setup
+and checks, and submission guidance. This page explains the deeper procedures.
+
 - [Work in the project](#work-in-the-project)
   - [Maintainer environment](#maintainer-environment)
   - [Use Git worktrees](#use-git-worktrees)
   - [Repository routing](#repository-routing)
-  - [Before editing](#before-editing)
 - [Document the project](#document-the-project)
   - [Documentation authoring](#documentation-authoring)
   - [Static figure rules](#static-figure-rules)
@@ -14,25 +16,21 @@
   - [Verification](#verification)
   - [Releases](#releases)
 
+---
+
 <br>
 
 # Work in the project
 
 ## Maintainer environment
 
-From the project root, install the package and development tools with Python
-3.12 or newer. The `--group` option requires pip 25.1 or newer:
-
-```shell
-python -m venv .venv
-.venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -e "." --group dev
-```
-
-On Windows use `.venv\Scripts\python.exe`. With uv, use `just sync` after
-[creating the lock files](#releases). `uv`, `direnv`, and `just` are optional for
-application users. The [dependency reference](References.md#dependency-declarations)
-distinguishes installed requirements from maintainer tools.
+Follow the [normal development setup](../CONTRIBUTING.md#set-up-development)
+for a pip-based editable install. For a locked uv environment, use `just sync`
+after [creating and committing the lock files](#releases). On Windows, Python
+executables live under `.venv\Scripts`; on POSIX they live under `.venv/bin`.
+The [dependency reference](References.md#dependency-declarations) distinguishes
+runtime requirements from maintainer tools. uv, direnv, and just are optional
+for the normal contributor install.
 
 The starter has no enabled optional extras. If you add and populate the
 commented `rag` extra in `pyproject.toml`, these commands install it:
@@ -47,8 +45,8 @@ python -m pip install -e ".[rag]" --group dev
 The optional `worktree-create` recipe makes a separate checkout from a Git
 branch, tag, or commit and installs its locked dependencies into that checkout's
 `.venv`. Run `just lock`, then commit `uv.lock` and `pylock.toml` on the base
-branch first. This workflow needs `uv`, while the normal project install paths
-above do not.
+branch first. This workflow needs uv, while the
+[normal contributor setup](../CONTRIBUTING.md#set-up-development) does not.
 
 Run the command from the project repository. The recipe adds the new checkout
 without changing your shell's directory. The destination's parent directory
@@ -102,28 +100,8 @@ Buildben ignores the starter diagrams because their filenames contain
 `.IGNORE.mmd`. Rename a diagram when you are ready to track and edit it.
 
 The [project paths](References.md#project-paths) table links to existing owners.
-Ask before adding a top-level directory when one of these locations fits.
-Keep package initializers limited to imports and module docstrings. Reuse
-existing helpers, use exact attributes on known types, and write Sphinx-style
-docstrings for public behavior.
 
-## Before editing
-
-Read [AGENTS.md](../AGENTS.md), [BACKLOG.md](../BACKLOG.md), and the relevant component
-in [Explanations](Explanations.md). Inspect `git status --short` and nearby
-source before editing. Keep unrelated user changes untouched. Explain the
-intended change before editing several files.
-
-`BACKLOG.md` holds durable actionable work not being handled now. Keep an active
-pass's `TODO.md` execution checklist beside its `PLAN.md`; do not create empty
-active artifacts or use TODO as a second backlog. Keep one authoritative
-checklist per action, rather than duplicate editable checkboxes in the plan.
-Before closing or archiving a pass, explicitly transfer unfinished work to the
-backlog or another pass.
-
-Update docs when setup, commands, APIs, environment variables, or saved file
-formats change. Record the final behavior in [CHANGELOG.md](../CHANGELOG.md),
-including affected users and migration instructions for breaking changes.
+---
 
 <br>
 
@@ -131,36 +109,15 @@ including affected users and migration instructions for breaking changes.
 
 ## Documentation authoring
 
-Follow the [documentation rules](README.md#documentation-rules) and
-[component names](README.md#component-names). They define the names used across
-all six pages. An explanation must identify a component, explain its job and
-connections, and link the relevant words to a working implementation.
-
-Write from the smallest usable configuration to optional features. Introduce a
-term before using it in a task title. Keep exact API names and filenames. Link
-inside the sentence or table cell where a reader needs the information; do not
-append generic further-reading lists or related-link callouts. References must
-connect commands and fields to their explanations and practical examples.
-
-Give each guide its own prerequisites, complete files or clearly labeled
-excerpts, commands, and expected results. Give [Examples](EXAMPLES.md) complete
-application setups. Do not assume a reader ran an unrelated earlier example.
-
-The six `docs/` pages use topical H1 sections with H2 entries nested beneath
-them in the table of contents. Put a standalone `<br>` before each topical H1.
-The generated documentation test checks the hierarchy and spacing during
-`pytest`. Use sentence-case headings and `<details>` for long examples. GitHub
-callouts have specific uses:
-
-| Marker | Use |
-| --- | --- |
-| `[!TIP]` | Optional workflow advice. |
-| `[!NOTE]` | Helpful background. |
-| `[!IMPORTANT]` | Required prerequisite or architecture rule. |
-| `[!WARNING]` | Deprecated behavior, temporary bugs, or costly operations. |
-| `[!CAUTION]` | Destructive or security-relevant actions. |
-
-Place the marker alone on its blockquote line; GitHub ignores custom titles.
+1. Select the owning page using [Choose a document](README.md#choose-a-document),
+   then inspect the relevant source and existing examples.
+2. Follow the [documentation rules](README.md#documentation-rules) and
+   [component names](README.md#component-names). Edit behavior, prose, and affected
+   incoming and outgoing links together.
+3. Run changed examples in an isolated directory and compare the results with
+   the documented expectations. Keep each example independently usable.
+4. Preview the affected pages and run the [documentation checks](#verification).
+   Link checks catch missing targets, not unclear explanations or misleading claims.
 
 ## Static figure rules
 
@@ -175,31 +132,37 @@ fonts. Explain what distinct visual treatments mean; do not give actions and
 components identical styling. Embed figures in a centered Markdown table with
 a numbered caption. Keep theme swatches in Graphigs rather than duplicating them.
 
+---
+
 <br>
 
 # Verify and release
 
 ## Verification
 
-Run the tools from the project environment:
+Use the [normal checks](../CONTRIBUTING.md#run-checks), selecting the tests that
+exercise changed behavior and running the project's required checks before
+submission. Do not treat an unrelated passing test as evidence for an unexercised
+path.
+
+For documentation, run the generated project's maintained checks:
 
 ```shell
-.venv/bin/ruff format .
-.venv/bin/ruff check .
-.venv/bin/pyright
-.venv/bin/python -m pytest
+.venv/bin/python -m pytest tests/test_documentation.py
 ```
 
-For documentation, execute changed examples in disposable directories and
-check each result against the prose. Check file links and heading anchors,
-including links back from reference tables. Read the introduction without prior
-project knowledge: every component name must be defined before it is needed.
-Run `git diff --check` and inspect the diff for unrelated changes.
+These validate the six `docs/` pages' grouped outlines and ordinary local
+Markdown links in the README, CONTRIBUTING, AGENTS, and docs pages. They check
+local files and heading anchors, not remote URLs or GitHub's exact rendering.
 
-Before finishing, review names, duplicated helpers, comments, and module
-ownership. Add a TODO only for a real unresolved issue and check for an existing
-entry first. Report verification and unresolved work with a copyable commit
-message. Commit or publish only when requested.
+Execute changed examples in disposable directories and compare their output
+and file changes with the prose. Preview the affected documents as well: the
+checks cannot judge whether an explanation is understandable or a navigation
+entry is useful. Read introductions without assuming prior project knowledge.
+
+Report the commands and observed results, including failures, missing
+prerequisites, and omitted checks. Keep the corresponding behavior unverified
+until the relevant scenario has actually run.
 
 ## Releases
 

@@ -14,7 +14,6 @@ import tomllib
 import xml.etree.ElementTree as ET
 from collections.abc import Generator
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
 
 import pytest
 
@@ -358,24 +357,6 @@ def test_scaffolded_project_uses_dependency_group_template(
     assert 'worktree-remove destination delete_branch="false":' in justfile_text
     assert "uv sync --locked --all-extras --all-groups" in justfile_text
     assert 'UV_PROJECT_ENVIRONMENT="$destination_path/.venv"' in justfile_text
-    readme_text = (proot / "README.md").read_text(encoding="utf-8")
-    assert 'python -m pip install -e "."' in readme_text
-    development_text = (proot / "docs" / "Development.md").read_text(encoding="utf-8")
-    assert 'python -m pip install -e ".[rag]"' in development_text
-    assert 'python -m pip install -e "." --group dev' in readme_text
-    assert 'python -m pip install -e ".[rag]" --group dev' in development_text
-    assert "just worktree-create feature/parser" in development_text
-    assert 'just worktree-remove "../parser trial" true' in development_text
-    assert "the normal project install paths" in development_text
-    assert "above do not" in development_text
-    assert "bube_test_tmp version" in readme_text
-    assert "bube_test_tmp diagnose" in readme_text
-    assert "bube_test_tmp config setup --yes --storage-root" in readme_text
-    assert "bube_test_tmp config doctor" in readme_text
-    assert (
-        'bube_test_tmp config set app.message "Hello local storage" --scope storage'
-        in readme_text
-    )
 
 
 def test_scaffolded_worktree_create_handles_spaces_and_overrides_inherited_uv_env(
@@ -1031,75 +1012,27 @@ def test_scaffolded_publish_pypi_requires_both_committed_policies(
     ]
 
 
-def _markdown_anchors(text: str) -> set[str]:
-    """Collect heading anchors and explicit anchors outside code blocks.
-
-    :param text: Markdown source.
-    :return: GitHub-style local anchor names.
-    """
-    text = re.sub(r"^```[^\n]*\n.*?^```\s*$", "", text, flags=re.MULTILINE | re.DOTALL)
-    result = set(re.findall(r'<a\s+id="([^"]+)"', text))
-    counts: dict[str, int] = {}
-    for heading in re.findall(r"^#{1,6}\s+(.+)$", text, re.MULTILINE):
-        heading = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", heading)
-        slug = re.sub(r"[^\w\- ]", "", heading.strip().lower()).replace(" ", "-")
-        count = counts.get(slug, 0)
-        result.add(f"{slug}-{count}" if count else slug)
-        counts[slug] = count + 1
-    return result
-
-
 def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> None:
-    """Check rendered documentation names, file links, and section anchors."""
-    labels = {
-        "README.md": "Documentation",
-        "Explanations.md": "Explanations",
-        "How-To-User-Guides.md": "How-to user guides",
-        "References.md": "References",
-        "EXAMPLES.md": "Examples",
-        "Development.md": "Development",
-    }
+    """Exercise the generated documentation's own outline and navigation checks."""
     docs = bube_test_project / "docs"
-    references = (docs / "References.md").read_text(encoding="utf-8")
-    assert "How-To-User-Guides.md#install-from-a-cloned-repository" in references
-    assert (bube_test_project / "tests" / "test_documentation.py").is_file()
+    for filename in (
+        "README.md",
+        "CONTRIBUTING.md",
+        "AGENTS.md",
+        "docs/README.md",
+        "docs/Explanations.md",
+        "docs/How-To-User-Guides.md",
+        "docs/References.md",
+        "docs/EXAMPLES.md",
+        "docs/Development.md",
+    ):
+        assert (bube_test_project / filename).is_file()
     ET.parse(docs / "assets" / "docs-reading-map.svg")
-    for filename, label in labels.items():
-        text = (docs / filename).read_text()
-        assert text.startswith(f"# {label}\n")
-        assert "> Related:" not in text and "> Related links:" not in text
-        assert "{my_project}" not in text and "{MyProject}" not in text
-    paths = [
-        bube_test_project / "README.md",
-        bube_test_project / "AGENTS.md",
-        *docs.glob("*.md"),
-    ]
-    errors: list[str] = []
-    for path in paths:
-        text = re.sub(
-            r"^```[^\n]*\n.*?^```\s*$",
-            "",
-            path.read_text(),
-            flags=re.MULTILINE | re.DOTALL,
-        )
-        text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
-        for label, href in re.findall(r"!?\[([^\]\n]*)\]\(([^\s)]+)\)", text):
-            parsed = urlsplit(href)
-            if parsed.scheme or parsed.netloc:
-                continue
-            target = (
-                (path.parent / unquote(parsed.path)).resolve() if parsed.path else path
-            )
-            if not target.exists():
-                errors.append(f"{path.name}: missing {href}")
-            elif parsed.fragment and target.suffix == ".md":
-                if unquote(parsed.fragment) not in _markdown_anchors(
-                    target.read_text()
-                ):
-                    errors.append(f"{path.name}: missing anchor {href}")
-            elif target.parent == docs and target.name in labels:
-                assert label == labels[target.name], (path, label, href)
-    assert not errors, "\n".join(errors)
+    _run(
+        [sys.executable, "-m", "pytest", "-q", "tests/test_documentation.py"],
+        cwd=bube_test_project,
+        env=_project_env(bube_test_project),
+    )
 
 
 def test_scaffolded_project_includes_project_neutral_mermaid_templates(
@@ -1153,6 +1086,75 @@ def test_scaffolded_documentation_rejects_outline_errors(
         check=False,
     )
     assert result.returncode != 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    ("page", "href"),
+    [
+        ("README.md", "missing-contributor-guide.md"),
+        ("CONTRIBUTING.md", "docs/Development.md#missing-section"),
+    ],
+)
+def test_scaffolded_documentation_rejects_broken_navigation(
+    bube_test_project: Path, page: str, href: str
+) -> None:
+    """Prove generated checks reject missing files and section destinations.
+
+    :param bube_test_project: Disposable generated project.
+    :param page: Root document to give a broken link.
+    :param href: Missing local destination.
+    :return: None.
+    """
+    path = bube_test_project / page
+    with path.open("a", encoding="utf-8") as stream:
+        stream.write(f"\n[Missing destination]({href})\n")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            "tests/test_documentation.py",
+            "-k",
+            "documentation_links",
+        ],
+        cwd=bube_test_project,
+        env=_project_env(bube_test_project),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert href in result.stdout + result.stderr
+
+
+def test_scaffolded_documentation_ignores_example_links(
+    bube_test_project: Path,
+) -> None:
+    """Allow illustrative broken links in hidden or fenced examples.
+
+    :param bube_test_project: Disposable generated project.
+    :return: None.
+    """
+    path = bube_test_project / "CONTRIBUTING.md"
+    with path.open("a", encoding="utf-8") as stream:
+        stream.write(
+            "\n<!-- [Example](missing-example.md) -->\n"
+            "\n```markdown\n[Example](docs/Development.md#missing-section)\n```\n"
+        )
+    _run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            "tests/test_documentation.py",
+            "-k",
+            "documentation_links",
+        ],
+        cwd=bube_test_project,
+        env=_project_env(bube_test_project),
+    )
 
 
 @pytest.mark.skipif(

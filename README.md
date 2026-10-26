@@ -274,6 +274,11 @@ labels and introduce components before instructions that depend on them:
 - `docs/EXAMPLES.md`: Examples, complete storage and configuration setups.
 - `docs/Development.md`: Development, verification and release instructions.
 
+The root `CONTRIBUTING.md` owns shared working conventions and the normal
+development setup and checks; `AGENTS.md` directs coding agents to those rules.
+The generated README provides grouped navigation for users and contributors
+instead of duplicating development commands.
+
 The starter has a Typer CLI, `python -m <my_project>` support, and AppRC
 configuration. It enables named storage without a user dotenv. One `APP_RC`
 declaration registers typed sections; a config bundle passes those sections to

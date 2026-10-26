@@ -1,14 +1,16 @@
-"""Keep the generated documentation's heading structure navigable."""
+"""Keep documentation outlines and local navigation usable."""
 
 from __future__ import annotations
 
 import re
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 import pytest
 
 
-DOCS = Path(__file__).resolve().parents[1] / "docs"
+ROOT = Path(__file__).resolve().parents[1]
+DOCS = ROOT / "docs"
 FENCE = re.compile(r"^```[^\n]*\n.*?^```\s*$", re.MULTILINE | re.DOTALL)
 HEADING = re.compile(r"^(#{1,6}) (.+)$", re.MULTILINE)
 TOC_ENTRY = re.compile(r"^( *)- \[([^\]]+)\]\(#([^)]+)\)$", re.MULTILINE)
@@ -25,16 +27,73 @@ def _heading_slug(heading: str) -> str:
     return re.sub(r"[^\w\- ]", "", heading).replace(" ", "-")
 
 
+def _visible_markdown(text: str) -> str:
+    """Exclude comments and fenced examples from navigation checks.
+
+    :param text: Markdown source.
+    :return: Source containing only visible navigation content.
+    """
+    return FENCE.sub("", re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL))
+
+
+def _markdown_anchors(text: str) -> set[str]:
+    """Collect explicit anchors and heading slugs, including duplicate suffixes.
+
+    :param text: Markdown source.
+    :return: Local fragment targets outside comments and fenced examples.
+    """
+    text = _visible_markdown(text)
+    anchors = set(re.findall(r'<a\s+id="([^"]+)"', text))
+    counts: dict[str, int] = {}
+    for _, heading in HEADING.findall(text):
+        stem = _heading_slug(heading)
+        count = counts.get(stem, 0)
+        anchors.add(f"{stem}-{count}" if count else stem)
+        counts[stem] = count + 1
+    return anchors
+
+
 @pytest.mark.parametrize(
-    "path", sorted(DOCS.glob("*.md")), ids=lambda path: path.name
+    "path",
+    [
+        ROOT / "README.md",
+        ROOT / "CONTRIBUTING.md",
+        ROOT / "AGENTS.md",
+        *sorted(DOCS.glob("*.md")),
+    ],
+    ids=lambda path: path.relative_to(ROOT).as_posix(),
 )
+def test_documentation_links(path: Path) -> None:
+    """Require ordinary local inline links to reach existing files and headings.
+
+    :param path: Documentation page containing links to validate.
+    :return: None.
+    """
+    text = _visible_markdown(path.read_text(encoding="utf-8"))
+    errors: list[str] = []
+    for _, href in re.findall(r"!?\[([^\]\n]*)\]\(([^\s)]+)\)", text):
+        parsed = urlsplit(href)
+        if parsed.scheme or parsed.netloc:
+            continue
+        target = (path.parent / unquote(parsed.path)).resolve() if parsed.path else path
+        if not target.exists():
+            errors.append(f"{path.relative_to(ROOT)}: missing {href}")
+        elif parsed.fragment and target.suffix == ".md":
+            if unquote(parsed.fragment) not in _markdown_anchors(
+                target.read_text(encoding="utf-8")
+            ):
+                errors.append(f"{path.relative_to(ROOT)}: missing anchor {href}")
+    assert not errors, "\n".join(errors)
+
+
+@pytest.mark.parametrize("path", sorted(DOCS.glob("*.md")), ids=lambda path: path.name)
 def test_documentation_outline(path: Path) -> None:
     """Require grouped TOCs and spacing on every main documentation page.
 
     :param path: Rendered documentation page to inspect.
     :return: None.
     """
-    text = FENCE.sub("", path.read_text())
+    text = _visible_markdown(path.read_text(encoding="utf-8"))
     headings = list(HEADING.finditer(text))
     assert headings and headings[0].group(1) == "#", path
     groups = [match for match in headings[1:] if match.group(1) == "#"]
