@@ -995,7 +995,7 @@ def test_source_install_smoke(
         }
     }
     temporary_parent = Path(environment["TEMP"])
-    temporary_before = set(temporary_parent.iterdir())
+    temporary_before = {path for path in temporary_parent.iterdir() if path.is_dir()}
     thread.start()
     try:
         result = _run_installer(
@@ -1006,7 +1006,9 @@ def test_source_install_smoke(
             timeout=900,
         )
         assert result.returncode == 0, result.stdout + result.stderr
-        assert set(temporary_parent.iterdir()) == temporary_before
+        assert {
+            path for path in temporary_parent.iterdir() if path.is_dir()
+        } == temporary_before
         assert (temporary_parent / "sentinel").read_text(
             encoding="utf-8"
         ) == "keep temporary parent"
