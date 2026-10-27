@@ -1,7 +1,8 @@
-"""Consumer tests for the canonical BuildBen source installers."""
+"""Consumer tests for canonical and rendered BuildBen source installers."""
 
 from __future__ import annotations
 
+import argparse
 import base64
 import io
 import json
@@ -20,6 +21,8 @@ from urllib.parse import quote
 
 import pytest
 
+from buildben.init_proj import _run as render_project
+
 INSTALLER_DIR = Path(__file__).resolve().parents[1] / "src/buildben_dev/distribution"
 
 
@@ -35,10 +38,12 @@ def _release_json(source: Path, asset_url: str) -> str:
     )
 
 
-def _write_sdist(path: Path, members: dict[str, bytes]) -> None:
+def _write_sdist(
+    path: Path, members: dict[str, bytes], distribution: str = "buildben"
+) -> None:
     with tarfile.open(path, "w:gz") as archive:
         for name, data in members.items():
-            info = tarfile.TarInfo(f"buildben-0.10.3/{name}")
+            info = tarfile.TarInfo(f"{distribution}-0.10.3/{name}")
             info.size = len(data)
             archive.addfile(info, io.BytesIO(data))
 
@@ -65,6 +70,34 @@ def _inherit_active_venv(tmp_path: Path, environment: dict[str, str]) -> Path:
     return venv
 
 
+@pytest.fixture(params=["canonical", "rendered"])
+def windows_installer_target(
+    request: pytest.FixtureRequest, tmp_path: Path
+) -> tuple[Path, str, str]:
+    """Select the canonical installer or one emitted by the real scaffolder."""
+    if request.param == "canonical":
+        return INSTALLER_DIR / "install-windows.ps1", "HisQu/buildben", "buildben"
+    name = "scope_fixture"
+    root = tmp_path / "rendered project"
+    render_project(
+        argparse.Namespace(
+            name=name,
+            target_dir=str(root),
+            git_init=False,
+            github_user="fixture-owner",
+        )
+    )
+    project_root = root / name
+    project_data = tomllib.loads(
+        (project_root / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    return (
+        project_root / "src" / f"{name}_dev" / "distribution" / "install-windows.ps1",
+        f"fixture-owner/{name}",
+        project_data["project"]["name"],
+    )
+
+
 def _install_smoke_fixture(
     tmp_path: Path,
     source: Path,
@@ -80,8 +113,12 @@ def _install_smoke_fixture(
     main_commit_status: int = 200,
     main_archive_status: int = 200,
     second_main_source: Path | None = None,
+    installer_source: Path | None = None,
+    installer_repository: str = "HisQu/buildben",
 ):
     source = source.resolve(strict=True)
+    installer_source = installer_source or INSTALLER_DIR / "install-windows.ps1"
+    installer_module = installer_source.parent.parent.name
     if source_mode == "main":
         if main_commit is None or not re.fullmatch(r"[0-9a-f]{40}", main_commit):
             pytest.fail("Main smoke requires a full lowercase 40-character commit SHA.")
@@ -129,7 +166,7 @@ def _install_smoke_fixture(
         def do_GET(self) -> None:
             if self.path == "/installer":
                 self._send(
-                    (INSTALLER_DIR / "install-windows.ps1").read_bytes(),
+                    installer_source.read_bytes(),
                     "text/plain",
                 )
                 return
@@ -181,7 +218,7 @@ def _install_smoke_fixture(
         module.mkdir()
         (module / "InstallerHttpFixture.psm1").write_text(
             "function Invoke-RestMethod { param([string]$Uri); "
-            "if ($Uri -eq 'https://raw.githubusercontent.com/HisQu/buildben/main/src/buildben_dev/distribution/install-windows.ps1') { "
+            "if ($Uri -eq $env:INSTALLER_SMOKE_INSTALLER_PUBLIC_URL) { "
             "return Microsoft.PowerShell.Utility\\Invoke-RestMethod -Uri $env:INSTALLER_SMOKE_INSTALLER_URL }; "
             "if ($Uri -like 'https://api.github.com/repos/*/releases/*') { "
             "$releasePath = $env:INSTALLER_SMOKE_RELEASE_JSON; "
@@ -211,7 +248,7 @@ def _install_smoke_fixture(
             "if args[:1] == ['api']:\n"
             " endpoint=next((arg for arg in args[1:] if arg.startswith(('repos/', '/repos/'))), '')\n"
             " endpoint='/'+endpoint.lstrip('/')\n"
-            " if endpoint == '/repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-windows.ps1':\n"
+            " if endpoint == '/'+os.environ['INSTALLER_SMOKE_INSTALLER_ENDPOINT']:\n"
             "  sys.stdout.buffer.write(urllib.request.urlopen(os.environ['INSTALLER_SMOKE_INSTALLER_URL']).read()); raise SystemExit(0)\n"
             " repository=os.environ['INSTALLER_SMOKE_REPOSITORY']\n"
             " if endpoint == '/repos/'+repository+'/commits/main':\n"
@@ -268,7 +305,7 @@ def _install_smoke_fixture(
             "if args[:1] == ['api']:\n"
             " endpoint=next((arg for arg in args[1:] if arg.startswith(('repos/', '/repos/'))), '')\n"
             " endpoint='/'+endpoint.lstrip('/')\n"
-            " if endpoint == '/repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-windows.ps1':\n"
+            " if endpoint == '/'+os.environ['INSTALLER_SMOKE_INSTALLER_ENDPOINT']:\n"
             "  sys.stdout.buffer.write(urllib.request.urlopen(os.environ['INSTALLER_SMOKE_INSTALLER_URL']).read()); raise SystemExit(0)\n"
             " repository=os.environ['INSTALLER_SMOKE_REPOSITORY']\n"
             " if endpoint == '/repos/'+repository+'/commits/main':\n"
@@ -353,6 +390,12 @@ def _install_smoke_fixture(
             "INSTALLER_SMOKE_ASSET_URL": asset_url,
             "INSTALLER_SMOKE_API_URL": api_url,
             "INSTALLER_SMOKE_INSTALLER_URL": f"http://127.0.0.1:{server.server_port}/installer",
+            "INSTALLER_SMOKE_INSTALLER_ENDPOINT": (
+                f"repos/{installer_repository}/contents/src/{installer_module}/distribution/install-windows.ps1"
+            ),
+            "INSTALLER_SMOKE_INSTALLER_PUBLIC_URL": (
+                f"https://raw.githubusercontent.com/{installer_repository}/main/src/{installer_module}/distribution/install-windows.ps1"
+            ),
             "INSTALLER_SMOKE_GH_CALLS": str(tmp_path / "gh-calls.jsonl"),
             "INSTALLER_SMOKE_GH_CALLED": str(gh_called),
             "INSTALLER_SMOKE_REAL_GH": real_gh or "",
@@ -396,11 +439,11 @@ def _run_installer(
     env: dict[str, str],
     timeout: int = 120,
 ) -> subprocess.CompletedProcess[str]:
-    """Capture installer diagnostics using their explicit Windows encoding.
+    """Capture Windows installer diagnostics as bytes and decode with OEM.
 
-    The downloaded PowerShell driver sets its output encoding to UTF-8. File
-    mode uses Windows PowerShell's OEM console encoding. Capture bytes so the
-    parent Python locale cannot raise a decoder error and lose diagnostics.
+    Both PowerShell entrypoints retain the native console encoding. Capturing
+    bytes prevents the parent Python locale from losing diagnostics to a
+    decoder error.
     """
     if os.name != "nt":
         return subprocess.run(
@@ -415,10 +458,8 @@ def _run_installer(
         command, check=False, capture_output=True, env=env, timeout=timeout
     )
 
-    encoding = "utf-8" if "-EncodedCommand" in command else "oem"
-
     def decode_output(output: bytes) -> str:
-        return output.decode(encoding, errors="backslashreplace")
+        return output.decode("oem", errors="backslashreplace")
 
     return subprocess.CompletedProcess(
         result.args,
@@ -432,6 +473,9 @@ def _installer_command(
     uv: str | None,
     *arguments: str,
     skip_config: bool = True,
+    installer_path: Path | None = None,
+    installer_repository: str = "HisQu/buildben",
+    installer_module: str = "buildben_dev",
     invocation: Literal["file", "downloaded"] = "file",
 ) -> list[str]:
     """Build file or downloaded-text commands without interpolating arguments."""
@@ -452,16 +496,14 @@ def _installer_command(
             )
             fetch = (
                 "$installer = gh api -H 'Accept: application/vnd.github.raw+json' "
-                "'repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-windows.ps1'; "
+                f"'repos/{installer_repository}/contents/src/{installer_module}/distribution/install-windows.ps1'; "
                 "if ($LASTEXITCODE -ne 0) { throw 'Installer download failed.' }; "
                 if use_gh
                 else "$installer = Invoke-RestMethod -Uri "
-                "'https://raw.githubusercontent.com/HisQu/buildben/main/src/buildben_dev/distribution/install-windows.ps1'; "
+                f"'https://raw.githubusercontent.com/{installer_repository}/main/src/{installer_module}/distribution/install-windows.ps1'; "
             )
             driver = (
                 "$ErrorActionPreference = 'Stop'; "
-                "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; "
-                "$OutputEncoding = [Console]::OutputEncoding; "
                 + fetch
                 + "if (-not $installer) { throw 'Installer download is empty.' }; "
                 + "$installerArguments = [string[]](ConvertFrom-Json -InputObject "
@@ -483,7 +525,7 @@ def _installer_command(
             "-NoProfile",
             "-NonInteractive",
             "-File",
-            str(INSTALLER_DIR / "install-windows.ps1"),
+            str(installer_path or INSTALLER_DIR / "install-windows.ps1"),
             *prefix,
             *arguments,
         ]
@@ -514,8 +556,6 @@ def test_rejected_options_do_not_run_uv(arguments: list[str], tmp_path: Path) ->
         env = {**os.environ, "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}"}
         driver = (
             "$ErrorActionPreference = 'Stop'; "
-            "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; "
-            "$OutputEncoding = [Console]::OutputEncoding; "
             "$installerArguments = [string[]](ConvertFrom-Json -InputObject "
             "([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('"
             + base64.b64encode(json.dumps(arguments).encode("utf-8")).decode("ascii")
@@ -586,22 +626,28 @@ def test_windows_installer_main_validation_preserves_uv_selection(
     invocation: Literal["file", "downloaded"],
     client: str,
     explicit_uv: bool,
+    windows_installer_target: tuple[Path, str, str],
 ) -> None:
-    source = tmp_path / "buildben-0.10.3.tar.gz"
+    installer_path, repository, distribution = windows_installer_target
+    source = tmp_path / f"{distribution}-0.10.3.tar.gz"
     _write_sdist(
         source,
         {
-            "pyproject.toml": b'[project]\nname = "buildben"\nversion = "0.10.3"\n',
+            "pyproject.toml": f'[project]\nname = "{distribution}"\nversion = "0.10.3"\n'.encode(),
             "uv.lock": b"version = 1\n",
         },
+        distribution,
     )
     fixture = _install_smoke_fixture(
         tmp_path,
         source,
         client,
+        repository=repository,
         source_mode="main",
         main_commit="a" * 40,
         main_commit_response=b'{"sha":"invalid"}',
+        installer_source=installer_path,
+        installer_repository=repository,
     )
     server, thread, environment, _, tool_dir, _, _, _, _, gh_called = fixture
     selected_uv_dir = tmp_path / "selected uv with spaces"
@@ -618,12 +664,17 @@ def test_windows_installer_main_validation_preserves_uv_selection(
     command = _installer_command(
         str(selected_uv) if explicit_uv else None,
         *args,
+        installer_path=installer_path,
+        installer_repository=repository,
+        installer_module=installer_path.parent.parent.name,
         invocation=invocation,
     )
     if explicit_uv:
         environment["PATH"] = os.pathsep.join([str(path_dir), environment["PATH"]])
     else:
-        environment["PATH"] = os.pathsep.join([str(selected_uv_dir), environment["PATH"]])
+        environment["PATH"] = os.pathsep.join(
+            [str(selected_uv_dir), environment["PATH"]]
+        )
     temporary_parent = Path(environment["TEMP"])
     before = set(temporary_parent.iterdir())
     thread.start()
@@ -637,7 +688,7 @@ def test_windows_installer_main_validation_preserves_uv_selection(
             encoding="utf-8"
         ) == "keep temporary parent"
         assert list(tool_dir.iterdir()) == []
-        assert not (selected_uv_dir / "mutations.jsonl").exists()
+        assert (selected_uv_dir / "calls.jsonl").is_file()
         assert not (path_dir / "calls.jsonl").exists()
         if client == "curl":
             assert not gh_called.exists()
@@ -649,13 +700,24 @@ def test_windows_installer_main_validation_preserves_uv_selection(
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows PowerShell installer regression.")
 @pytest.mark.parametrize("invocation", ["file", "downloaded"])
+@pytest.mark.parametrize("client", ["curl", "gh"])
 def test_windows_installer_default_release_rejects_draft(
-    tmp_path: Path, invocation: Literal["file", "downloaded"]
+    tmp_path: Path,
+    invocation: Literal["file", "downloaded"],
+    client: str,
+    windows_installer_target: tuple[Path, str, str],
 ) -> None:
-    source = tmp_path / "buildben-0.10.3.tar.gz"
+    installer_path, repository, distribution = windows_installer_target
+    source = tmp_path / f"{distribution}-0.10.3.tar.gz"
     source.write_bytes(b"fixture archive")
     fixture = _install_smoke_fixture(
-        tmp_path, source, "curl", release_overrides={"draft": True}
+        tmp_path,
+        source,
+        client,
+        release_overrides={"draft": True},
+        repository=repository,
+        installer_source=installer_path,
+        installer_repository=repository,
     )
     server, thread, environment, _, tool_dir, *_ = fixture
     uv = _windows_boundary_uv(tmp_path / "release uv with spaces")
@@ -663,7 +725,13 @@ def test_windows_installer_default_release_rejects_draft(
     try:
         result = _run_installer(
             _installer_command(
-                str(uv), "--github-client", "curl", invocation=invocation
+                str(uv),
+                "--github-client",
+                client,
+                installer_path=installer_path,
+                installer_repository=repository,
+                installer_module=installer_path.parent.parent.name,
+                invocation=invocation,
             ),
             env=environment,
         )
@@ -686,18 +754,27 @@ def test_windows_installer_default_release_rejects_draft(
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows PowerShell installer regression.")
 @pytest.mark.parametrize("invocation", ["file", "downloaded"])
+@pytest.mark.parametrize("client", ["curl", "gh"])
 @pytest.mark.parametrize("version", ["0.10.3", "v0.10.3"])
 def test_windows_installer_version_selects_requested_stable_tag(
-    tmp_path: Path, invocation: Literal["file", "downloaded"], version: str
+    tmp_path: Path,
+    invocation: Literal["file", "downloaded"],
+    client: str,
+    version: str,
+    windows_installer_target: tuple[Path, str, str],
 ) -> None:
-    source = tmp_path / "buildben-0.10.3.tar.gz"
+    installer_path, repository, distribution = windows_installer_target
+    source = tmp_path / f"{distribution}-0.10.3.tar.gz"
     source.write_bytes(b"not a gzip archive")
     fixture = _install_smoke_fixture(
         tmp_path,
         source,
-        "curl",
+        client,
         release_overrides={"draft": False},
         latest_release_overrides={"draft": True},
+        repository=repository,
+        installer_source=installer_path,
+        installer_repository=repository,
     )
     server, thread, environment, _, tool_dir, *_ = fixture
     uv = _windows_boundary_uv(tmp_path / "version uv with spaces")
@@ -707,9 +784,12 @@ def test_windows_installer_version_selects_requested_stable_tag(
             _installer_command(
                 str(uv),
                 "--github-client",
-                "curl",
+                client,
                 "--version",
                 version,
+                installer_path=installer_path,
+                installer_repository=repository,
+                installer_module=installer_path.parent.parent.name,
                 invocation=invocation,
             ),
             env=environment,
@@ -747,17 +827,33 @@ def test_windows_installer_conflicts_before_uv_or_source_requests(
     invocation: Literal["file", "downloaded"],
     client: str,
     arguments: list[str],
+    windows_installer_target: tuple[Path, str, str],
 ) -> None:
-    source = tmp_path / "buildben-0.10.3.tar.gz"
+    installer_path, repository, distribution = windows_installer_target
+    source = tmp_path / f"{distribution}-0.10.3.tar.gz"
     source.write_bytes(b"fixture archive")
-    fixture = _install_smoke_fixture(tmp_path, source, client)
+    fixture = _install_smoke_fixture(
+        tmp_path,
+        source,
+        client,
+        repository=repository,
+        installer_source=installer_path,
+        installer_repository=repository,
+    )
     server, thread, environment, _, _, _, _, _, _, gh_called = fixture
     uv_dir = tmp_path / "conflict uv"
     _windows_boundary_uv(uv_dir, fail=True)
     uv_calls = uv_dir / "calls.jsonl"
     environment["PATH"] = os.pathsep.join([str(uv_dir), environment["PATH"]])
     command = _installer_command(
-        None, "--github-client", client, *arguments, invocation=invocation
+        None,
+        "--github-client",
+        client,
+        *arguments,
+        installer_path=installer_path,
+        installer_repository=repository,
+        installer_module=installer_path.parent.parent.name,
+        invocation=invocation,
     )
     thread.start()
     try:
@@ -779,13 +875,18 @@ def test_windows_installer_conflicts_before_uv_or_source_requests(
             else []
         )
         if invocation == "downloaded" and client == "gh":
-            assert any(
-                "repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-windows.ps1"
-                in call
-                for call in calls
-            ), calls
-            assert not any(
-                "repos/HisQu/buildben/commits/main" in call or "releases/" in call
+            allowed_endpoint = f"repos/{repository}/contents/src/{installer_path.parent.parent.name}/distribution/install-windows.ps1"
+            assert calls, "The downloaded installer must be fetched through gh."
+            assert all(
+                next(
+                    (
+                        argument.lstrip("/")
+                        for argument in call
+                        if argument.startswith(("repos/", "/repos/"))
+                    ),
+                    None,
+                )
+                == allowed_endpoint
                 for call in calls
             ), calls
         else:

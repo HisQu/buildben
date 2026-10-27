@@ -122,8 +122,9 @@ This project follows Semantic Versioning.
 - Fixed the Unix BuildBen installer attempting to run a configuration command
   that BuildBen does not provide. Generated applications retain their setup wizard.
 - Fixed Windows installer state being lost when downloaded text runs as a
-  PowerShell script block. Windows installer checks now cover that documented
-  invocation alongside file execution, including public and gh downloads.
+  PowerShell script block, both for BuildBen and generated projects. Windows
+  checks exercise the canonical and actually rendered installers through file
+  execution and downloaded text, including public and gh downloads.
 
 <br>
 
