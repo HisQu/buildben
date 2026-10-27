@@ -51,6 +51,18 @@ def _archive_bytes(members: dict[str, bytes]) -> bytes:
     return stream.getvalue()
 
 
+def _inherit_active_venv(tmp_path: Path, environment: dict[str, str]) -> Path:
+    """Run installer smokes with an active virtual environment in the parent."""
+    venv = tmp_path / "active project venv"
+    subprocess.run(
+        [sys.executable, "-m", "venv", "--without-pip", str(venv)], check=True
+    )
+    environment["VIRTUAL_ENV"] = str(venv)
+    scripts = venv / ("Scripts" if os.name == "nt" else "bin")
+    environment["PATH"] = os.pathsep.join([str(scripts), environment.get("PATH", "")])
+    return venv
+
+
 def _install_smoke_fixture(
     tmp_path: Path,
     source: Path,
@@ -477,6 +489,26 @@ def test_source_install_smoke(tmp_path: Path, source_mode: str) -> None:
         version,
         gh_called,
     ) = fixture
+    active_venv = _inherit_active_venv(tmp_path, environment)
+    base_python = subprocess.run(
+        [
+            uv,
+            "python",
+            "find",
+            "--system",
+            "--no-project",
+            "--no-python-downloads",
+            "3.12",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=environment,
+    ).stdout.strip()
+    environment["PATH"] = os.pathsep.join(
+        [environment["PATH"], str(Path(base_python).parent)]
+    )
+    environment["UV_PYTHON_DOWNLOADS"] = "never"
     installer_arguments = ["--github-client", client]
     if source_mode == "main":
         installer_arguments.append("--main")
@@ -574,6 +606,21 @@ def test_source_install_smoke(tmp_path: Path, source_mode: str) -> None:
                 encoding="utf-8"
             )
         )
+        python_path = Path(receipt["python"]).resolve()
+        python_info = subprocess.run(
+            [
+                str(python_path),
+                "-c",
+                "import sys; print(sys.prefix == sys.base_prefix)",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=installed_environment,
+        ).stdout.strip()
+        assert python_info == "True"
+        assert not python_path.is_relative_to(active_venv.resolve())
+        assert not python_path.is_relative_to((tool_dir / "buildben").resolve())
         assert receipt["package_removed"] is True
         assert Path(uv).is_file()
         repeated = subprocess.run(
