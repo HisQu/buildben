@@ -88,6 +88,11 @@ Run checks from the project root using the development environment.
 Formatting checks do not modify files. Apply formatting fixes only to files you
 edited; do not include unrelated formatting changes. The [verification guide](docs/Development.md#verification)
 explains check selection and how to validate changed documentation and examples.
+For Windows installer changes, follow the canonical
+[Windows installer verification procedure](docs/Development.md#windows-installer-verification-procedure).
+Run Windows checks only in an independent native Windows environment; never
+launch native Windows verification executables from WSL. The existing Windows
+CI package-install smoke does not execute the installer entrypoints.
 
 ---
 

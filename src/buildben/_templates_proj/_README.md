@@ -349,5 +349,6 @@ lorem ipsum
     - [Repository layout](docs/Development.md#repository-routing)
     - [Documentation authoring](docs/Development.md#documentation-authoring)
     - [Verification](docs/Development.md#verification)
+    - [Windows installer verification](docs/Development.md#windows-installer-verification-procedure)
     - [Releases](docs/Development.md#releases)
 

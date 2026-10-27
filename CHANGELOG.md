@@ -104,6 +104,8 @@ This project follows Semantic Versioning.
 - New generated applications require `apprc>=0.29.0,<0.30`; Buildben retains
   an empty runtime dependency list. Generated installation smoke and the native
   installer matrix use saved uninstall launchers rather than direct uv removal.
+- Documented the native Windows CI verification procedure in root agent guidance
+  and the README; WSL agents must not launch Windows verification executables.
 
 <br>
 
