@@ -104,6 +104,8 @@ This project follows Semantic Versioning.
 - New generated applications require `apprc>=0.29.0,<0.30`; Buildben retains
   an empty runtime dependency list. Generated installation smoke and the native
   installer matrix use saved uninstall launchers rather than direct uv removal.
+- Documented the native Windows CI verification procedure in root agent guidance
+  and the README; WSL agents must not launch Windows verification executables.
 
 <br>
 
@@ -119,6 +121,13 @@ This project follows Semantic Versioning.
 
 - Fixed the Unix BuildBen installer attempting to run a configuration command
   that BuildBen does not provide. Generated applications retain their setup wizard.
+- Fixed Windows installer state being lost when downloaded text runs as a
+  PowerShell script block, both for BuildBen and generated projects. Windows
+  checks exercise the canonical and actually rendered installers through file
+  execution and downloaded text, including public and gh downloads.
+- Fixed Unix source staging under temporary-directory aliases such as macOS
+  `/var`, for BuildBen and generated installers, without relaxing lifecycle
+  link checks.
 
 <br>
 

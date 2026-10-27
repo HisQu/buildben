@@ -14,6 +14,8 @@ and checks, and submission guidance. This page explains the deeper procedures.
   - [Static figure rules](#static-figure-rules)
 - [Verify and release](#verify-and-release)
   - [Verification](#verification)
+  - [Windows installer verification procedure](#windows-installer-verification-procedure)
+  - [Unix installer staging verification](#unix-installer-staging-verification)
   - [Releases](#releases)
 
 ---
@@ -164,6 +166,83 @@ Report the commands and observed results, including failures, missing
 prerequisites, and omitted checks. Keep the corresponding behavior unverified
 until the relevant scenario has actually run.
 
+## Windows installer verification procedure
+
+> [!IMPORTANT]
+> From WSL, never launch native Windows verification executables, directly or
+> through helpers. This includes `powershell.exe`, `pwsh.exe`, Windows
+> Python/pytest, `cmd.exe`, and Windows `uv`. Do not work around this boundary
+> with a Windows virtual environment, subprocess wrapper, or alternate launcher.
+> Use independent native Windows CI for Windows execution.
+
+Use the existing [CI workflow](../.github/workflows/ci.yml) for the exact commit
+under review. Its `installation` job has native `windows-latest` cells for
+Python 3.12 and 3.13, running `just release-install-smoke`. Inspect the job logs
+and report the commit, job, command, and observed result rather than treating a
+workflow's presence as proof.
+
+That recipe builds and extracts the project's sdist, installs it directly with
+`uv tool install`, checks CLI help and the installed package snapshot, records
+the installation, and exercises the saved native uninstaller while preserving
+configuration and data sentinels. It does **not** execute `install-windows.ps1`
+or the installer `.cmd` wrappers. A successful package-install smoke therefore
+does not establish Windows installer-entrypoint correctness.
+
+For an installer change, distinguish that existing package coverage from the
+following native Windows evidence:
+
+1. Exercise the actual
+   [`src/{my_project}_dev/distribution/install-windows.ps1`](../src/{my_project}_dev/distribution/install-windows.ps1)
+   file, not functions copied into a separate harness.
+2. Exercise the documented downloaded `[scriptblock]::Create(...)` invocation
+   from the [Windows one-line installation instructions](How-To-User-Guides.md#for-windows),
+   with the downloaded content corresponding to the commit being verified.
+   File invocation alone does not establish behavior in a downloaded script block.
+3. Check that installer helpers share a mutable state object created locally
+   for each invocation. Do not replace that shared object with copied scalar
+   variables or `$script:` state: nested and downloaded script-block scopes
+   must observe the same invocation-local updates without leaking state.
+
+BuildBen's own native Windows regression tests exercise its canonical installer
+and the project installer rendered through the real project scaffolder. That
+central template coverage is separate from this generated project's CI package
+smoke; this starter does not generate a `tests/test_release_install.py` suite or
+a `-k windows_installer` test command. Do not claim generated installer proof
+from the package smoke or a copied-function harness. Record any actual-file or
+downloaded-entrypoint scenario that has not run as unverified.
+
+Linux tests and static inspection are useful evidence only for the behavior
+they exercise; they are not Windows execution proof. Capturing output,
+`-NoProfile`, and `-NonInteractive` do not isolate a Windows console. Treat
+`CREATE_NO_WINDOW` as an unverified workaround, not a verified cure for console
+or control-event behavior.
+
+If native Windows CI cannot run, report the blocker and keep Windows proof and
+verification-dependent delivery pending. Do not launch Windows executables
+from WSL to compensate, and do not change billing, runner policy, execution
+policy, permissions, or other security settings to unblock verification.
+
+## Unix installer staging verification
+
+Unix staging changes need actual installer-entrypoint evidence, not only the
+generated CI package-install smoke. BuildBen's maintained
+[source-installer tests](https://github.com/HisQu/buildben/blob/main/tests/test_release_install.py)
+render this Unix installer with matching project identity and run real source
+installation and saved uninstallation with physical and symlinked temporary
+parents. That central template coverage is separate from this project's
+direct-package smoke.
+
+Canonicalize only a newly created installer-owned staging root before deriving
+extracted-source paths. Keep lifecycle and preflight link checks intact; do not
+resolve arbitrary helper inputs, alter fixtures, or skip a failing smoke to hide
+a production failure. Record missing project-specific installer evidence as
+unverified rather than claiming it from another project's CI.
+
+Those central rendered Unix cases use the real BuildBen package with
+`--skip-config`, because BuildBen does not provide a generated application's
+configuration command. They do not establish this project's configuration-wizard
+behavior.
+
 ## Releases
 
 `CHANGELOG.md` is the source for GitHub Release notes. Before a release, move
@@ -205,8 +284,8 @@ just release patch
 The tag workflow reuses one successful full `ci.yml` run for the exact tagged
 commit rather than repeating the full source matrix. It builds and validates
 one wheel and source archive, then publishes only those two assets with release
-notes in the GitHub release body. Normal CI exercises the source installer on
-all six native OS/Python cells; the release job performs one Python 3.12 wheel
+notes in the GitHub release body. Normal CI exercises direct sdist installation
+on all six native OS/Python cells; the release job performs one Python 3.12 wheel
 installation smoke and does not build platform installers.
 
 The generated `just release-install-smoke` isolates HOME, AppRC/state, and uv
@@ -214,8 +293,10 @@ locations, validates the source archive version, and records its direct uv tool
 installation with the stdlib lifecycle helper. It uses the saved native
 uninstaller and verifies retained sentinels rather than deleting uv directly.
 This direct-install route does not claim bootstrap ownership of its supplied uv.
-Keep Windows coverage on Windows: Linux execution cannot establish CMD quoting,
-PowerShell preflight, or executable-in-use behavior.
+Follow the [Windows installer verification procedure](#windows-installer-verification-procedure)
+for the distinction between package-install coverage and installer-entrypoint
+proof. Linux execution cannot establish CMD quoting, PowerShell preflight, or
+executable-in-use behavior.
 
 `just build-release-inputs` accepts an optional positional path to already
 validated release notes:

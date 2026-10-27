@@ -109,6 +109,9 @@ jobs:
           just-version: "1.56.0"
       - name: Install project from uv.lock
         run: uv sync --locked --all-extras --all-groups
+      - name: Run Windows installer scope regressions
+        if: runner.os == 'Windows'
+        run: uv run --locked python -m pytest -n 0 tests/test_release_install.py -k windows_installer
       - name: Run source-installer consumer smoke
         env:
           GH_TOKEN: ${{ github.token }}

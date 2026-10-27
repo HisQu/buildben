@@ -30,6 +30,16 @@ conventions. Consult the relevant [Development](docs/Development.md) guides.
 ## Verification
 - Review the diff for duplicate helpers, naming drift, unnecessary abstractions, and regressions.
 - Run the project’s relevant lint, type-check, and test commands before considering the task done.
+- Before Windows installer work, follow the canonical
+  [Windows installer verification procedure](docs/Development.md#windows-installer-verification-procedure).
+- From WSL, never launch native Windows verification executables, directly or
+  through helpers: this includes PowerShell, Windows Python/pytest, `cmd.exe`,
+  and Windows `uv`. Use independent native Windows CI, not a Windows virtual
+  environment or executable launched from WSL.
+- For Unix installer changes, follow the
+  [Unix staging verification procedure](docs/Development.md#unix-installer-staging-verification).
+  Preserve lifecycle link checks and distinguish actual installer proof from
+  the generated direct-package smoke.
 
 ## User Decisions
 - Never answer questions on the user's behalf.

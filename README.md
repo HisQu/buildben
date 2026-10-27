@@ -79,6 +79,8 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 
 1. [`buildben`: build-benedictions](#buildben-build-benedictions)
    1. [📦 Installation](#-installation)
+      1. [Windows installer verification procedure](#windows-installer-verification-procedure)
+      1. [Unix installer staging verification](#unix-installer-staging-verification)
       1. [Uninstall](#uninstall)
    2. [🚀 Usage](#-usage)
    3. [❓Optional Installs](#optional-installs)
@@ -202,6 +204,62 @@ run `gh auth login` and `gh auth setup-git`. Public downloads use anonymous
 access; `curl` does not inherit gh credentials. Private VCS dependencies still
 need Git authentication independently of release visibility. BuildBen and
 generated applications do not require administrator privileges.
+
+### Windows installer verification procedure
+
+Use the existing `windows-latest` matrix in the
+[`installation` CI job](.github/workflows/ci.yml) for native Windows evidence.
+Extend the existing [release-install tests](tests/test_release_install.py),
+not copied installer functions or a separate harness. Exercise the real
+installer through both `.ps1` file execution with `-File` and the documented
+downloaded-text `ScriptBlock.Create` invocation.
+
+On the native Windows runner, run:
+
+```powershell
+uv run --locked python -m pytest -n 0 tests/test_release_install.py -k windows_installer
+```
+
+The source-install consumer smoke must also complete through
+[`just release-install-smoke`](justfile), which checks real source installation
+and saved uninstallation through both Windows entrypoints. Focused tests alone
+do not replace that smoke. Linux checks are useful but do not prove Windows
+installation or behavior.
+
+> [!WARNING]
+> From WSL, never launch native Windows verification executables: PowerShell,
+> Windows Python/pytest, `cmd.exe`, or Windows `uv`, directly or through helpers.
+> Do not use a cross-OS virtual environment as a workaround. Previous local
+> attempts terminated the terminal; the cause is unknown. Output capture,
+> `-NoProfile`, and `-NonInteractive` do not establish console isolation, and
+> `CREATE_NO_WINDOW` is not a proven fix. Do not retry locally.
+
+A separately authorized, independent native Windows runner is an alternative;
+this WSL terminal is not. Observe CI runs with Linux `gh` and record the actual
+run and results; configured CI is not evidence that a run completed. If permissions,
+billing, or secrets block CI, record the concrete blocker and leave Windows proof
+and main-branch delivery pending. Do not change billing, policy, or security
+settings or publish artifacts to bypass the blocker. Branch pushes require
+explicit authorization.
+
+### Unix installer staging verification
+
+Run [`just release-install-smoke`](justfile) after changing Unix staging.
+The maintained [consumer tests](tests/test_release_install.py) exercise release
+and pinned-main sources through both the canonical installer and the Unix
+installer rendered by the real scaffolder. Cover physical and symlinked
+temporary parents, actual installation, saved uninstallation, and cleanup.
+The existing macOS `installation` jobs must execute successfully too.
+
+Normalize only the newly created installer-owned staging root before deriving
+extracted-source paths. A macOS system alias such as `/var` must not make valid
+staging fail lifecycle validation. Do not resolve arbitrary lifecycle or
+preflight inputs to bypass their link checks; keep the rejection coverage in
+[`tests/test_lifecycle.py`](tests/test_lifecycle.py).
+
+The rendered Unix cases reuse the real BuildBen source package with
+`--skip-config`: they prove staging, lifecycle recording, installation, and
+uninstallation, not a generated application's configuration wizard.
 
 ### Uninstall
 
