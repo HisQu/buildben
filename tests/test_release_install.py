@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import io
 import json
 import os
@@ -14,6 +15,7 @@ import threading
 import tomllib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PurePosixPath
+from typing import Literal
 from urllib.parse import quote
 
 import pytest
@@ -125,6 +127,12 @@ def _install_smoke_fixture(
             self.wfile.write(data)
 
         def do_GET(self) -> None:
+            if self.path == "/installer":
+                self._send(
+                    (INSTALLER_DIR / "install-windows.ps1").read_bytes(),
+                    "text/plain",
+                )
+                return
             if self.path == f"/assets/{quote(source.name)}":
                 self._send(source.read_bytes(), "application/gzip")
                 return
@@ -173,6 +181,8 @@ def _install_smoke_fixture(
         module.mkdir()
         (module / "InstallerHttpFixture.psm1").write_text(
             "function Invoke-RestMethod { param([string]$Uri); "
+            "if ($Uri -eq 'https://raw.githubusercontent.com/HisQu/buildben/main/src/buildben_dev/distribution/install-windows.ps1') { "
+            "return Microsoft.PowerShell.Utility\\Invoke-RestMethod -Uri $env:INSTALLER_SMOKE_INSTALLER_URL }; "
             "if ($Uri -like 'https://api.github.com/repos/*/releases/*') { "
             "$releasePath = $env:INSTALLER_SMOKE_RELEASE_JSON; "
             "if ($Uri -like '*/latest') { $releasePath = $env:INSTALLER_SMOKE_LATEST_RELEASE_JSON }; "
@@ -193,12 +203,16 @@ def _install_smoke_fixture(
         )
         gh_shim = shim_dir / "gh_shim.py"
         gh_shim.write_text(
-            "import os, pathlib, subprocess, sys, urllib.request\n"
+            "import json, os, pathlib, subprocess, sys, urllib.request\n"
+            "args=sys.argv[1:]\n"
+            "with open(os.environ['INSTALLER_SMOKE_GH_CALLS'], 'a', encoding='utf-8') as log: log.write(json.dumps(args)+'\\n')\n"
             "pathlib.Path(os.environ['INSTALLER_SMOKE_GH_CALLED']).write_text('called')\n"
             "if os.environ.get('INSTALLER_SMOKE_GH_FAIL') == '1': raise SystemExit(88)\n"
-            "args=sys.argv[1:]\n"
             "if args[:1] == ['api']:\n"
-            " endpoint=next((arg for arg in args[1:] if not arg.startswith('-')), '')\n"
+            " endpoint=next((arg for arg in args[1:] if arg.startswith(('repos/', '/repos/'))), '')\n"
+            " endpoint='/'+endpoint.lstrip('/')\n"
+            " if endpoint == '/repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-windows.ps1':\n"
+            "  sys.stdout.buffer.write(urllib.request.urlopen(os.environ['INSTALLER_SMOKE_INSTALLER_URL']).read()); raise SystemExit(0)\n"
             " repository=os.environ['INSTALLER_SMOKE_REPOSITORY']\n"
             " if endpoint == '/repos/'+repository+'/commits/main':\n"
             "  print(urllib.request.urlopen(os.environ['INSTALLER_SMOKE_API_URL']+endpoint).read().decode()); raise SystemExit(0)\n"
@@ -246,12 +260,16 @@ def _install_smoke_fixture(
         gh_shim = shim_dir / "gh"
         gh_shim.write_text(
             "#!/usr/bin/env python3\n"
-            "import os, pathlib, subprocess, sys, urllib.request\n"
+            "import json, os, pathlib, subprocess, sys, urllib.request\n"
+            "args=sys.argv[1:]\n"
+            "with open(os.environ['INSTALLER_SMOKE_GH_CALLS'], 'a', encoding='utf-8') as log: log.write(json.dumps(args)+'\\n')\n"
             "pathlib.Path(os.environ['INSTALLER_SMOKE_GH_CALLED']).write_text('called')\n"
             "if os.environ.get('INSTALLER_SMOKE_GH_FAIL') == '1': raise SystemExit(88)\n"
-            "args=sys.argv[1:]\n"
             "if args[:1] == ['api']:\n"
-            " endpoint=next((arg for arg in args[1:] if not arg.startswith('-')), '')\n"
+            " endpoint=next((arg for arg in args[1:] if arg.startswith(('repos/', '/repos/'))), '')\n"
+            " endpoint='/'+endpoint.lstrip('/')\n"
+            " if endpoint == '/repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-windows.ps1':\n"
+            "  sys.stdout.buffer.write(urllib.request.urlopen(os.environ['INSTALLER_SMOKE_INSTALLER_URL']).read()); raise SystemExit(0)\n"
             " repository=os.environ['INSTALLER_SMOKE_REPOSITORY']\n"
             " if endpoint == '/repos/'+repository+'/commits/main':\n"
             "  print(urllib.request.urlopen(os.environ['INSTALLER_SMOKE_API_URL']+endpoint).read().decode()); raise SystemExit(0)\n"
@@ -274,6 +292,7 @@ def _install_smoke_fixture(
     isolated = tmp_path / "isolated home with spaces"
     installer_temp = tmp_path / "installer temporary directory with spaces"
     installer_temp.mkdir()
+    (installer_temp / "sentinel").write_text("keep temporary parent", encoding="utf-8")
     config = isolated / "config"
     data = isolated / "data"
     cache = isolated / "cache"
@@ -333,6 +352,8 @@ def _install_smoke_fixture(
             "INSTALLER_SMOKE_RELEASE_TAG": f"v{version}",
             "INSTALLER_SMOKE_ASSET_URL": asset_url,
             "INSTALLER_SMOKE_API_URL": api_url,
+            "INSTALLER_SMOKE_INSTALLER_URL": f"http://127.0.0.1:{server.server_port}/installer",
+            "INSTALLER_SMOKE_GH_CALLS": str(tmp_path / "gh-calls.jsonl"),
             "INSTALLER_SMOKE_GH_CALLED": str(gh_called),
             "INSTALLER_SMOKE_REAL_GH": real_gh or "",
             "INSTALLER_SMOKE_CURL_CALLED": str(tmp_path / "curl-called"),
@@ -369,26 +390,91 @@ def _install_smoke_fixture(
     )
 
 
-def _installer_command(uv: str, *arguments: str, skip_config: bool = True) -> list[str]:
+def _run_installer(
+    command: list[str],
+    *,
+    env: dict[str, str],
+    timeout: int = 120,
+) -> subprocess.CompletedProcess[str]:
+    """Capture installer diagnostics using their explicit Windows encoding.
+
+    The downloaded PowerShell driver sets its output encoding to UTF-8. File
+    mode uses Windows PowerShell's OEM console encoding. Capture bytes so the
+    parent Python locale cannot raise a decoder error and lose diagnostics.
+    """
+    if os.name != "nt":
+        return subprocess.run(
+            command, check=False, capture_output=True, text=True, env=env,
+            timeout=timeout,
+        )
+    result = subprocess.run(
+        command, check=False, capture_output=True, env=env, timeout=timeout
+    )
+
+    encoding = "utf-8" if "-EncodedCommand" in command else "oem"
+
+    def decode_output(output: bytes) -> str:
+        return output.decode(encoding, errors="backslashreplace")
+
+    return subprocess.CompletedProcess(
+        result.args, result.returncode,
+        stdout=decode_output(result.stdout),
+        stderr=decode_output(result.stderr),
+    )
+
+
+def _installer_command(
+    uv: str | None,
+    *arguments: str,
+    skip_config: bool = True,
+    invocation: Literal["file", "downloaded"] = "file",
+) -> list[str]:
+    """Build file or downloaded-text commands without interpolating arguments."""
     prefix = ["--yes"]
     if skip_config:
         prefix.append("--skip-config")
-    prefix.extend(["--uv", uv])
+    if uv is not None:
+        prefix.extend(["--uv", uv])
     if os.name == "nt":
+        if invocation == "downloaded":
+            encoded_arguments = base64.b64encode(
+                json.dumps([*prefix, *arguments]).encode("utf-8")
+            ).decode("ascii")
+            use_gh = any(
+                argument == "--github-client" and arguments[index + 1 : index + 2] == ("gh",)
+                for index, argument in enumerate(arguments)
+            )
+            fetch = (
+                "$installer = gh api -H 'Accept: application/vnd.github.raw+json' "
+                "'repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-windows.ps1'; "
+                "if ($LASTEXITCODE -ne 0) { throw 'Installer download failed.' }; "
+                if use_gh
+                else "$installer = Invoke-RestMethod -Uri "
+                "'https://raw.githubusercontent.com/HisQu/buildben/main/src/buildben_dev/distribution/install-windows.ps1'; "
+            )
+            driver = (
+                "$ErrorActionPreference = 'Stop'; "
+                "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; "
+                "$OutputEncoding = [Console]::OutputEncoding; "
+                + fetch
+                + "if (-not $installer) { throw 'Installer download is empty.' }; "
+                + "$installerArguments = @(ConvertFrom-Json -InputObject "
+                + "([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('"
+                + encoded_arguments
+                + "')))); "
+                + '& ([scriptblock]::Create(($installer -join "`n"))) @installerArguments'
+            )
+            return [
+                "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive",
+                "-EncodedCommand",
+                base64.b64encode(driver.encode("utf-16le")).decode("ascii"),
+            ]
         return [
-            "powershell.exe",
-            "-NoProfile",
-            "-NonInteractive",
-            "-File",
-            str(INSTALLER_DIR / "install-windows.ps1"),
-            *prefix,
-            *arguments,
+            "powershell.exe", "-NoProfile", "-NonInteractive", "-File",
+            str(INSTALLER_DIR / "install-windows.ps1"), *prefix, *arguments,
         ]
     return [
-        "bash",
-        str(INSTALLER_DIR / "install-linux-macos.sh"),
-        *prefix,
-        *arguments,
+        "bash", str(INSTALLER_DIR / "install-linux-macos.sh"), *prefix, *arguments,
     ]
 
 
@@ -409,13 +495,28 @@ def test_rejected_options_do_not_run_uv(arguments: list[str], tmp_path: Path) ->
         uv = tmp_path / "uv.cmd"
         uv.write_text("@echo off\necho invoked\n", encoding="utf-8")
         env = {**os.environ, "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}"}
+        driver = (
+            "$ErrorActionPreference = 'Stop'; "
+            "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; "
+            "$OutputEncoding = [Console]::OutputEncoding; "
+            "& '"
+            + str(INSTALLER_DIR / "install-windows.ps1").replace("'", "''")
+            + "' @("
+            + (
+                "ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString("
+                "[Convert]::FromBase64String('"
+                + base64.b64encode(json.dumps(arguments).encode("utf-8")).decode("ascii")
+                + "')))"
+            )
+            + ")"
+        )
         command = [
             "powershell.exe",
+            "-NoLogo",
             "-NoProfile",
             "-NonInteractive",
-            "-File",
-            str(INSTALLER_DIR / "install-windows.ps1"),
-            *arguments,
+            "-EncodedCommand",
+            base64.b64encode(driver.encode("utf-16le")).decode("ascii"),
         ]
     else:
         uv = tmp_path / "uv"
@@ -423,16 +524,251 @@ def test_rejected_options_do_not_run_uv(arguments: list[str], tmp_path: Path) ->
         uv.chmod(0o755)
         env = {**os.environ, "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}"}
         command = ["bash", str(INSTALLER_DIR / "install-linux-macos.sh"), *arguments]
-    result = subprocess.run(
-        command, check=False, capture_output=True, text=True, env=env
-    )
+    result = _run_installer(command, env=env)
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
     assert "invoked" not in output, output
 
 
+
+def _windows_boundary_uv(directory: Path, *, fail: bool = False) -> Path:
+    """Record uv calls and reject mutation before the source-validation boundary.
+
+    :param directory: Isolated executable directory, also containing JSON-lines logs.
+    :param fail: Reject every invocation to detect an incorrectly selected PATH uv.
+    :return: Path to the Windows command shim.
+    """
+    directory.mkdir()
+    (directory / "uv-fixture.py").write_text(
+        "import json, pathlib, sys\n"
+        "directory = pathlib.Path(__file__).parent\n"
+        "args = sys.argv[1:]\n"
+        "with (directory / 'calls.jsonl').open('a', encoding='utf-8') as log:\n"
+        " log.write(json.dumps(args) + '\\n')\n"
+        f"if {fail!r}: raise SystemExit(92)\n"
+        "if args == ['--version']:\n"
+        " print('uv 0.12.18'); raise SystemExit(0)\n"
+        "if args[:2] == ['python', 'find']:\n"
+        " print(sys.executable); raise SystemExit(0)\n"
+        "with (directory / 'mutations.jsonl').open('a', encoding='utf-8') as log:\n"
+        " log.write(json.dumps(args) + '\\n')\n"
+        "raise SystemExit(91)\n",
+        encoding="utf-8",
+    )
+    uv = directory / "uv.cmd"
+    uv.write_text(
+        f'@echo off\r\n"{sys.executable}" "%~dp0uv-fixture.py" %*\r\n'
+        "exit /b %errorlevel%\r\n",
+        encoding="utf-8",
+    )
+    return uv
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows PowerShell installer regression.")
+@pytest.mark.parametrize("invocation", ["file", "downloaded"])
+@pytest.mark.parametrize("client", ["curl", "gh"])
+@pytest.mark.parametrize("explicit_uv", [False, True])
+def test_windows_installer_main_validation_preserves_uv_selection(
+    tmp_path: Path,
+    invocation: Literal["file", "downloaded"],
+    client: str,
+    explicit_uv: bool,
+) -> None:
+    source = tmp_path / "buildben-0.10.3.tar.gz"
+    _write_sdist(
+        source,
+        {
+            "pyproject.toml": b'[project]\nname = "buildben"\nversion = "0.10.3"\n',
+            "uv.lock": b"version = 1\n",
+        },
+    )
+    fixture = _install_smoke_fixture(
+        tmp_path,
+        source,
+        client,
+        source_mode="main",
+        main_commit="a" * 40,
+        main_commit_response=b'{"sha":"invalid"}',
+    )
+    server, thread, environment, _, tool_dir, _, _, _, _, gh_called = fixture
+    selected_uv_dir = tmp_path / "selected uv with spaces"
+    selected_uv = _windows_boundary_uv(selected_uv_dir)
+    path_dir = tmp_path / "failing uv path"
+    _windows_boundary_uv(path_dir, fail=True)
+    environment["PATH"] = os.pathsep.join(
+        [str(path_dir), environment["PATH"]]
+    )
+    args = ["--github-client", client, "--main"]
+    command = _installer_command(
+        str(selected_uv) if explicit_uv else None,
+        *args,
+        invocation=invocation,
+    )
+    if not explicit_uv:
+        environment["PATH"] = os.pathsep.join([str(selected_uv_dir), environment["PATH"]])
+    temporary_parent = Path(environment["TEMP"])
+    before = set(temporary_parent.iterdir())
+    thread.start()
+    try:
+        result = _run_installer(command, env=environment)
+        output = result.stdout + result.stderr
+        assert result.returncode != 0, output
+        assert "GitHub returned an invalid main commit SHA" in output, output
+        assert set(temporary_parent.iterdir()) == before
+        assert (temporary_parent / "sentinel").read_text(encoding="utf-8") == "keep temporary parent"
+        assert list(tool_dir.iterdir()) == []
+        assert not (selected_uv_dir / "mutations.jsonl").exists()
+        assert not (path_dir / "calls.jsonl").exists()
+        if client == "curl":
+            assert not gh_called.exists()
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows PowerShell installer regression.")
+@pytest.mark.parametrize("invocation", ["file", "downloaded"])
+def test_windows_installer_default_release_rejects_draft(
+    tmp_path: Path, invocation: Literal["file", "downloaded"]
+) -> None:
+    source = tmp_path / "buildben-0.10.3.tar.gz"
+    source.write_bytes(b"fixture archive")
+    fixture = _install_smoke_fixture(
+        tmp_path, source, "curl", release_overrides={"draft": True}
+    )
+    server, thread, environment, _, tool_dir, *_ = fixture
+    uv = _windows_boundary_uv(tmp_path / "release uv with spaces")
+    thread.start()
+    try:
+        result = _run_installer(
+            _installer_command(str(uv), "--github-client", "curl", invocation=invocation),
+            env=environment,
+        )
+        output = result.stdout + result.stderr
+        assert result.returncode != 0, output
+        assert "not a published stable release" in output, output
+        assert list(tool_dir.iterdir()) == []
+        assert not (uv.parent / "mutations.jsonl").exists()
+        assert list(Path(environment["TEMP"]).iterdir()) == [
+            Path(environment["TEMP"]) / "sentinel"
+        ]
+        assert (Path(environment["TEMP"]) / "sentinel").read_text() == "keep temporary parent"
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows PowerShell installer regression.")
+@pytest.mark.parametrize("invocation", ["file", "downloaded"])
+@pytest.mark.parametrize("version", ["0.10.3", "v0.10.3"])
+def test_windows_installer_version_selects_requested_stable_tag(
+    tmp_path: Path, invocation: Literal["file", "downloaded"], version: str
+) -> None:
+    source = tmp_path / "buildben-0.10.3.tar.gz"
+    source.write_bytes(b"not a gzip archive")
+    fixture = _install_smoke_fixture(
+        tmp_path,
+        source,
+        "curl",
+        release_overrides={"draft": False},
+        latest_release_overrides={"draft": True},
+    )
+    server, thread, environment, _, tool_dir, *_ = fixture
+    uv = _windows_boundary_uv(tmp_path / "version uv with spaces")
+    thread.start()
+    try:
+        result = _run_installer(
+            _installer_command(
+                str(uv),
+                "--github-client",
+                "curl",
+                "--version",
+                version,
+                invocation=invocation,
+            ),
+            env=environment,
+        )
+        output = result.stdout + result.stderr
+        assert result.returncode != 0, output
+        assert "not a gzip file" in output, output
+        assert "not a published stable release" not in output, output
+        assert list(tool_dir.iterdir()) == []
+        assert not (uv.parent / "mutations.jsonl").exists()
+        assert list(Path(environment["TEMP"]).iterdir()) == [
+            Path(environment["TEMP"]) / "sentinel"
+        ]
+        assert (Path(environment["TEMP"]) / "sentinel").read_text() == "keep temporary parent"
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows PowerShell installer regression.")
+@pytest.mark.parametrize("client", ["curl", "gh"])
+@pytest.mark.parametrize("invocation", ["file", "downloaded"])
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--main", "--version", "0.10.3"],
+        ["--version", "0.10.3", "--main"],
+    ],
+)
+def test_windows_installer_conflicts_before_uv_or_source_requests(
+    tmp_path: Path,
+    invocation: Literal["file", "downloaded"],
+    client: str,
+    arguments: list[str],
+) -> None:
+    source = tmp_path / "buildben-0.10.3.tar.gz"
+    source.write_bytes(b"fixture archive")
+    fixture = _install_smoke_fixture(tmp_path, source, client)
+    server, thread, environment, _, _, _, _, _, _, gh_called = fixture
+    uv_dir = tmp_path / "conflict uv"
+    _windows_boundary_uv(uv_dir, fail=True)
+    uv_calls = uv_dir / "calls.jsonl"
+    environment["PATH"] = os.pathsep.join([str(uv_dir), environment["PATH"]])
+    command = _installer_command(
+        None, "--github-client", client, *arguments, invocation=invocation
+    )
+    thread.start()
+    try:
+        result = _run_installer(command, env=environment)
+        output = result.stdout + result.stderr
+        assert result.returncode != 0, output
+        assert "--main cannot be combined with --version" in output, output
+        assert not uv_calls.exists()
+        assert list(Path(environment["TEMP"]).iterdir()) == [
+            Path(environment["TEMP"]) / "sentinel"
+        ]
+        assert (Path(environment["TEMP"]) / "sentinel").read_text() == "keep temporary parent"
+        calls_file = Path(environment["INSTALLER_SMOKE_GH_CALLS"])
+        calls = [json.loads(line) for line in calls_file.read_text().splitlines()] if calls_file.exists() else []
+        if invocation == "downloaded" and client == "gh":
+            assert any(
+                "repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-windows.ps1"
+                in call
+                for call in calls
+            ), calls
+            assert not any(
+                "repos/HisQu/buildben/commits/main" in call
+                or "releases/" in call
+                for call in calls
+            ), calls
+        else:
+            assert not calls
+            assert not gh_called.exists()
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+
+
+@pytest.mark.parametrize("invocation", ["file", "downloaded"] if os.name == "nt" else ["file"])
 @pytest.mark.parametrize("source_mode", ["release", "main"])
-def test_source_install_smoke(tmp_path: Path, source_mode: str) -> None:
+def test_source_install_smoke(
+    tmp_path: Path, source_mode: str, invocation: Literal["file", "downloaded"]
+) -> None:
     """Install an actual release or pinned main archive through the installer."""
     source_key = (
         "INSTALLER_SMOKE_SOURCE"
@@ -522,17 +858,20 @@ def test_source_install_smoke(tmp_path: Path, source_mode: str) -> None:
             "INSTALLER_SMOKE_MAIN_COMMIT",
         }
     }
+    temporary_parent = Path(environment["TEMP"])
+    temporary_before = set(temporary_parent.iterdir())
     thread.start()
     try:
-        result = subprocess.run(
-            _installer_command(uv, *installer_arguments, skip_config=False),
-            check=False,
-            capture_output=True,
-            text=True,
+        result = _run_installer(
+            _installer_command(
+                uv, *installer_arguments, skip_config=False, invocation=invocation
+            ),
             env=environment,
             timeout=900,
         )
         assert result.returncode == 0, result.stdout + result.stderr
+        assert set(temporary_parent.iterdir()) == temporary_before
+        assert (temporary_parent / "sentinel").read_text(encoding="utf-8") == "keep temporary parent"
         if os.name == "nt":
             tool_python = tool_dir / "buildben" / "Scripts" / "python.exe"
             executables = [tool_bin / "buildben.exe", tool_bin / "bube.exe"]
@@ -590,11 +929,8 @@ def test_source_install_smoke(tmp_path: Path, source_mode: str) -> None:
             "UV_TOOL_DIR": str(tmp_path / "misleading tools"),
             "UV_TOOL_BIN_DIR": str(tmp_path / "misleading bins"),
         }
-        uninstall = subprocess.run(
+        uninstall = _run_installer(
             uninstall_command,
-            check=False,
-            capture_output=True,
-            text=True,
             env=misleading_environment,
             timeout=120,
         )
@@ -606,6 +942,8 @@ def test_source_install_smoke(tmp_path: Path, source_mode: str) -> None:
                 encoding="utf-8"
             )
         )
+        assert receipt["uv_bootstrapped"] is False
+        assert Path(receipt["uv"]).resolve() == Path(uv).resolve()
         python_path = Path(receipt["python"]).resolve()
         python_info = subprocess.run(
             [
@@ -623,11 +961,8 @@ def test_source_install_smoke(tmp_path: Path, source_mode: str) -> None:
         assert not python_path.is_relative_to((tool_dir / "buildben").resolve())
         assert receipt["package_removed"] is True
         assert Path(uv).is_file()
-        repeated = subprocess.run(
+        repeated = _run_installer(
             uninstall_command,
-            check=False,
-            capture_output=True,
-            text=True,
             env=installed_environment,
             timeout=120,
         )
@@ -680,13 +1015,10 @@ def _run_main_failure(
         sentinel.write_text("previous installation", encoding="utf-8")
     thread.start()
     try:
-        result = subprocess.run(
+        result = _run_installer(
             _installer_command(
                 uv, "--github-client", client, "--main", skip_config=True
             ),
-            check=False,
-            capture_output=True,
-            text=True,
             env=environment,
             timeout=120,
         )
@@ -901,11 +1233,8 @@ def test_latest_release_rejects_draft_and_prerelease(
     server, thread, environment, uv, tool_dir, _, _, _, _, _ = fixture
     thread.start()
     try:
-        result = subprocess.run(
+        result = _run_installer(
             _installer_command(uv, "--github-client", "curl"),
-            check=False,
-            capture_output=True,
-            text=True,
             env=environment,
             timeout=120,
         )
@@ -946,11 +1275,8 @@ def test_release_requires_one_matching_source_archive(
     server, thread, environment, uv, tool_dir, _, _, _, _, _ = fixture
     thread.start()
     try:
-        result = subprocess.run(
+        result = _run_installer(
             _installer_command(uv, "--github-client", "curl"),
-            check=False,
-            capture_output=True,
-            text=True,
             env=environment,
             timeout=120,
         )
@@ -998,11 +1324,8 @@ def test_invalid_sdist_metadata_or_lock_never_installs(
     server, thread, environment, uv, tool_dir, _, _, _, _, _ = fixture
     thread.start()
     try:
-        result = subprocess.run(
+        result = _run_installer(
             _installer_command(uv, "--github-client", "curl"),
-            check=False,
-            capture_output=True,
-            text=True,
             env=environment,
             timeout=120,
         )
@@ -1030,11 +1353,8 @@ def test_source_installer_rejects_unsafe_tar_member(tmp_path: Path) -> None:
     server, thread, environment, uv, tool_dir, _, _, _, _, _ = fixture
     thread.start()
     try:
-        result = subprocess.run(
+        result = _run_installer(
             _installer_command(uv, "--github-client", "curl"),
-            check=False,
-            capture_output=True,
-            text=True,
             env=environment,
             timeout=120,
         )
@@ -1061,11 +1381,8 @@ def test_explicit_version_uses_tag_endpoint(tmp_path: Path) -> None:
     server, thread, environment, uv, tool_dir, _, _, _, _, _ = fixture
     thread.start()
     try:
-        result = subprocess.run(
+        result = _run_installer(
             _installer_command(uv, "--github-client", "curl", "--version", "0.10.3"),
-            check=False,
-            capture_output=True,
-            text=True,
             env=environment,
             timeout=120,
         )
@@ -1089,11 +1406,8 @@ def test_gh_transport_failure_does_not_fall_back_to_public_transport(
     environment["INSTALLER_SMOKE_GH_FAIL"] = "1"
     thread.start()
     try:
-        result = subprocess.run(
+        result = _run_installer(
             _installer_command(uv, "--github-client", "gh"),
-            check=False,
-            capture_output=True,
-            text=True,
             env=environment,
             timeout=120,
         )
