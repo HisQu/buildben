@@ -404,7 +404,11 @@ def _run_installer(
     """
     if os.name != "nt":
         return subprocess.run(
-            command, check=False, capture_output=True, text=True, env=env,
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
             timeout=timeout,
         )
     result = subprocess.run(
@@ -417,7 +421,8 @@ def _run_installer(
         return output.decode(encoding, errors="backslashreplace")
 
     return subprocess.CompletedProcess(
-        result.args, result.returncode,
+        result.args,
+        result.returncode,
         stdout=decode_output(result.stdout),
         stderr=decode_output(result.stderr),
     )
@@ -441,7 +446,8 @@ def _installer_command(
                 json.dumps([*prefix, *arguments]).encode("utf-8")
             ).decode("ascii")
             use_gh = any(
-                argument == "--github-client" and arguments[index + 1 : index + 2] == ("gh",)
+                argument == "--github-client"
+                and arguments[index + 1 : index + 2] == ("gh",)
                 for index, argument in enumerate(arguments)
             )
             fetch = (
@@ -458,23 +464,34 @@ def _installer_command(
                 "$OutputEncoding = [Console]::OutputEncoding; "
                 + fetch
                 + "if (-not $installer) { throw 'Installer download is empty.' }; "
-                + "$installerArguments = @(ConvertFrom-Json -InputObject "
+                + "$installerArguments = [string[]](ConvertFrom-Json -InputObject "
                 + "([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('"
                 + encoded_arguments
                 + "')))); "
                 + '& ([scriptblock]::Create(($installer -join "`n"))) @installerArguments'
             )
             return [
-                "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive",
+                "powershell.exe",
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
                 "-EncodedCommand",
                 base64.b64encode(driver.encode("utf-16le")).decode("ascii"),
             ]
         return [
-            "powershell.exe", "-NoProfile", "-NonInteractive", "-File",
-            str(INSTALLER_DIR / "install-windows.ps1"), *prefix, *arguments,
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            str(INSTALLER_DIR / "install-windows.ps1"),
+            *prefix,
+            *arguments,
         ]
     return [
-        "bash", str(INSTALLER_DIR / "install-linux-macos.sh"), *prefix, *arguments,
+        "bash",
+        str(INSTALLER_DIR / "install-linux-macos.sh"),
+        *prefix,
+        *arguments,
     ]
 
 
@@ -499,16 +516,13 @@ def test_rejected_options_do_not_run_uv(arguments: list[str], tmp_path: Path) ->
             "$ErrorActionPreference = 'Stop'; "
             "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; "
             "$OutputEncoding = [Console]::OutputEncoding; "
-            "& '"
+            "$installerArguments = [string[]](ConvertFrom-Json -InputObject "
+            "([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('"
+            + base64.b64encode(json.dumps(arguments).encode("utf-8")).decode("ascii")
+            + "')))); "
+            + "& '"
             + str(INSTALLER_DIR / "install-windows.ps1").replace("'", "''")
-            + "' @("
-            + (
-                "ConvertFrom-Json -InputObject ([Text.Encoding]::UTF8.GetString("
-                "[Convert]::FromBase64String('"
-                + base64.b64encode(json.dumps(arguments).encode("utf-8")).decode("ascii")
-                + "')))"
-            )
-            + ")"
+            + "' @installerArguments"
         )
         command = [
             "powershell.exe",
@@ -528,7 +542,6 @@ def test_rejected_options_do_not_run_uv(arguments: list[str], tmp_path: Path) ->
     output = result.stdout + result.stderr
     assert result.returncode != 0, output
     assert "invoked" not in output, output
-
 
 
 def _windows_boundary_uv(directory: Path, *, fail: bool = False) -> Path:
@@ -563,6 +576,7 @@ def _windows_boundary_uv(directory: Path, *, fail: bool = False) -> Path:
     )
     return uv
 
+
 @pytest.mark.skipif(os.name != "nt", reason="Windows PowerShell installer regression.")
 @pytest.mark.parametrize("invocation", ["file", "downloaded"])
 @pytest.mark.parametrize("client", ["curl", "gh"])
@@ -595,7 +609,10 @@ def test_windows_installer_main_validation_preserves_uv_selection(
     path_dir = tmp_path / "failing uv path"
     _windows_boundary_uv(path_dir, fail=True)
     environment["PATH"] = os.pathsep.join(
-        [str(path_dir), environment["PATH"]]
+        part
+        for part in environment["PATH"].split(os.pathsep)
+        if not (Path(part) / "uv.exe").is_file()
+        and not (Path(part) / "uv.cmd").is_file()
     )
     args = ["--github-client", client, "--main"]
     command = _installer_command(
@@ -603,7 +620,9 @@ def test_windows_installer_main_validation_preserves_uv_selection(
         *args,
         invocation=invocation,
     )
-    if not explicit_uv:
+    if explicit_uv:
+        environment["PATH"] = os.pathsep.join([str(path_dir), environment["PATH"]])
+    else:
         environment["PATH"] = os.pathsep.join([str(selected_uv_dir), environment["PATH"]])
     temporary_parent = Path(environment["TEMP"])
     before = set(temporary_parent.iterdir())
@@ -614,7 +633,9 @@ def test_windows_installer_main_validation_preserves_uv_selection(
         assert result.returncode != 0, output
         assert "GitHub returned an invalid main commit SHA" in output, output
         assert set(temporary_parent.iterdir()) == before
-        assert (temporary_parent / "sentinel").read_text(encoding="utf-8") == "keep temporary parent"
+        assert (temporary_parent / "sentinel").read_text(
+            encoding="utf-8"
+        ) == "keep temporary parent"
         assert list(tool_dir.iterdir()) == []
         assert not (selected_uv_dir / "mutations.jsonl").exists()
         assert not (path_dir / "calls.jsonl").exists()
@@ -624,6 +645,7 @@ def test_windows_installer_main_validation_preserves_uv_selection(
         server.shutdown()
         thread.join()
         server.server_close()
+
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows PowerShell installer regression.")
 @pytest.mark.parametrize("invocation", ["file", "downloaded"])
@@ -640,7 +662,9 @@ def test_windows_installer_default_release_rejects_draft(
     thread.start()
     try:
         result = _run_installer(
-            _installer_command(str(uv), "--github-client", "curl", invocation=invocation),
+            _installer_command(
+                str(uv), "--github-client", "curl", invocation=invocation
+            ),
             env=environment,
         )
         output = result.stdout + result.stderr
@@ -651,7 +675,9 @@ def test_windows_installer_default_release_rejects_draft(
         assert list(Path(environment["TEMP"]).iterdir()) == [
             Path(environment["TEMP"]) / "sentinel"
         ]
-        assert (Path(environment["TEMP"]) / "sentinel").read_text() == "keep temporary parent"
+        assert (
+            Path(environment["TEMP"]) / "sentinel"
+        ).read_text() == "keep temporary parent"
     finally:
         server.shutdown()
         thread.join()
@@ -697,7 +723,9 @@ def test_windows_installer_version_selects_requested_stable_tag(
         assert list(Path(environment["TEMP"]).iterdir()) == [
             Path(environment["TEMP"]) / "sentinel"
         ]
-        assert (Path(environment["TEMP"]) / "sentinel").read_text() == "keep temporary parent"
+        assert (
+            Path(environment["TEMP"]) / "sentinel"
+        ).read_text() == "keep temporary parent"
     finally:
         server.shutdown()
         thread.join()
@@ -741,9 +769,15 @@ def test_windows_installer_conflicts_before_uv_or_source_requests(
         assert list(Path(environment["TEMP"]).iterdir()) == [
             Path(environment["TEMP"]) / "sentinel"
         ]
-        assert (Path(environment["TEMP"]) / "sentinel").read_text() == "keep temporary parent"
+        assert (
+            Path(environment["TEMP"]) / "sentinel"
+        ).read_text() == "keep temporary parent"
         calls_file = Path(environment["INSTALLER_SMOKE_GH_CALLS"])
-        calls = [json.loads(line) for line in calls_file.read_text().splitlines()] if calls_file.exists() else []
+        calls = (
+            [json.loads(line) for line in calls_file.read_text().splitlines()]
+            if calls_file.exists()
+            else []
+        )
         if invocation == "downloaded" and client == "gh":
             assert any(
                 "repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-windows.ps1"
@@ -751,8 +785,7 @@ def test_windows_installer_conflicts_before_uv_or_source_requests(
                 for call in calls
             ), calls
             assert not any(
-                "repos/HisQu/buildben/commits/main" in call
-                or "releases/" in call
+                "repos/HisQu/buildben/commits/main" in call or "releases/" in call
                 for call in calls
             ), calls
         else:
@@ -764,7 +797,9 @@ def test_windows_installer_conflicts_before_uv_or_source_requests(
         server.server_close()
 
 
-@pytest.mark.parametrize("invocation", ["file", "downloaded"] if os.name == "nt" else ["file"])
+@pytest.mark.parametrize(
+    "invocation", ["file", "downloaded"] if os.name == "nt" else ["file"]
+)
 @pytest.mark.parametrize("source_mode", ["release", "main"])
 def test_source_install_smoke(
     tmp_path: Path, source_mode: str, invocation: Literal["file", "downloaded"]
@@ -871,7 +906,9 @@ def test_source_install_smoke(
         )
         assert result.returncode == 0, result.stdout + result.stderr
         assert set(temporary_parent.iterdir()) == temporary_before
-        assert (temporary_parent / "sentinel").read_text(encoding="utf-8") == "keep temporary parent"
+        assert (temporary_parent / "sentinel").read_text(
+            encoding="utf-8"
+        ) == "keep temporary parent"
         if os.name == "nt":
             tool_python = tool_dir / "buildben" / "Scripts" / "python.exe"
             executables = [tool_bin / "buildben.exe", tool_bin / "bube.exe"]
