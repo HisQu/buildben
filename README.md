@@ -80,6 +80,7 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 1. [`buildben`: build-benedictions](#buildben-build-benedictions)
    1. [📦 Installation](#-installation)
       1. [Windows installer verification procedure](#windows-installer-verification-procedure)
+      1. [Unix installer staging verification](#unix-installer-staging-verification)
       1. [Uninstall](#uninstall)
    2. [🚀 Usage](#-usage)
    3. [❓Optional Installs](#optional-installs)
@@ -240,6 +241,21 @@ billing, or secrets block CI, record the concrete blocker and leave Windows proo
 and main-branch delivery pending. Do not change billing, policy, or security
 settings or publish artifacts to bypass the blocker. Branch pushes require
 explicit authorization.
+
+### Unix installer staging verification
+
+Run [`just release-install-smoke`](justfile) after changing Unix staging.
+The maintained [consumer tests](tests/test_release_install.py) exercise release
+and pinned-main sources through both the canonical installer and the Unix
+installer rendered by the real scaffolder. Cover physical and symlinked
+temporary parents, actual installation, saved uninstallation, and cleanup.
+The existing macOS `installation` jobs must execute successfully too.
+
+Normalize only the newly created installer-owned staging root before deriving
+extracted-source paths. A macOS system alias such as `/var` must not make valid
+staging fail lifecycle validation. Do not resolve arbitrary lifecycle or
+preflight inputs to bypass their link checks; keep the rejection coverage in
+[`tests/test_lifecycle.py`](tests/test_lifecycle.py).
 
 ### Uninstall
 

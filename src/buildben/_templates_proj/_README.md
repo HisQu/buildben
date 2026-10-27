@@ -350,5 +350,6 @@ lorem ipsum
     - [Documentation authoring](docs/Development.md#documentation-authoring)
     - [Verification](docs/Development.md#verification)
     - [Windows installer verification](docs/Development.md#windows-installer-verification-procedure)
+    - [Unix installer staging verification](docs/Development.md#unix-installer-staging-verification)
     - [Releases](docs/Development.md#releases)
 

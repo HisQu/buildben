@@ -94,6 +94,11 @@ Run Windows checks only in an independent native Windows environment; never
 launch native Windows verification executables from WSL. The existing Windows
 CI package-install smoke does not execute the installer entrypoints.
 
+For Unix staging changes, follow the
+[Unix installer staging verification procedure](docs/Development.md#unix-installer-staging-verification).
+Keep lifecycle link checks intact; direct-package smoke does not establish
+installer staging or saved-uninstaller behavior.
+
 ---
 
 <br>

@@ -15,6 +15,7 @@ and checks, and submission guidance. This page explains the deeper procedures.
 - [Verify and release](#verify-and-release)
   - [Verification](#verification)
   - [Windows installer verification procedure](#windows-installer-verification-procedure)
+  - [Unix installer staging verification](#unix-installer-staging-verification)
   - [Releases](#releases)
 
 ---
@@ -220,6 +221,22 @@ If native Windows CI cannot run, report the blocker and keep Windows proof and
 verification-dependent delivery pending. Do not launch Windows executables
 from WSL to compensate, and do not change billing, runner policy, execution
 policy, permissions, or other security settings to unblock verification.
+
+## Unix installer staging verification
+
+Unix staging changes need actual installer-entrypoint evidence, not only the
+generated CI package-install smoke. BuildBen's maintained
+[source-installer tests](https://github.com/HisQu/buildben/blob/main/tests/test_release_install.py)
+render this Unix installer with matching project identity and run real source
+installation and saved uninstallation with physical and symlinked temporary
+parents. That central template coverage is separate from this project's
+direct-package smoke.
+
+Canonicalize only a newly created installer-owned staging root before deriving
+extracted-source paths. Keep lifecycle and preflight link checks intact; do not
+resolve arbitrary helper inputs, alter fixtures, or skip a failing smoke to hide
+a production failure. Record missing project-specific installer evidence as
+unverified rather than claiming it from another project's CI.
 
 ## Releases
 

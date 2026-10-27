@@ -531,7 +531,7 @@ def _installer_command(
         ]
     return [
         "bash",
-        str(INSTALLER_DIR / "install-linux-macos.sh"),
+        str(installer_path or INSTALLER_DIR / "install-linux-macos.sh"),
         *prefix,
         *arguments,
     ]
@@ -899,11 +899,22 @@ def test_windows_installer_conflicts_before_uv_or_source_requests(
 
 
 @pytest.mark.parametrize(
+    "temporary_parent_kind",
+    ["physical"] if os.name == "nt" else ["physical", "symlinked"],
+)
+@pytest.mark.parametrize(
+    "installer_origin", ["canonical"] if os.name == "nt" else ["canonical", "rendered"]
+)
+@pytest.mark.parametrize(
     "invocation", ["file", "downloaded"] if os.name == "nt" else ["file"]
 )
 @pytest.mark.parametrize("source_mode", ["release", "main"])
 def test_source_install_smoke(
-    tmp_path: Path, source_mode: str, invocation: Literal["file", "downloaded"]
+    tmp_path: Path,
+    source_mode: str,
+    invocation: Literal["file", "downloaded"],
+    installer_origin: str,
+    temporary_parent_kind: str,
 ) -> None:
     """Install an actual release or pinned main archive through the installer."""
     source_key = (
@@ -942,6 +953,28 @@ def test_source_install_smoke(
     if client not in {"curl", "gh"}:
         pytest.fail("INSTALLER_SMOKE_CLIENT must be curl or gh.")
 
+    installer_path = INSTALLER_DIR / (
+        "install-windows.ps1" if os.name == "nt" else "install-linux-macos.sh"
+    )
+    if installer_origin == "rendered":
+        rendered_root = tmp_path / "rendered project"
+        render_project(
+            argparse.Namespace(
+                name="buildben",
+                target_dir=str(rendered_root),
+                git_init=False,
+                github_user="HisQu",
+            )
+        )
+        installer_path = (
+            rendered_root
+            / "buildben"
+            / "src"
+            / "buildben_dev"
+            / "distribution"
+            / "install-linux-macos.sh"
+        )
+
     fixture = _install_smoke_fixture(
         tmp_path,
         source,
@@ -961,6 +994,14 @@ def test_source_install_smoke(
         version,
         gh_called,
     ) = fixture
+    if os.name != "nt":
+        temporary_parent = Path(environment["TEMP"]).resolve(strict=True)
+        if temporary_parent_kind == "symlinked":
+            temporary_alias = tmp_path / "symlinked temporary parent with spaces"
+            temporary_alias.symlink_to(temporary_parent, target_is_directory=True)
+            temporary_parent = temporary_alias
+        for variable in ("TMPDIR", "TMP", "TEMP"):
+            environment[variable] = str(temporary_parent)
     active_venv = _inherit_active_venv(tmp_path, environment)
     base_python = subprocess.run(
         [
@@ -1000,7 +1041,11 @@ def test_source_install_smoke(
     try:
         result = _run_installer(
             _installer_command(
-                uv, *installer_arguments, skip_config=False, invocation=invocation
+                uv,
+                *installer_arguments,
+                skip_config=False,
+                installer_path=installer_path,
+                invocation=invocation,
             ),
             env=environment,
             timeout=900,
