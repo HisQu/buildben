@@ -203,6 +203,12 @@ access; `curl` does not inherit gh credentials. Private VCS dependencies still
 need Git authentication independently of release visibility. BuildBen and
 generated applications do not require administrator privileges.
 
+Windows installer verification covers both `.ps1` file execution and the
+downloaded-text invocation above. Run the focused native Windows checks with
+`uv run --locked python -m pytest -n 0 tests/test_release_install.py -k windows_installer`.
+`just release-install-smoke` additionally checks real source installation and
+saved uninstallation through both Windows entrypoints.
+
 ### Uninstall
 
 New installer-based installations save an offline uninstaller outside the tool

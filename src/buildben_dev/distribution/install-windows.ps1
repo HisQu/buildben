@@ -6,16 +6,19 @@ $AppCommand = "buildben"
 $Repository = "HisQu/buildben"
 $UvVersion = "0.12.18"
 $ConfigureApp = "false"
-$GithubClient = "curl"
-$Version = $null
-$VersionExplicit = $false
-$SourceMode = "release"
-$ExplicitUv = $null
-$AssumeYes = $false
-$SkipConfig = $false
-$Uv = $null
-$UvBootstrapped = $false
-$InstallPython = $null
+$InstallerState = @{
+    Version = $null
+    VersionExplicit = $false
+    SourceMode = "release"
+    ExplicitUv = $null
+    AssumeYes = $false
+    SkipConfig = $false
+    Uv = $null
+    UvOrigin = "missing"
+    UvBootstrapped = $false
+    InstallPython = $null
+    GithubClient = "curl"
+}
 
 function Show-Usage {
     @"
@@ -57,28 +60,28 @@ function Parse-Arguments {
         switch ($Argument) {
             { $_ -in @("-v", "--version") } {
                 if ($Index + 1 -ge $Arguments.Count) { throw "$Argument requires a version." }
-                $Index++; $script:Version = $Arguments[$Index]; $script:VersionExplicit = $true; continue
+                $Index++; $InstallerState.Version = $Arguments[$Index]; $InstallerState.VersionExplicit = $true; continue
             }
             "--github-client" {
                 if ($Index + 1 -ge $Arguments.Count) { throw "--github-client requires curl or gh." }
-                $Index++; $script:GithubClient = $Arguments[$Index]; continue
+                $Index++; $InstallerState.GithubClient = $Arguments[$Index]; continue
             }
             "--uv" {
                 if ($Index + 1 -ge $Arguments.Count) { throw "--uv requires a path." }
-                $Index++; $script:ExplicitUv = $Arguments[$Index]; continue
+                $Index++; $InstallerState.ExplicitUv = $Arguments[$Index]; continue
             }
-            { $_ -in @("-y", "--yes") } { $script:AssumeYes = $true; continue }
-            "--skip-config" { $script:SkipConfig = $true; continue }
-            "--main" { $script:SourceMode = "main"; continue }
+            { $_ -in @("-y", "--yes") } { $InstallerState.AssumeYes = $true; continue }
+            "--skip-config" { $InstallerState.SkipConfig = $true; continue }
+            "--main" { $InstallerState.SourceMode = "main"; continue }
             { $_ -in @("-h", "--help") } { Write-Host (Show-Usage); return $false }
             default { throw "Unknown argument: $Argument" }
         }
     }
-    if ($SourceMode -eq "main" -and $VersionExplicit) { throw "--main cannot be combined with --version." }
-    if ($null -ne $Version) {
-        $Normalized = $Version.TrimStart("v")
-        if ($Normalized -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') { throw "Invalid release version: $Version" }
-        $script:Version = "v$Normalized"
+    if ($InstallerState.SourceMode -eq "main" -and $InstallerState.VersionExplicit) { throw "--main cannot be combined with --version." }
+    if ($null -ne $InstallerState.Version) {
+        $Normalized = $InstallerState.Version.TrimStart("v")
+        if ($Normalized -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') { throw "Invalid release version: $($InstallerState.Version)" }
+        $InstallerState.Version = "v$Normalized"
     }
     return $true
 }
@@ -91,14 +94,14 @@ function Set-UvPath {
     if (-not (Test-Path -LiteralPath $Candidate -PathType Leaf)) { throw "uv executable is not a file: $Candidate" }
     & $Candidate --version *> $null
     if ($LASTEXITCODE -ne 0) { throw "The supplied executable does not appear to be uv: $Candidate" }
-    $script:Uv = $Candidate; $script:UvOrigin = $Origin
+    $InstallerState.Uv = $Candidate; $InstallerState.UvOrigin = $Origin
 }
 
 function Find-Uv {
-    if (-not [string]::IsNullOrWhiteSpace($ExplicitUv)) { Set-UvPath -Path $ExplicitUv -Origin "explicit"; return }
+    if (-not [string]::IsNullOrWhiteSpace($InstallerState.ExplicitUv)) { Set-UvPath -Path $InstallerState.ExplicitUv -Origin "explicit"; return }
     $Command = Get-Command uv -CommandType Application -ErrorAction SilentlyContinue
     if ($null -ne $Command) { Set-UvPath -Path $Command.Source -Origin "system"; return }
-    $script:Uv = $null; $script:UvOrigin = "missing"
+    $InstallerState.Uv = $null; $InstallerState.UvOrigin = "missing"
 }
 
 function Install-PermanentUv {
@@ -107,33 +110,33 @@ function Install-PermanentUv {
     Write-Host "Installing uv $UvVersion permanently in $UvDirectory..."
     Invoke-RestMethod "https://astral.sh/uv/$UvVersion/install.ps1" | Invoke-Expression
     Set-UvPath -Path (Join-Path $UvDirectory "uv.exe") -Origin "per-user"
-    $script:UvBootstrapped = $true
+    $InstallerState.UvBootstrapped = $true
 }
 
 function Confirm-Plan {
-    $SourceDescription = if ($SourceMode -eq "main") { "main (unreleased snapshot)" } elseif ($null -eq $Version) { "latest published release" } else { "published release $Version" }
-    Write-Host "Install $SourceDescription; transport: $GithubClient; uv: $UvOrigin"
-    if ($SkipConfig -or $ConfigureApp -ne "true") { Write-Host "Configuration setup will be skipped." }
-    elseif ($AssumeYes) { }
-    if ($AssumeYes) { return $true }
-    $Answer = Read-Host "Continue? $(if ($UvOrigin -eq 'missing') { 'uv will be installed permanently. Enter y/yes or n/no' } else { '[y/N]' })"
+    $SourceDescription = if ($InstallerState.SourceMode -eq "main") { "main (unreleased snapshot)" } elseif ($null -eq $InstallerState.Version) { "latest published release" } else { "published release $($InstallerState.Version)" }
+    Write-Host "Install $SourceDescription; transport: $($InstallerState.GithubClient); uv: $($InstallerState.UvOrigin)"
+    if ($InstallerState.SkipConfig -or $ConfigureApp -ne "true") { Write-Host "Configuration setup will be skipped." }
+    elseif ($InstallerState.AssumeYes) { }
+    if ($InstallerState.AssumeYes) { return $true }
+    $Answer = Read-Host "Continue? $(if ($InstallerState.UvOrigin -eq 'missing') { 'uv will be installed permanently. Enter y/yes or n/no' } else { '[y/N]' })"
     if ($Answer.Trim().ToLowerInvariant() -in @("y", "yes")) { return $true }
     Write-Host "Installation cancelled."; return $false
 }
 
 function Update-ToolPath {
-    & $Uv tool update-shell
+    & $InstallerState.Uv tool update-shell
     if ($LASTEXITCODE -ne 0) { Write-Warning "uv could not update the tool executable PATH. Open a new shell or add the directory from 'uv tool dir --bin' to PATH." }
 }
 
 function Find-InstallationPython {
     foreach ($PythonVersion in @("3.13", "3.12")) {
-        $Candidate = & $Uv python find --system --no-project --no-python-downloads $PythonVersion 2>$null
-        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace(($Candidate | Out-String))) { $script:InstallPython = ($Candidate | Out-String).Trim(); return }
+        $Candidate = & $InstallerState.Uv python find --system --no-project --no-python-downloads $PythonVersion 2>$null
+        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace(($Candidate | Out-String))) { $InstallerState.InstallPython = ($Candidate | Out-String).Trim(); return }
     }
-    Invoke-Checked -FilePath $Uv -Arguments @("python", "install", "3.12") -Description "Installing managed Python 3.12"
-    $Candidate = & $Uv python find --system --no-project 3.12
-    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace(($Candidate | Out-String))) { $script:InstallPython = ($Candidate | Out-String).Trim(); return }
+    Invoke-Checked -FilePath $InstallerState.Uv -Arguments @("python", "install", "3.12") -Description "Installing managed Python 3.12"
+    $Candidate = & $InstallerState.Uv python find --system --no-project 3.12
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace(($Candidate | Out-String))) { $InstallerState.InstallPython = ($Candidate | Out-String).Trim(); return }
     throw "uv could not provide its managed Python 3.12 interpreter."
 }
 
@@ -236,10 +239,10 @@ subprocess.run([uv, "tool", "install", "--force", "--refresh", "--python", sys.e
 if lifecycle.is_file(): subprocess.run(record, cwd=project_root, check=True)
 '@
     try {
-        $Bootstrap = if ($UvBootstrapped) { "true" } else { "false" }
-        $PythonArguments = @("-", $Uv, $GithubClient, $Repository, $TemporaryDirectory, $AppDistribution, $SourceMode, $Bootstrap)
-        if ($null -ne $Version) { $PythonArguments += $Version }
-        Invoke-Checked -FilePath $InstallPython -Arguments $PythonArguments -InputText $PythonCode -Description "$AppDistribution source installation"
+        $Bootstrap = if ($InstallerState.UvBootstrapped) { "true" } else { "false" }
+        $PythonArguments = @("-", $InstallerState.Uv, $InstallerState.GithubClient, $Repository, $TemporaryDirectory, $AppDistribution, $InstallerState.SourceMode, $Bootstrap)
+        if ($null -ne $InstallerState.Version) { $PythonArguments += $InstallerState.Version }
+        Invoke-Checked -FilePath $InstallerState.InstallPython -Arguments $PythonArguments -InputText $PythonCode -Description "$AppDistribution source installation"
         Update-ToolPath
     }
     finally { Remove-Item -LiteralPath $TemporaryDirectory -Recurse -Force -ErrorAction SilentlyContinue }
@@ -247,8 +250,8 @@ if lifecycle.is_file(): subprocess.run(record, cwd=project_root, check=True)
 
 
 function Configure-InstalledApplication {
-    if ($SkipConfig -or $ConfigureApp -ne "true") { return }
-    $ToolBin = Invoke-Captured -FilePath $Uv -Arguments @("tool", "dir", "--bin") -Description "Locating the installed command"
+    if ($InstallerState.SkipConfig -or $ConfigureApp -ne "true") { return }
+    $ToolBin = Invoke-Captured -FilePath $InstallerState.Uv -Arguments @("tool", "dir", "--bin") -Description "Locating the installed command"
     $Executable = Join-Path $ToolBin "$AppCommand.exe"
     if (-not (Test-Path -LiteralPath $Executable -PathType Leaf)) { throw "Installed command was not found: $Executable" }
     Invoke-Checked -FilePath $Executable -Arguments @("config", "setup") -Description "Configuration setup"
@@ -259,7 +262,7 @@ function Invoke-Main {
     if (-not (Parse-Arguments -Arguments $Arguments)) { return }
     Find-Uv
     if (-not (Confirm-Plan)) { return }
-    if ($UvOrigin -eq "missing") { Install-PermanentUv }
+    if ($InstallerState.UvOrigin -eq "missing") { Install-PermanentUv }
     Install-FromSource
     Configure-InstalledApplication
     Write-Host "`n$AppDistribution setup completed successfully."
