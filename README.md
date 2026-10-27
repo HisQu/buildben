@@ -257,6 +257,10 @@ staging fail lifecycle validation. Do not resolve arbitrary lifecycle or
 preflight inputs to bypass their link checks; keep the rejection coverage in
 [`tests/test_lifecycle.py`](tests/test_lifecycle.py).
 
+The rendered Unix cases reuse the real BuildBen source package with
+`--skip-config`: they prove staging, lifecycle recording, installation, and
+uninstallation, not a generated application's configuration wizard.
+
 ### Uninstall
 
 New installer-based installations save an offline uninstaller outside the tool

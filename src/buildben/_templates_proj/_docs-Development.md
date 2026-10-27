@@ -238,6 +238,11 @@ resolve arbitrary helper inputs, alter fixtures, or skip a failing smoke to hide
 a production failure. Record missing project-specific installer evidence as
 unverified rather than claiming it from another project's CI.
 
+Those central rendered Unix cases use the real BuildBen package with
+`--skip-config`, because BuildBen does not provide a generated application's
+configuration command. They do not establish this project's configuration-wizard
+behavior.
+
 ## Releases
 
 `CHANGELOG.md` is the source for GitHub Release notes. Before a release, move

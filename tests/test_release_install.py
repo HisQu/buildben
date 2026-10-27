@@ -1039,11 +1039,13 @@ def test_source_install_smoke(
     temporary_before = {path for path in temporary_parent.iterdir() if path.is_dir()}
     thread.start()
     try:
+        # > Rendered installers reuse the BuildBen package to cover staging and
+        # > lifecycle behavior, not a generated application's configuration wizard.
         result = _run_installer(
             _installer_command(
                 uv,
                 *installer_arguments,
-                skip_config=False,
+                skip_config=(installer_origin == "rendered"),
                 installer_path=installer_path,
                 invocation=invocation,
             ),
