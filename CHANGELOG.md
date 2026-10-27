@@ -125,6 +125,9 @@ This project follows Semantic Versioning.
   PowerShell script block, both for BuildBen and generated projects. Windows
   checks exercise the canonical and actually rendered installers through file
   execution and downloaded text, including public and gh downloads.
+- Fixed Unix source staging under temporary-directory aliases such as macOS
+  `/var`, for BuildBen and generated installers, without relaxing lifecycle
+  link checks.
 
 <br>
 

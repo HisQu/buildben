@@ -126,7 +126,7 @@ import json, re, subprocess, sys, tarfile
 from pathlib import Path, PurePosixPath
 uv, client, repo, temp, distribution, source_mode, bootstrap, *requested = sys.argv[1:]
 requested = requested[0] if requested else ""
-root = Path(temp)
+root = Path(temp).resolve(strict=True)
 version_re = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 def normalize(value): return re.sub(r"[-_.]+", "-", value).lower()
 def gh_api(path): return subprocess.run(["gh", "api", path], check=True, text=True, capture_output=True).stdout
