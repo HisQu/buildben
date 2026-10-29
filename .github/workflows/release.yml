@@ -115,25 +115,27 @@ jobs:
           set -euo pipefail
           mkdir -p release
           printf '%s' "$RELEASE_NOTES_BASE64" | base64 --decode > release/release-notes.md
+      - name: Check tracked management artifacts without rewriting
+        run: just check-artifacts
       - name: Build and validate package once
         run: just build-release-inputs release/release-notes.md
       - name: Smoke the built wheel once on Python 3.12
         run: just release-wheel-smoke
-      - name: Upload wheel and source archive to the draft release
+      - name: Stage release-native entries and integrity manifest
+        run: just stage-release-assets "$GITHUB_REF_NAME" "$GITHUB_SHA"
+      - name: Upload the exact verified release asset set
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t packages < <(find dist -maxdepth 1 -type f \( -name '*.whl' -o -name '*.tar.gz' \) -printf '%f\n' | LC_ALL=C sort)
-          if [[ "${#packages[@]}" -ne 2 ]]; then
-            echo "Expected exactly one wheel and one source archive." >&2
-            exit 1
-          fi
+          PYTHONPATH=src python -m buildben_dev.packaging.release_assets verify \
+            --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" \
+            --commit "$GITHUB_SHA" --directory release/assets > release/assets.list
+          mapfile -t assets < release/assets.list
           PYTHONPATH=src python -m buildben_dev.packaging.release_assets upload \
             --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" \
-            --commit "$GITHUB_SHA" --directory dist --files \
-            "${packages[@]}"
+            --commit "$GITHUB_SHA" --directory release/assets --files "${assets[@]}"
 
 
   github-release:
@@ -331,6 +333,9 @@ jobs:
             echo "Downloaded release files do not match the selected wheel and source archive." >&2
             exit 1
           fi
+          PYTHONPATH=src python -m buildben_dev.packaging.release_assets verify-pypi \
+            --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" \
+            --commit "$target_commit" --metadata "$release_metadata" --directory "$snapshot_dir"
           uvx --from twine twine check "$snapshot_dir/$wheel_name" "$snapshot_dir/$sdist_name"
 
           python3 - "$snapshot_dir/manifest.json" "$release_id" "$RELEASE_TAG" "$active_commit" "$tag_object_sha" "$target_commit" "$wheel_name" "$sdist_name" <<'PY'

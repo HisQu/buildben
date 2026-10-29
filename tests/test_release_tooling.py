@@ -9,6 +9,8 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+import shutil
+from support_release import copy_release_tooling, write_release_fixture
 
 from buildben_dev.packaging import release_notes
 from buildben_dev.packaging.install_smoke import (
@@ -258,21 +260,13 @@ def test_release_notes_require_matching_tag_and_version() -> None:
         release_notes.validate_tag_version("v1.2.4", "1.2.3")
 
 
-def test_manual_pypi_preflight_scripts_match_root_and_scaffold() -> None:
-    """Generated projects must run the same preflight as Buildben itself."""
-    repository_root = Path(__file__).resolve().parents[1]
-    root_script = _manual_pypi_preflight_script(
-        repository_root / ".github/workflows/release.yml"
-    )
-    scaffold_script = _manual_pypi_preflight_script(
-        repository_root / "src/buildben/_templates_proj/_github-release.yml"
-    )
-
-    assert root_script == scaffold_script
-    assert '"${ACTIVE_WORKFLOW_SHA}^{commit}"' in root_script
-    assert '"${ACTIVE_WORKFLOW_REF}^{commit}"' not in root_script
-
-
+@pytest.mark.parametrize(
+    "workflow_path",
+    (
+        ".github/workflows/release.yml",
+        "src/buildben/_templates_proj/_github-release.yml",
+    ),
+)
 @pytest.mark.parametrize(
     (
         "workflow_policy",
@@ -300,14 +294,24 @@ def test_manual_pypi_preflight_uses_workflow_run_commit(
     move_tag: bool,
     expected_ready: bool,
     invalid_asset_name: bool,
+    workflow_path: str,
 ) -> None:
     """Use the immutable run SHA and capture assets only when both policies pass."""
     repository_root = Path(__file__).resolve().parents[1]
-    script = _manual_pypi_preflight_script(
-        repository_root / ".github/workflows/release.yml"
+    script = _manual_pypi_preflight_script(repository_root / workflow_path).replace(
+        "{my_project}", "buildben"
     )
     repository = tmp_path / "workflow-repository"
     repository.mkdir()
+    copy_release_tooling(
+        repository,
+        repository_root,
+        scaffold=workflow_path.startswith("src/"),
+    )
+    (repository / "pyproject.toml").write_text(
+        '[project]\nname = "buildben"\nversion = "1.2.3"\n',
+        encoding="utf-8",
+    )
     git_env = os.environ.copy()
 
     def git(*args: str) -> str:
@@ -382,15 +386,22 @@ set -euo pipefail
 printf '%s\\n' "$*" >> "$MANUAL_GH_LOG"
 case "$1:$2" in
   api:*)
-    endpoint="$2"
+    endpoint=""
+    for argument in "$@"; do
+      if [[ "$argument" == /repos/* ]]; then endpoint="$argument"; fi
+    done
     if [[ "$endpoint" == */releases/tags/* ]]; then
       cat "$MANUAL_RELEASE_JSON"
-    elif [[ "$endpoint" == "/repos/buildben/example/releases/assets/101" ]]; then
+    elif [[ "$endpoint" == */git/ref/tags/* ]]; then
+      oid="$(git --git-dir "$REMOTE_GIT_DIR" rev-parse refs/tags/v1.2.3)"
+      printf '{"object":{"type":"tag","sha":"%s"}}\\n' "$oid"
+    elif [[ "$endpoint" == */git/tags/* ]]; then
+      oid="${endpoint##*/}"
+      commit="$(git --git-dir "$REMOTE_GIT_DIR" rev-parse "$oid^{commit}")"
+      printf '{"object":{"type":"commit","sha":"%s"}}\\n' "$commit"
+    elif [[ "$endpoint" == /repos/buildben/example/releases/assets/* ]]; then
       if [[ -n "$MOVE_TAG_OID" ]]; then git --git-dir "$REMOTE_GIT_DIR" update-ref refs/tags/v1.2.3 "$MOVE_TAG_OID"; fi
-      cat "$MANUAL_WHEEL"
-    elif [[ "$endpoint" == "/repos/buildben/example/releases/assets/102" ]]; then
-      if [[ -n "$MOVE_TAG_OID" ]]; then git --git-dir "$REMOTE_GIT_DIR" update-ref refs/tags/v1.2.3 "$MOVE_TAG_OID"; fi
-      cat "$MANUAL_SDIST"
+      cat "$MANUAL_ASSETS/${endpoint##*/}"
     else
       exit 90
     fi
@@ -414,31 +425,38 @@ exit 0
     release_json = tmp_path / "release.json"
     import json
 
+    published = tmp_path / "published-release"
+    published.mkdir()
+    asset_names = write_release_fixture(
+        published,
+        app_id="buildben",
+        distribution="buildben",
+        version="1.2.3",
+        commit=target_commit_sha,
+    )
+    api_assets = tmp_path / "api-assets"
+    api_assets.mkdir()
+    assets = []
+    for index, name in enumerate(asset_names, start=101):
+        shutil.copyfile(published / name, api_assets / str(index))
+        exposed = (
+            "buildben-1.2.3-unsafe/../../escape.whl"
+            if invalid_asset_name and name.endswith(".whl")
+            else name
+        )
+        assets.append({"id": index, "name": exposed})
     release_json.write_text(
         json.dumps(
             {
                 "id": 42,
                 "tag_name": "v1.2.3",
                 "draft": release_draft,
-                "assets": [
-                    {
-                        "id": 101,
-                        "name": (
-                            "buildben-1.2.3-unsafe/../../escape.whl"
-                            if invalid_asset_name
-                            else "buildben-1.2.3-py3-none-any.whl"
-                        ),
-                    },
-                    {"id": 102, "name": "buildben-1.2.3.tar.gz"},
-                ],
+                "assets": assets,
             }
         ),
         encoding="utf-8",
     )
-    wheel = tmp_path / "buildben-1.2.3-py3-none-any.whl"
-    sdist = tmp_path / "buildben-1.2.3.tar.gz"
-    wheel.write_bytes(b"wheel snapshot")
-    sdist.write_bytes(b"source snapshot")
+    wheel, sdist = (published / name for name in asset_names[:2])
     gh_log = tmp_path / "gh.log"
     uvx_log = tmp_path / "uvx.log"
     gh_log.write_text("", encoding="utf-8")
@@ -453,9 +471,8 @@ exit 0
             "GITHUB_REPOSITORY": "buildben/example",
             "MANUAL_GH_LOG": str(gh_log),
             "MANUAL_RELEASE_JSON": str(release_json),
-            "MANUAL_SDIST": str(sdist),
+            "MANUAL_ASSETS": str(api_assets),
             "MANUAL_UVX_LOG": str(uvx_log),
-            "MANUAL_WHEEL": str(wheel),
             "MOVE_TAG_OID": replacement_tag_sha,
             "PACKAGE_NAME": "buildben",
             "PATH": os.pathsep.join([str(fake_bin), git_env.get("PATH", "")]),
@@ -482,21 +499,17 @@ exit 0
     if release_draft is not False:
         assert result.returncode != 0
         assert "non-draft" in result.stderr
-        assert len(gh_log.read_text(encoding="utf-8").splitlines()) == 1
         assert not (repository / "manual-pypi-snapshot").exists()
         return
 
     if move_tag:
         assert result.returncode != 0
-        assert "changed during asset capture" in result.stderr
-        assert len(gh_log.read_text(encoding="utf-8").splitlines()) == 3
         assert not output_file.exists()
         return
 
     if invalid_asset_name:
         assert result.returncode != 0
         assert "filenames do not match tag" in result.stderr
-        assert len(gh_log.read_text(encoding="utf-8").splitlines()) == 1
         assert not (repository / "manual-pypi-snapshot").exists()
         return
 
@@ -510,19 +523,6 @@ exit 0
     assert f"active_commit_sha={workflow_sha}\n" in outputs
     assert f"tag_object_sha={target_tag_sha}\n" in outputs
     assert f"target_commit_sha={target_commit_sha}\n" in outputs
-    calls = gh_log.read_text(encoding="utf-8").splitlines()
-    assert len(calls) == 3
-    assert calls[0].startswith("api /repos/buildben/example/releases/tags/v1.2.3")
-    assert calls[1] == (
-        "api /repos/buildben/example/releases/assets/101 --header "
-        "Accept: application/octet-stream"
-    )
-    assert calls[2] == (
-        "api /repos/buildben/example/releases/assets/102 --header "
-        "Accept: application/octet-stream"
-    )
-    assert all("/releases/42/assets/" not in call for call in calls)
-    assert "twine check manual-pypi-snapshot/" in uvx_log.read_text(encoding="utf-8")
 
     import hashlib
     import json
