@@ -1,0 +1,51 @@
+"""Serve the gh CLI contract from configured loopback GitHub fixture bytes."""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+
+def main() -> int:
+    arguments = sys.argv[1:]
+    if arguments[:1] == ["api"]:
+        endpoint = next(
+            (value for value in arguments[1:] if value.startswith(("repos/", "/repos/"))),
+            None,
+        )
+        if endpoint is None:
+            raise SystemExit("Fixture gh requires a repository endpoint.")
+        address = "https://api.github.com/" + endpoint.lstrip("/")
+        with urllib.request.urlopen(address, timeout=30) as response:
+            sys.stdout.buffer.write(response.read())
+        return 0
+    if arguments[:2] == ["release", "download"]:
+        tag = arguments[2]
+        repository = arguments[arguments.index("--repo") + 1]
+        output = Path(arguments[arguments.index("--dir") + 1])
+        pattern = arguments[arguments.index("--pattern") + 1]
+        api = os.environ["INSTALLER_SMOKE_API_URL"]
+        with urllib.request.urlopen(
+            f"{api}/repos/{repository}/releases/tags/{urllib.parse.quote(tag)}",
+            timeout=30,
+        ) as response:
+            release = json.loads(response.read())
+        assets = [
+            asset for asset in release["assets"] if asset["name"] == pattern
+        ]
+        if len(assets) != 1:
+            raise SystemExit("Fixture release asset selection was not unique.")
+        with urllib.request.urlopen(assets[0]["browser_download_url"], timeout=30) as response:
+            data = response.read()
+        output.mkdir(parents=True, exist_ok=True)
+        (output / pattern).write_bytes(data)
+        return 0
+    raise SystemExit("Unsupported gh fixture command: " + " ".join(arguments))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

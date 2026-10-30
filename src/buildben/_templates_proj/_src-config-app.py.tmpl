@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-# == Third-party imports
 import apprc as rc
 
 APP_RC = rc.AppRC(
     app_id="<my_project>",
     display_name="<my_project>",
+    paths=rc.Paths(config=True, appdata=True),
     config_package="<my_project>.config",
-    storage=rc.Storage(selector_env_key="<MY_PROJECT>_STORAGE"),
+    user_dotenv=rc.UserDotenv(),
     command_name="<my_project>",
 )

@@ -1,10 +1,12 @@
 include uv.lock
 include pylock.toml
-include uninstall.sh
-include uninstall.cmd
+include app-install.sh app-install.cmd
+include app-launch.sh app-launch.cmd
+include app-uninstall.sh app-uninstall.cmd
 
 recursive-include src/buildben *
 recursive-include src/buildben_dev *
+recursive-include src/buildben_distr *
 
 prune INPUT
 prune OUTPUT

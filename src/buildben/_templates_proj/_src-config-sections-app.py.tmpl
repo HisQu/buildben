@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-# == Standard Library ========================
-from pathlib import Path
-
 # == 3rd Party ===============================
 import apprc as rc
 
@@ -21,17 +18,6 @@ from <my_project>.config.app import APP_RC
 class AppSettings(rc.Config):
     """Typed application settings loaded from AppRC-managed env layers."""
 
-    storage_root: Path = rc.field(
-        "<MY_PROJECT>_STORAGE",
-        title="Storage root",
-        explanation_short="Directory where the application stores its persistent data.",
-        explanation_long=(
-            "Choose the storage root through the command-line option, environment "
-            "variable, or saved storage registry selection."
-        ),
-        editable=False,
-        required=True,
-    )
     message: str = rc.field(
         "<MY_PROJECT>_MESSAGE",
         default="Hello from <my_project>",

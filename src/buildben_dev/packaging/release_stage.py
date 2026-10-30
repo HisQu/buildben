@@ -1,0 +1,202 @@
+"""Stage exact release-only native entries beside validated packages."""
+
+from __future__ import annotations
+
+import argparse
+import dataclasses
+import hashlib
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path, PurePosixPath
+
+from apprc.distribution import (
+    PayloadTree,
+    build_main_installer,
+    install_support_files,
+    read_project_metadata,
+    render_bootstraps,
+)
+from buildben_distr.make_artifacts import distribution_spec
+from buildben_dev.packaging import release_assets
+
+REPOSITORY = "HisQu/buildben"
+
+
+def _package_files(directory: Path, project: str, version: str) -> tuple[Path, Path]:
+    """Select and validate the unique built wheel and source archive."""
+    packages = tuple(
+        path for path in directory.iterdir() if path.name.endswith((".whl", ".tar.gz"))
+    )
+    wheels = tuple(path for path in packages if path.name.endswith(".whl"))
+    sdists = tuple(path for path in packages if path.name.endswith(".tar.gz"))
+    if len(wheels) != 1 or len(sdists) != 1:
+        raise ValueError(
+            "Release staging requires exactly one wheel and one source archive."
+        )
+    for path in (*wheels, *sdists):
+        release_assets._validate_package(path, project, version)
+    return wheels[0], sdists[0]
+
+
+def _locked_runtime_requirements(root: Path) -> tuple[str, ...]:
+    """Export only the application's locked runtime constraints.
+
+    Management requirements belong to the separate standalone helper
+    ``main-installer-requirements.txt`` and must not become application runtime
+    constraints.
+    """
+    result = subprocess.run(
+        [
+            "uv",
+            "export",
+            "--format",
+            "requirements-txt",
+            "--locked",
+            "--no-dev",
+            "--no-default-groups",
+            "--no-hashes",
+            "--no-emit-project",
+        ],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    constraints = tuple(
+        line.strip()
+        for line in result.stdout.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    )
+    if any(requirement.startswith("-") for requirement in constraints):
+        raise ValueError("Locked runtime export contains unsupported pip options.")
+    return tuple(dict.fromkeys(constraints))
+
+
+def stage_release(
+    tag: str,
+    commit: str,
+    *,
+    root: Path,
+    repository: str = REPOSITORY,
+) -> tuple[str, ...]:
+    """Stage final validated packages and release-specific AppRC outputs.
+
+    :param tag: Final release tag, without creating or pushing a tag.
+    :param commit: Full immutable source commit to record in the manifest.
+    :param root: Application repository root.
+    :param repository: Immutable OWNER/REPO release identity.
+    :return: Strict manifest validator's exact upload filename set.
+    """
+    root = root.resolve()
+    if root != Path.cwd().resolve():
+        raise ValueError("Run release staging from the application repository root.")
+    name, version = release_assets._project()
+    if tag != f"v{version}":
+        raise ValueError("Release tag does not match project metadata.")
+    wheel, sdist = _package_files(root / "dist", name, version)
+    asset = f"https://github.com/{repository}/releases/download/{tag}/{sdist.name}"
+    digest = hashlib.sha256(sdist.read_bytes()).hexdigest()
+    metadata = read_project_metadata(root)
+    base_spec = distribution_spec(root, metadata)
+    spec = dataclasses.replace(
+        base_spec,
+        source_mode="release",
+        repository_url=f"https://github.com/{repository}.git",
+        release_version=version,
+        release_commit=commit,
+        release_asset=asset,
+        release_digest=digest,
+        runtime_requirements=tuple(
+            dict.fromkeys(
+                (*base_spec.runtime_requirements, *_locked_runtime_requirements(root))
+            )
+        ),
+    )
+    payload_root = root / metadata.distribution_path / "payload"
+    modules = tuple(
+        PurePosixPath("app_lifecycle") / filename
+        for filename in ("__init__.py", "install.py", "uninstall.py", "actions.py")
+    )
+    with tempfile.TemporaryDirectory(prefix="buildben-release-payload-") as temporary:
+        staged_payload = Path(temporary) / "payload"
+        shutil.copytree(payload_root, staged_payload)
+        base_payload = PayloadTree(staged_payload, modules)
+        for relative, content in install_support_files(spec, base_payload).items():
+            resource = PurePosixPath("app_lifecycle/_support") / relative
+            destination = staged_payload.joinpath(*resource.parts)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(content)
+            if relative.name in {"launch.sh", "uninstall.sh"}:
+                destination.chmod(0o700)
+        support_root = staged_payload / "app_lifecycle" / "_support"
+        resources = tuple(
+            PurePosixPath(
+                "app_lifecycle/_support", *path.relative_to(support_root).parts
+            )
+            for path in sorted(support_root.rglob("*"))
+            if path.is_file()
+        )
+        payload = PayloadTree(staged_payload, modules, resources=resources)
+        installer = build_main_installer(spec, payload)
+    artifacts = (*render_bootstraps(spec), installer)
+    destinations = {
+        PurePosixPath("app-install.sh"): "app-install.sh",
+        PurePosixPath("app-install.cmd"): "app-install.cmd",
+        PurePosixPath("bootstrap.ps1"): "bootstrap.ps1",
+        metadata.distribution_path
+        / "artifacts/installer/main-installer.py": "main-installer.py",
+    }
+    rendered: dict[str, bytes] = {}
+    for artifact in artifacts:
+        filename = destinations.get(artifact.destination)
+        if filename is not None:
+            if filename in rendered:
+                raise ValueError(f"Release generator repeated {filename}.")
+            rendered[filename] = artifact.content
+    expected_native = set(destinations.values())
+    if set(rendered) != expected_native:
+        raise ValueError(
+            "AppRC did not emit the complete script-mode release entry set."
+        )
+    destination = root / "release" / "assets"
+    destination.mkdir(parents=True, exist_ok=True)
+    staged_names = [wheel.name, sdist.name, *sorted(expected_native)]
+    allowed = set(staged_names) | {"release-manifest.json"}
+    unexpected = {path.name for path in destination.iterdir()} - allowed
+    if unexpected:
+        raise ValueError(
+            "Release staging directory contains stale or unexpected files."
+        )
+    for package in (wheel, sdist):
+        shutil.copyfile(package, destination / package.name)
+    for filename, content in rendered.items():
+        (destination / filename).write_bytes(content)
+    return release_assets.stage(
+        destination,
+        staged_names,
+        repository=repository,
+        tag=tag,
+        commit=commit,
+        payload_format="script",
+    )
+
+
+def main() -> None:
+    """Parse release identity and stage exact native helper assets."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("tag")
+    parser.add_argument("commit")
+    parser.add_argument("--repository", default=REPOSITORY)
+    arguments = parser.parse_args()
+    files = stage_release(
+        arguments.tag,
+        arguments.commit,
+        root=Path.cwd(),
+        repository=arguments.repository,
+    )
+    print("\n".join(files))
+
+
+if __name__ == "__main__":
+    main()

@@ -486,15 +486,27 @@ _release-artifact-check notes_output build_only="false" notes_input="":
         echo "Expected exactly one wheel and one sdist in dist/." >&2
         exit 1
     fi
-    if [[ "$(basename "${wheels[0]}")" != {my_project}-${version}-*.whl ]]; then
-        echo "Expected a wheel for ${version}." >&2
+    wheel_distribution="$(printf '%s' "{my_project}" | tr '[:upper:]' '[:lower:]' | tr -s '._-' '_')"
+    sdist_distribution="${wheel_distribution//_/-}"
+    if [[ "$(basename "${wheels[0]}")" != "${wheel_distribution}_${version}_"*.whl ]]; then
+        echo "Expected a normalized project wheel for ${version}." >&2
         exit 1
     fi
-    if [[ "$(basename "${sdists[0]}")" != "{my_project}-${version}.tar.gz" ]]; then
-        echo "Expected sdist {my_project}-${version}.tar.gz." >&2
+    if [[ "$(basename "${sdists[0]}")" != "${sdist_distribution}-${version}.tar.gz" ]]; then
+        echo "Expected sdist ${sdist_distribution}-${version}.tar.gz." >&2
         exit 1
     fi
     uv run --with twine --no-project -- twine check "${wheels[0]}" "${sdists[0]}"
+
+make-artifacts:
+    PYTHONPATH=src python -m {my_project}_distr.make_artifacts
+
+check-artifacts:
+    PYTHONPATH=src python -m {my_project}_distr.make_artifacts --check
+
+# Stage only the validated package pair and exact SDK-generated native entries.
+stage-release-assets tag commit:
+    PYTHONPATH=src python -m {my_project}_dev.packaging.release_stage {{quote(tag)}} {{quote(commit)}}
 
 # Build standard wheel and sdist once without running the full source matrix.
 build-release-inputs notes_file="":
@@ -519,107 +531,47 @@ release-wheel-smoke:
     trap 'rm -rf "$smoke_root"' EXIT
     (cd "$smoke_root"; uv run --isolated --python 3.12 --with "{my_project} @ $artifact_uri" python "$smoke_script" --expected-version "$version")
 
-# Install a generated project's real sdist in an isolated uv tool environment.
+# Install a generated project's real sdist and main-source archive with isolated state.
 release-install-smoke:
     #!/usr/bin/env bash
     set -euo pipefail
-    just build-release-inputs
-    shopt -s nullglob
-    sdists=(dist/*.tar.gz)
-    if [[ "${#sdists[@]}" -ne 1 ]]; then echo "Expected exactly one source archive in dist/." >&2; exit 1; fi
+    if [[ -n "${INSTALLER_SMOKE_MAIN_SOURCE:-}" && -z "${INSTALLER_SMOKE_MAIN_COMMIT:-}" || -z "${INSTALLER_SMOKE_MAIN_SOURCE:-}" && -n "${INSTALLER_SMOKE_MAIN_COMMIT:-}" ]]; then
+        echo "INSTALLER_SMOKE_MAIN_SOURCE and INSTALLER_SMOKE_MAIN_COMMIT must be supplied together." >&2
+        exit 1
+    fi
+    just check-artifacts
+    if [[ -z "${INSTALLER_SMOKE_SOURCE:-}" ]]; then
+        just build-release-inputs
+        shopt -s nullglob
+        sdists=(dist/*.tar.gz)
+        if [[ "${#sdists[@]}" -ne 1 ]]; then echo "Expected exactly one source archive in dist/." >&2; exit 1; fi
+        smoke_source="$(realpath "${sdists[0]}")"
+        if command -v cygpath >/dev/null 2>&1; then smoke_source="$(cygpath -m "$smoke_source")"; fi
+        export INSTALLER_SMOKE_SOURCE="$smoke_source"
+    fi
+    if [[ ! -f "$INSTALLER_SMOKE_SOURCE" ]]; then echo "Source archive does not exist: $INSTALLER_SMOKE_SOURCE" >&2; exit 1; fi
     version="$(uv version --short)"
-    if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-        echo "Generated project version is not a validated release version." >&2
-        exit 1
-    fi
-    base_python="$(uv python find --system --no-project --no-python-downloads)"
-    source_ref="$(git rev-parse HEAD)"
-    if [[ ! "$source_ref" =~ ^[0-9a-f]{40,64}$ ]]; then
-        echo "Source reference is not a full Git commit SHA." >&2
-        exit 1
-    fi
+    release_commit="$(git rev-parse HEAD)"
+    just stage-release-assets "v${version}" "$release_commit"
     smoke_root="$(mktemp -d)"
     trap 'rm -rf "$smoke_root"' EXIT
-    export HOME="$smoke_root/home"
-    export XDG_CONFIG_HOME="$smoke_root/config"
-    export XDG_DATA_HOME="$smoke_root/data"
-    export XDG_STATE_HOME="$smoke_root/state"
-    export XDG_CACHE_HOME="$smoke_root/cache"
-    export LOCALAPPDATA="$smoke_root/local-appdata"
-    export UV_CACHE_DIR="$smoke_root/uv-cache"
-    export UV_TOOL_DIR="$smoke_root/uv-tools"
-    export UV_TOOL_BIN_DIR="$smoke_root/uv-bin"
-    source_root="$smoke_root/source"
-    mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_STATE_HOME" "$XDG_CACHE_HOME" "$LOCALAPPDATA" "$source_root"
-    tool_dir_fs="$UV_TOOL_DIR"
-    if command -v cygpath >/dev/null 2>&1; then
-        export UV_TOOL_DIR="$(cygpath -m "$UV_TOOL_DIR")"
-        export UV_TOOL_BIN_DIR="$(cygpath -m "$UV_TOOL_BIN_DIR")"
-        export UV_CACHE_DIR="$(cygpath -m "$UV_CACHE_DIR")"
-        export LOCALAPPDATA="$(cygpath -m "$LOCALAPPDATA")"
-        tool_dir_fs="$(cygpath -u "$UV_TOOL_DIR")"
-    fi
-    config_sentinel="$XDG_CONFIG_HOME/{my_project}-sentinel"
-    data_sentinel="$XDG_DATA_HOME/{my_project}-sentinel"
-    printf 'preserve config\n' > "$config_sentinel"
-    printf 'preserve data\n' > "$data_sentinel"
-    tar -xzf "${sdists[0]}" -C "$source_root"
-    project_root="$(find "$source_root" -mindepth 1 -maxdepth 1 -type d -print -quit)"
-    if [[ ! -f "$project_root/pyproject.toml" || ! -f "$project_root/uv.lock" ]]; then
-        echo "Generated source archive must contain pyproject.toml and uv.lock." >&2
-        exit 1
-    fi
-    if [[ "$(basename "${sdists[0]}")" != "{my_project}-${version}.tar.gz" ]]; then
-        echo "Source archive version does not match generated project metadata." >&2
-        exit 1
-    fi
-    "$base_python" -c 'import pathlib, sys, tomllib; metadata = tomllib.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))["project"]; assert metadata["version"] == sys.argv[2], "Extracted source version differs from archive version"' "$project_root/pyproject.toml" "$version"
-    runtime_requirements="$smoke_root/runtime-requirements.txt"
-    lifecycle="$project_root/src/{my_project}_dev/distribution/lifecycle.py"
-    uv_path="$(command -v uv)"
-    if command -v cygpath >/dev/null 2>&1; then uv_path="$(cygpath -m "$uv_path")"; fi
-    "$base_python" "$lifecycle" record --uv "$uv_path" --version "$version" --source-ref "$source_ref" --check
-    (
-        cd "$project_root"
-        uv export --locked --no-dev --no-default-groups --no-emit-project --format requirements.txt --output-file "$runtime_requirements"
-        uv tool install --force --refresh --python "$base_python" --with-requirements "$runtime_requirements" "$project_root"
-    )
-    "$base_python" "$lifecycle" record --uv "$uv_path" --version "$version" --source-ref "$source_ref"
-    export PATH="$UV_TOOL_BIN_DIR:$PATH"
-    tool_project="{my_project}"
-    tool_env="$tool_dir_fs/$tool_project"
-    if [[ ! -d "$tool_env" ]]; then
-        tool_env="$tool_dir_fs/${tool_project//_/-}"
-    fi
-    if [[ -x "$tool_env/Scripts/python.exe" ]]; then
-        tool_python="$tool_env/Scripts/python.exe"
-        tool_bin="$(cygpath -u "$UV_TOOL_BIN_DIR")"
-        "$tool_bin/{my_project}.exe" --help
-        "$tool_bin/bube.exe" config setup --help
+    if [[ -n "${INSTALLER_SMOKE_MAIN_SOURCE:-}" ]]; then
+        if [[ ! -f "$INSTALLER_SMOKE_MAIN_SOURCE" ]]; then
+            echo "Main source archive does not exist: $INSTALLER_SMOKE_MAIN_SOURCE" >&2
+            exit 1
+        fi
+        main_commit="$INSTALLER_SMOKE_MAIN_COMMIT"
     else
-        tool_python="$tool_env/bin/python"
-        "$UV_TOOL_BIN_DIR/{my_project}" --help
-        "$UV_TOOL_BIN_DIR/bube" config setup --help
+        main_commit="$release_commit"
+        archive_file="$smoke_root/main-source.tar.gz"
+        git archive --format=tar.gz --prefix="{my_project}-${main_commit}/" --output="$archive_file" "$main_commit"
+        main_source="$(realpath "$archive_file")"
+        if command -v cygpath >/dev/null 2>&1; then main_source="$(cygpath -m "$main_source")"; fi
+        export INSTALLER_SMOKE_MAIN_SOURCE="$main_source"
+        export INSTALLER_SMOKE_MAIN_COMMIT="$main_commit"
     fi
-    "$tool_python" -m {my_project}_dev.packaging.install_smoke --expected-version "$version"
-    test "$(cat "$config_sentinel")" = "preserve config"
-    test "$(cat "$data_sentinel")" = "preserve data"
-    if [[ -x "$tool_env/Scripts/python.exe" ]]; then
-        state_dir="$LOCALAPPDATA/<distribution_name>/installation"
-        launcher_cmd="$(cygpath -w "$state_dir/uninstall.cmd")"
-        cmd.exe /c "\"$launcher_cmd\" --yes"
-    else
-        state_dir="$XDG_STATE_HOME/<distribution_name>/installation"
-        "$state_dir/uninstall.sh" --yes
-    fi
-    test ! -d "$tool_env"
-    test -f "$state_dir/receipt.json"
-    test -f "$state_dir/lifecycle.py"
-    test ! -e "$UV_TOOL_BIN_DIR/{my_project}"
-    test ! -e "$UV_TOOL_BIN_DIR/{my_project}.exe"
-    test "$(cat "$config_sentinel")" = "preserve config"
-    test "$(cat "$data_sentinel")" = "preserve data"
-
+    export INSTALLER_SMOKE_CLIENT="${INSTALLER_SMOKE_CLIENT:-curl}"
+    uv run --locked --group dev -- python -m pytest -q "tests/test_{my_project}_package.py" -k "source_install_smoke or windows_installer_entries or official_uv_bootstrap"
 # Rehearse the release gate. It does not upload anything.
 release-check:
     #!/usr/bin/env bash

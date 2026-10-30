@@ -16,13 +16,13 @@
 `{my_project}` starts as a Python package with a Typer command line and AppRC
 configuration. Learn its [command-line application](Explanations.md#command-line-application)
 and [config sections](Explanations.md#config-sections) before adding settings or
-commands. Then [initialize storage](How-To-User-Guides.md#initialize-storage)
+commands. Then [read a saved setting in Python](EXAMPLES.md#read-saved-settings-in-python)
 and inspect the values used by the generated application.
 
-The [storage-only example](EXAMPLES.md#storage-only-application) is the default
-setup. The other examples show changes you can make after understanding it.
-Replace the starter message with your application's settings and describe new
-components here as you implement them.
+The [saved settings example](EXAMPLES.md#read-saved-settings-in-python)
+demonstrates the default setup. The other examples show changes you can make
+after understanding it. Replace the starter message with your application's
+settings and describe new components here as you implement them.
 
 ## Choose a document
 
@@ -47,18 +47,16 @@ actual application behavior is implemented.
 | Name | Implementation | Definition |
 | --- | --- | --- |
 | [Command-line application](Explanations.md#command-line-application) | `{my_project}.cli.app` | The Typer command tree run by the console and module entrypoints. |
-| [`AppRC`](Explanations.md#apprc) | `APP_RC` in `config/app.py` | One application declaration that registers settings and enables storage. |
+| [`AppRC`](Explanations.md#apprc) | `APP_RC` in `config/app.py` | One application declaration for business settings and independent filesystem capabilities. |
 | [Config section](Explanations.md#config-sections) | `AppSettings` in `config/sections/app.py` | A class containing related typed settings. |
 | [Config field](Explanations.md#config-sections) | `rc.field(...)` | One setting's environment key, default, and documentation. |
 | [`ResolvedConfig`](Explanations.md#resolvedconfig) | `state.resolved` in runtime commands | Values read for one invocation, used to build settings. |
 | [Config bundle](Explanations.md#config-bundle) | `{MyProject}Config` in `config/bundle.py` | A dataclass containing the application's config sections. |
-| [Storage](Explanations.md#storage) | A registered data directory | Persistent application data and a storage-specific dotenv file. |
-| [Storage registry](Explanations.md#storage) | `apprc.toml` | Names, paths, and the saved default storage. |
-| [AppRC directory](Explanations.md#configuration-files) | Directory chosen by `{MY_PROJECT}_APPRC_DIR` | Home of the storage registry and an optional user dotenv. |
-| [ConfigManager](Explanations.md#configuration-tools) | `APP_RC.manage()` | Shared operations for setup, inspection, editing, and storage management. |
-| [Config CLI](Explanations.md#configuration-tools) | `{my_project} config ...` | Configuration commands mounted on the application. |
-| [Config editor](Explanations.md#configuration-tools) | `{my_project} config edit` | Terminal interface for inspecting layers and editing saved overrides. |
-| [Installers](References.md#installer-reference) | `src/{my_project}_dev/distribution` | Canonical installers for latest/specified releases and pinned `--main` snapshots, using public or authenticated transports. |
+| [Filesystem capabilities](Explanations.md#filesystem-capabilities) | `config`, `appdata`, `cache`, `state` | Independent declared locations used by application resources. |
+| [Installation placement](References.md#installation-placement) | `installation/installation.json` | Durable record of backend, source, enabled paths, and recovery support. |
+| [Config CLI](Explanations.md#command-line-application) | `{my_project} config ...` | Configuration commands mounted on the application. |
+| [Config editor](Explanations.md#configuration-tools) | `{my_project} config edit` | Terminal interface for inspecting and editing saved overrides. |
+| [Installers](References.md#installer-reference) | `src/{my_project}_distr` | Authored lifecycle payload and SDK-generated outputs. |
 
 ## Documentation rules
 
@@ -67,13 +65,19 @@ package descriptions. Contributors and coding agents must follow them.
 
 ### Installation instructions
 
-- Put installation before usage. Under `Installation`, keep `One-Line Install` before `Install from a Cloned Repository`, preserving the root README's existing heading hierarchy and layout. Keep platform labels such as `For Linux & macOS` and `For Windows` with their commands; installer examples may remain commented out. Follow [README maintenance](../CONTRIBUTING.md#readme-maintenance) rather than deleting useful content to make the README concise.
-- The one-line installer bootstraps from the repository's default branch. It installs the latest stable release by default; `--version VERSION` selects a release and `--main` selects a single pinned commit from remote `main` with its committed `uv.lock`. Main requires GitHub access but no release or Actions artifact; it may be unreleased code whose CI has not passed. See the [installer reference](References.md#installer-reference).
-- Public installation uses curl on Unix or native PowerShell HTTP on Windows and does not require GitHub CLI. `--github-client gh` uses authenticated GitHub CLI requests without fallback.
-- Link https://cli.github.com/ and document `gh auth login` and `gh auth setup-git` where authenticated access is needed. Private VCS dependencies require separate working Git credentials.
-- Cloned-repository instructions use `python -m venv` and `python -m pip install -e .`, so users can install without uv. Mention uv as optional.
-- GitHub releases contain one standard wheel and one source archive; do not describe installer bundles, platform archives, manifests, or permanent runtime exports.
-- Keep platform installer code in `src/{my_project}_dev/distribution`; root install scripts are thin shortcuts.
+- Use `gh release download` to obtain the exact release asset set, then run
+  `app-install.sh` or `app-install.cmd`. The generated release entry verifies
+  the selected manifest/package identity; use `--version VERSION` or `--main`
+  only when selecting a different supported source.
+- Explain that `--main` captures one immutable commit. `--github-client gh`
+  selects authenticated transport without anonymous fallback.
+- Keep checkout installation rooted in the authored generator, lifecycle
+  payload, and exactly six root wrappers. PowerShell stays below generated
+  artifacts; do not restore old `_dev/distribution` or root alias files.
+- Document `just make-artifacts`, no-write `just check-artifacts`, and the
+  separate `just stage-release-assets TAG FULL_COMMIT` release step.
+- Explain that the app wheel excludes `{my_project}_distr` and the source
+  archive includes authored source, required generated artifacts, and wrappers.
 
 ### Names and explanations
 
@@ -97,7 +101,7 @@ package descriptions. Contributors and coding agents must follow them.
 ### Links and examples
 
 - Link the relevant word or phrase within its paragraph or table cell, as in
-  "The [storage registry](Explanations.md#storage) remembers the directory."
+  "The [AppRC declaration](Explanations.md#apprc) defines application capabilities."
 - Link components to exact Explanations sections, operations to How-to user guides,
   exact APIs or commands to References, and complete setups to Examples.
 - Connect the documents in both directions through useful inline links. Link

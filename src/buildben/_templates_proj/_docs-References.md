@@ -7,7 +7,6 @@
   - [Command reference](#command-reference)
   - [Installer reference](#installer-reference)
   - [Uninstaller reference](#uninstaller-reference)
-  - [Storage commands](#storage-commands)
 - [Configuration and Python interfaces](#configuration-and-python-interfaces)
   - [Environment variables](#environment-variables)
   - [Configuration files](#configuration-files)
@@ -34,162 +33,209 @@
 | [config/app.py](../src/{my_project}/config/app.py) | The shared [AppRC](Explanations.md#apprc) declaration. |
 | [config/sections/app.py](../src/{my_project}/config/sections/app.py) | The `AppSettings` [config section](Explanations.md#config-sections). |
 | [config/bundle.py](../src/{my_project}/config/bundle.py) | The application's [config bundle](Explanations.md#config-bundle). |
-| [distribution](../src/{my_project}_dev/distribution) | Canonical [installer scripts](#installer-reference). |
-| [install-linux-macos.sh](../install-linux-macos.sh) | Root shortcut to the canonical Unix installer. |
-| [install-windows.cmd](../install-windows.cmd) | Double-click entry point and root shortcut to the canonical Windows installer. |
-| [uninstall.sh](../uninstall.sh) | Root shortcut to the saved Unix lifecycle helper. |
-| [uninstall.cmd](../uninstall.cmd) | Native Windows shortcut to the saved lifecycle helper. |
+| [`{my_project}_distr`](../src/{my_project}_distr) | Authored lifecycle payload, generator, and SDK-produced management artifacts. |
+| `app-install.sh` / `app-install.cmd` | Root install wrappers for POSIX and Windows. |
+| `app-launch.sh` / `app-launch.cmd` | Root launch wrappers for POSIX and Windows. |
+| `app-uninstall.sh` / `app-uninstall.cmd` | Root uninstall wrappers for POSIX and Windows. |
 | [tests](../tests) | Automated checks. |
 | [examples](../examples) | Small user-facing programs, described in [Examples](EXAMPLES.md). |
 | [docs](.) | Documentation, following the [authoring rules](README.md#documentation-rules). |
 
 ## Command reference
 
-Run these commands in the [installed environment](How-To-User-Guides.md#install-from-a-cloned-repository).
-Configuration commands use the AppRC directory selected by `{MY_PROJECT}_APPRC_DIR`.
+Run these commands from the [installed application environment](How-To-User-Guides.md#install-from-a-checkout).
+Application resources use declared paths captured for the invocation; see
+[configuration files](#configuration-files).
 
 | Command | Result |
 | --- | --- |
-| `{my_project} --help` | Show the command tree without requiring setup. |
-| `python -m {my_project} --help` | Run the same application through Python. |
+| `{my_project} --help` | Show business commands and AppRC's Maintenance management panel without requiring business setup. |
 | `{my_project} version` | Print the installed package version. |
-| `{my_project} diagnose --json` | Print package, interpreter, and AppRC paths. |
-| `{my_project} config setup --yes --storage-root ROOT` | [Initialize storage](How-To-User-Guides.md#initialize-storage) and register it as `default`. |
-| `{my_project} config doctor --json` | Inspect required values and source problems. |
-| `{my_project} config paths --json` | Show configuration paths. |
-| `{my_project} config show --json` | Build the [config bundle](Explanations.md#config-bundle) and print the application's configuration payload. |
-| `{my_project} config set app.message TEXT --scope storage` | [Save a setting](How-To-User-Guides.md#edit-a-saved-setting) in the selected storage dotenv. |
-| `{my_project} config edit` | Open the [config editor](Explanations.md#configuration-tools). |
-| `{my_project} appdata paths --json` | Inventory managed files, internal roots, retained external roots, and stale registry state without creating files. |
-| `{my_project} appdata clean --dry-run` | Preview managed-file and internal-root cleanup without deletion. |
-| `{my_project} appdata clean --yes --apprc-dir PATH` | Clean the explicitly selected managed directory without resolving ordinary runtime settings; retain external payloads. |
+| `{my_project} launcher` | Open the optional single-event-loop installed launcher. |
+| `{my_project} installation show [--json]` | Inspect installation authority without mutation. |
+| `{my_project} installation doctor [--json]` | Diagnose installation state without resolving business settings. |
+| `{my_project} installation migrate --dry-run` | Preview recognized legacy migration without writes. |
+| `{my_project} installation repair [--installer PATH]` | Repair the saved installation using explicit matching support. |
+| `{my_project} installation uninstall --dry-run` | Preview the selected uninstall without mutation. |
+| `{my_project} config show --json` | Print the application config payload from its captured runtime snapshot. |
+| `{my_project} config edit` | Open the optional config editor. |
 
-`config show --json` contains `package`, `version`, `storage_name`, `storage_root`,
-`storage_count`, and `config`. `config` holds the `AppSettings` fields. This shape
-is defined by `_config_show_payload` in the application's CLI module.
+`config show --json` contains package/version, paths, workspace selection, and
+the current config payload. Missing business settings do not disable installation
+show, doctor, dry-run, or repair management.
 
 ## Installer reference
 
-The canonical scripts live in `src/{my_project}_dev/distribution`. The root
-[`install-linux-macos.sh`](../install-linux-macos.sh) and
-[`install-windows.cmd`](../install-windows.cmd) files only forward arguments to
-those scripts. The Windows CMD entry point runs a PowerShell policy preflight
-before starting its installer.
+`src/{my_project}_distr/make_artifacts.py` composes the authored lifecycle
+payload with AppRC's deterministic generator. Run `just make-artifacts` after
+editing it, and `just check-artifacts` to check tracked files without rewriting
+them. The application wheel excludes `{my_project}_distr`; the source archive
+includes the generator, payload, generated artifacts, and six root wrappers.
 
-| Script | Platform and role |
+| Path | Purpose |
 | --- | --- |
-| `install-linux-macos.sh` | Bash installer for Linux and macOS. |
-| `install-windows.cmd` | Windows entry point, including double-click support. |
-| `install-windows.ps1` | Windows installer implementation. |
-| `prepare-powershell-windows.cmd` | Handles RemoteSigned policy and downloaded-file marks for the Windows entry point. |
-| `install-macos.command` | macOS double-click wrapper that forwards to the Bash installer. |
+| `app-install.sh`, `app-install.cmd` | Install a checkout or selected release source. |
+| `app-launch.sh`, `app-launch.cmd` | Launch the recorded installed command without environment recreation. |
+| `app-uninstall.sh`, `app-uninstall.cmd` | Invoke the saved authored uninstallation procedure. |
+| `src/{my_project}_distr/payload/app_lifecycle/install.py` | Repository-owned source acquisition and installation composition. |
+| `src/{my_project}_distr/payload/app_lifecycle/uninstall.py` | Repository-owned uninstall preview and handoff composition. |
+| `src/{my_project}_distr/artifacts/` | SDK-generated checkout payload; PowerShell remains under this tree. |
 
-The scripts bootstrap from the repository's default branch in both modes.
-Without a source option, they install the latest published stable source
-distribution; `--version VERSION` selects a specific stable release. Release
-installation uses the published release artifact. `--main` instead resolves
-the current remote `main` branch once and downloads that commit's source
-snapshot, including its committed `uv.lock`. It does not use local checkout
-changes and requires no GitHub release or Actions artifact.
+The default source is the current checkout when a local wrapper is used and the
+published release source when a release wrapper is used. `--version X.Y.Z`
+selects one published release. `--main` resolves remote `main` once to a full
+commit identity. `--github-client gh` selects authenticated GitHub CLI transport;
+it does not change source selection. For declared resource capabilities,
+choose `--layout native` or `--layout single-root --root ABSOLUTE_PATH`. A
+reinstall reuses saved absolute resource paths unless layout is explicitly
+overridden.
 
-`--main` requires GitHub access: public requests use anonymous transport, while
-`--github-client gh` uses authenticated GitHub CLI requests without anonymous
-fallback. Install [GitHub CLI](https://cli.github.com/), then run `gh auth login` and `gh auth setup-git` when authenticated GitHub or private VCS access is needed. Public release downloads and curl do not inherit gh credentials.
-private VCS dependencies separately need working Git credentials.
-
-Main is unreleased code, and its CI may not have passed. The installed package
-version comes from `pyproject.toml` and may match a release; the printed source
-commit SHA identifies the selected snapshot. Omit `--main` or pass
-`--version VERSION` to return to a release; `--main` and `--version` are
-mutually exclusive.
-
-| Option | Effect |
-| --- | --- |
-| *(no source option)* | Install the latest published stable release source archive. |
-| `--version VERSION` | Select a stable release version, accepting `X.Y.Z` or `vX.Y.Z`; cannot be combined with `--main`. |
-| `--main` | Install the current remote `main` snapshot pinned to one resolved commit and its committed lock file; requires GitHub access. |
-| `--github-client curl` | Use anonymous public download transport (the default); Windows uses native PowerShell HTTP. |
-| `--github-client gh` | Use authenticated GitHub CLI requests without anonymous fallback. |
-| `--uv PATH` | Use a specific uv executable. |
-| `--yes` | Skip the installer confirmation. |
-| `--skip-config` | Skip `{my_project} config setup` after installation. |
-| `--help` | Print the supported options. |
-
-The release contains one standard wheel and one source archive. The installer
-selects the matching source archive, requires its `pyproject.toml` and `uv.lock`,
-exports the locked runtime requirements, and installs it with `uv tool
-install`. A legacy source archive without `uv.lock` fails explicitly rather
-than falling back to Git or another version. The normal release workflow reuses
-one successful full CI gate for the exact tagged commit; it does not build
-platform-specific installer archives.
+Release preparation uses `just check-artifacts`, builds one validated wheel
+and sdist, then runs `just stage-release-assets TAG FULL_COMMIT`. The helper
+stages only the exact package pair and SDK-generated script entries in
+`release/assets` and delegates manifest creation to the strict release asset
+contract. Package builds do not generate artifacts or access the network.
 
 ## Uninstaller reference
 
-Root `uninstall.sh` / `uninstall.cmd` dispatch to saved native launchers.
-The canonical `src/{my_project}_dev/distribution/lifecycle.py` owns all deletion
-policy and uses only the standard library. Native wrappers locate and launch
-it; they do not duplicate removal logic. Saved launchers invoke absolute base
-Python/helper paths without the source checkout, app environment, or PATH.
+`app-uninstall.sh` and `app-uninstall.cmd` route through the repository-authored
+uninstall module and saved AppRC controller. The default retains declared
+application resources and installation recovery support. Complete removal
+requires an explicit category selection and confirmation:
 
 | Option | Effect |
 | --- | --- |
-| `--dry-run` | Preview only; never write state, download tools, clean data, or uninstall. |
-| `--yes` | Confirm package removal only; required without a terminal for mutation. |
-| `--clean-appdata` | Explicitly request application-managed cleanup before package removal, after machine-readable safety inventory and human preview. |
-| `--apprc-dir PATH` | Forward an explicit directory only to `appdata` operations. |
-| `--remove-uv` | Request separately authorized uv deletion only if every ownership, binary identity, and inventory check passes. |
-| `--uv PATH` | Explicit package-only legacy recovery when a valid receipt is unavailable; cannot override a valid receipt's installation. |
+| `--complete` | Request complete removal of selected, recorded resources. |
+| `--category config\|appdata\|cache\|state` | Select one owned resource category; repeat as needed. |
+| `--forget-retained` | Explicitly leave and report retained files where supported. |
+| `--yes` | Confirm the requested uninstall without an interactive prompt. |
 
-Unix state is
-`${XDG_STATE_HOME:-$HOME/.local/state}/<distribution_name>/installation`;
-relative `XDG_STATE_HOME` is rejected. Windows state is
-`%LOCALAPPDATA%\<distribution_name>\installation`, and missing `LOCALAPPDATA`
-is an error. The private `receipt.json` stores distribution/command, installed
-version/source ref, absolute base Python/uv/tool directories, appdata support,
-bootstrap provenance and candidate hashes, and `package_removed` completion.
-Saved helper/native launchers, Windows policy-preflight support, and receipt
-remain after removal. Successful reinstall refreshes that same layout; a
-conflicting layout, occupied unknown state directory, or linked state target
-is rejected before package installation.
+The saved controller is kept under the fixed native
+`installation/` directory, separate from appdata. Inspection and recovery use
+`{my_project} installation show`, `{my_project} installation doctor`, and
+`{my_project} installation repair`; these management commands do not require
+business settings to resolve.
 
-uv inventory uses the recorded directories, not later shell overrides.
-Eligibility requires an owned standalone bootstrap, unchanged recorded regular
-binaries, this package as the only tool before removal, and empty recorded and
-default inventories afterward. Inventory parse/errors fail closed. Empty tool
-inventories do not prove uv is unused by projects or prevent concurrent use.
-Only enumerated binaries are unlinked, uv last; there is no recursive removal.
+Project-specific cleanup belongs in ordinary repository functions called while
+the program remains installed. Cleanup that cannot prove ownership keeps the
+affected resource and installation authority for recovery. Unknown descendants,
+external workspaces, shared uv, and shared Python are not inferred as removal
+targets.
 
-Cleanup runs the installed application at the recorded tool-bin path. Its
-`appdata paths --json` inventory and `appdata clean --dry-run` must succeed
-before deletion. Managed targets overlapping saved recovery support are
-rejected. Failure/cancellation leaves the package installed. External payloads,
-unmanaged data, shared Python, caches, and shell configuration are retained.
-The [removal guide](How-To-User-Guides.md#remove-an-installation) covers practical
-cleanup, recovery, and editable pip removal.
+## Installation placement
 
-`appdata paths --json` returns `apprc_dir`, `managed_files`,
-`internal_storage_roots`, `external_storage_roots`, `stale_storage`, and
-`stale_user_dotenv`. `--apprc-dir` selects this managed inventory explicitly;
-root runtime dotenv/storage selectors are not inherited. `appdata clean`
-supports `--dry-run` and `--yes` / `-y`, with a separate default-No confirmation
-when neither flag bypasses mutation.
+The installer supports `native` paths or one explicit `single-root` layout.
+`--layout` and `--root` are installer options; `--root` is valid only with
+`--layout single-root` and must be absolute. The saved placement records enabled
+resource paths, which reinstallation reuses by default. This resource layout is
+separate from the program environment: `uv tool install` manages the application
+program in its tool environment, while `--layout` selects declared application
+resource locations. Changing layout does not move the installed program or
+automatically move existing resource contents.
 
 
-## Storage commands
+The legacy Buildben receipt is recognized only at
+`%LOCALAPPDATA%/<normalized-distribution>/installation/receipt.json` on Windows
+or `${XDG_STATE_HOME:-~/.local/state}/<normalized-distribution>/installation/receipt.json`
+on POSIX. To cut it over, first stop legacy installers, launchers, and
+uninstallers. Then explicitly choose a layout, provide verified installed-source
+evidence, and confirm quiescence:
 
-These commands act on the [storage registry](Explanations.md#storage). Names refer
-to registered directories. `--storage NAME` before `config` selects one directory
-for an invocation; [switching storage](How-To-User-Guides.md#switch-storage) shows
-how that differs from changing the saved default.
+```sh
+./app-install.sh --migrate-legacy --legacy-quiescent --legacy-source legacy-source.json --layout native
+./app-install.sh --migrate-legacy --legacy-quiescent --legacy-source legacy-source.json --layout single-root --root ABSOLUTE_PATH
+```
 
-| Command | Effect |
-| --- | --- |
-| `{my_project} config storage list` | List registered names and paths. |
-| `{my_project} config storage add NAME ROOT --yes` | Register a directory and initialize its storage dotenv. |
-| `{my_project} config storage select NAME` | Save a default for later invocations. |
-| `{my_project} config storage move NAME ROOT` | Move the directory and update its registration. |
-| `{my_project} config storage repoint NAME ROOT` | Reconnect a registration to a directory already at that path. |
-| `{my_project} config storage remove NAME` | Unregister the directory, leaving its data on disk. |
+Use `app-install.cmd` for Windows. The cutover validates the recorded uv
+backend and known helper files; unknown files block migration and remain
+untouched until reviewed. If a durable migration is interrupted, the installer
+resumes that recorded migration on its next run. Preflight conflicts must be
+resolved before repeating the explicit migration command.
+
+`--legacy-source` is a JSON file with exactly `source` and
+`distribution_record_digest`. `source` contains the SDK's complete
+`InstallationSource` fields: `kind`, `requirement`, `version`, `digest`,
+`runtime_requirements`, and `runtime_overrides`. Use the actual original
+acquisition and installed observation, not the current checkout or a newer
+release. Nullable fields remain JSON `null`; requirement lists remain arrays.
+The SDK re-probes the recorded backend and checks its installed version against
+the legacy receipt before any cutover. Release/wheel/materialized-main evidence
+must include the original archive digest and observed distribution RECORD
+fingerprint when required by the SDK. This evidence is an explicit migration
+input, not a second discovery receipt.
+
+For example, a previously observed editable source can be represented as:
+
+```json
+{
+  "source": {
+    "kind": "editable",
+    "requirement": "/absolute/original/project",
+    "version": null,
+    "digest": null,
+    "runtime_requirements": [],
+    "runtime_overrides": []
+  },
+  "distribution_record_digest": null
+}
+```
+
+Only use that example for a genuinely editable legacy installation, with its
+actual recorded constraints and overrides. An old receipt that records only a
+release label does not prove the original archive bytes or installed origin.
+If that evidence is unavailable, preserve the legacy installation and recover
+its acquisition evidence before migrating; the installer does not silently
+adopt the current checkout. Once a migration is journaled, retry uses the saved
+operation and bound support instead of asking for a new source choice.
+
+To collect the installed metadata without importing old business configuration,
+use the final SDK's ordinary metadata probe with the **recorded tool
+environment's interpreter**, not the `python` entry in the old receipt (that
+may be an external base interpreter):
+
+```sh
+probe="$(uv run --locked python -c 'from apprc.distribution.runtime import installed_probe; print(installed_probe.__file__)')"
+"/absolute/recorded/tool-dir/<normalized-distribution>/bin/python" "$probe" \
+  --distribution "<normalized-distribution>" \
+  --app-id "<actual-app-id>" \
+  --import-package "<my_project>" \
+  --command "<my_project>" > legacy-observation.json
+```
+
+On Windows, use the recorded tool environment's `Scripts/python.exe` with the
+same probe path and arguments. Add one `--command` for each actual installed
+entry point. This produces `version`, `direct_url`, and
+`distribution_record_digest` from that environment. Match `version` to
+`receipt.json`; copy the observed RECORD digest into the evidence file rather
+than hashing a different checkout. The cutover runs this probe again and
+compares the result, so collecting metadata does not authorize adoption.
+
+Use the original verified acquisition inputs to fill `source`. An editable
+PEP 610 `direct_url` must name the original absolute project and have
+`dir_info.editable=true`. A VCS source must retain the actual credential-free
+GitHub repository, complete commit, and subdirectory from its `vcs_info` and
+`subdirectory` fields; represent it as an `index` requirement
+`git+https://github.com/OWNER/REPO.git@FULL_COMMIT#subdirectory=PROJECT_PATH`.
+Use the observed installed version, not this checkout's version. For an SDK
+content-addressed wheel or release source, obtain the original archive SHA-256,
+source locator, constraints, and overrides from the verified acquisition
+manifest or retained artifact; the installed observation alone does not
+reconstruct those original inputs.
+
+There is a further strict SDK boundary: noneditable wheel/release origins
+must use its content-addressed staging convention, independently checked
+against the supplied archive digest and installed RECORD fingerprint. A legacy
+release installed from an arbitrary old temporary directory cannot be adopted
+by renaming its provenance to the current checkout or inventing a digest.
+Preserve that installation and its data, retain the observation and available
+original artifacts, and review a project-specific safe migration before
+changing authority. Neither an unavailable old staging directory nor a version
+label alone is a successful migration.
+
+Config, appdata, cache, and state are independent declared capabilities.
+Disabled paths remain absent; an installation record does not enable appdata.
+The fixed native `installation/` directory is separate from these purgeable
+resources and remains available for inspection and recovery.
 
 <br>
 
@@ -199,35 +245,30 @@ how that differs from changing the saved default.
 
 | Name | Meaning |
 | --- | --- |
-| `{MY_PROJECT}_APPRC_DIR` | AppRC directory containing `apprc.toml`; defaults to `~/.local/share/{my_project}`. |
-| `{MY_PROJECT}_STORAGE` | [Storage selector](Explanations.md#storage), accepting a registered name or a root path. |
 | `{MY_PROJECT}_MESSAGE` | Invocation override for `AppSettings.message`; see the [precedence example](EXAMPLES.md#an-invocation-override). |
 
-Shell values have higher precedence than saved dotenv values. The
-[configuration-files explanation](Explanations.md#configuration-files) gives the
-complete order. Setting `secret=True` redacts field display but does not encrypt
-dotenv files.
+The application loads environment files only when its declaration enables them.
+Installer resource layout is selected with `--layout` and, for `single-root`,
+`--root`; these are command-line options, not environment variables.
 
 ## Configuration files
 
 | File | Meaning |
 | --- | --- |
 | [config/apprc.defaults.env](../src/{my_project}/config/apprc.defaults.env) | Defaults included in the installed package. |
-| `<AppRC directory>/apprc.toml` | Registry of storage names, paths, and the saved default. |
-| `<storage root>/apprc.storage.env` | Overrides specific to one storage directory. |
-| `<AppRC directory>/apprc.user.env` | Shared preferences, only if [user dotenv support is enabled](EXAMPLES.md#user-preferences-and-storage). |
+| `<config path>/apprc.user.env` | Saved preferences only when user dotenv support is enabled. |
 
-The generated application enables storage but no user dotenv. Its
-[setup guide](How-To-User-Guides.md#initialize-storage) creates the managed files
-outside the installed package.
+Resource locations are capabilities declared in `{my_project}.config.app.APP_RC`.
+The saved installation authority records absolute paths for enabled resources;
+it does not turn disabled resources on.
 
 ## Public interfaces
 
 | Name | Responsibility |
 | --- | --- |
 | `{my_project}.config.app.APP_RC` | The shared `rc.AppRC` declaration. |
-| `{my_project}.config.sections.app.AppSettings` | Typed `storage_root` and `message` settings. |
-| `{my_project}.config.bundle.{MyProject}Config` | Dataclass grouping the application's config sections. |
+| `{my_project}.config.sections.app.AppSettings` | Typed application message and other business settings. |
+| `{my_project}.config.bundle.{MyProject}Config` | Dataclass grouping application configuration sections. |
 | `{my_project}.cli.app.app` | Typer command tree. |
 | `{my_project}.main.main` | Entry point for the console script. |
 
@@ -244,16 +285,19 @@ shows how `APP_RC.resolve()` and `ResolvedConfig.build()` construct them. The
 
 | Declaration in `pyproject.toml` | Use |
 | --- | --- |
-| `[project].dependencies` | Runtime dependencies, initially `apprc>=0.29.0,<0.30` and `typer`. |
+| `[project].dependencies` | Published runtime dependencies, including `apprc>=0.31.0,<0.32` and `typer`. |
 | `[project.optional-dependencies]` | Published extras for optional application features. |
-| `[dependency-groups]` | Local maintainer tools such as pytest, Ruff, and Pyright. |
+| `[dependency-groups].dev` | Local authoring dependencies, including `apprc-core[distribution]>=0.31.0,<0.32`. |
 
-`apprc` installs the matching `apprc-core` and terminal libraries. Buildben itself
-has no runtime dependency on AppRC. The generated application's
-[package explanation](Explanations.md#package-layout-and-dependencies) describes
-why each dependency is needed. [Contributing](../CONTRIBUTING.md#set-up-development)
-provides the normal pip setup; [Development](Development.md#maintainer-environment)
-covers uv and optional extras.
+The scaffold pins AppRC core, terminal, and optional GUI development sources to
+one immutable integration commit until the matching AppRC release is published.
+Runtime overrides pass the corresponding immutable source requirements to the
+uv-managed application installation. Buildben itself keeps `dependencies=[]`
+and has no AppRC runtime reference or application-data capabilities.
+
+See the [package explanation](Explanations.md#package-layout-and-dependencies)
+for wheel/sdist boundaries and [Development](Development.md#maintainer-environment)
+for the locked authoring environment.
 
 ## Figure visual tokens
 

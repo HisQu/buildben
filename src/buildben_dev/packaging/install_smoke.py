@@ -12,18 +12,10 @@ from dataclasses import dataclass
 REQUIRED_RESOURCES = (
     "buildben/_templates_proj/_justfile",
     "buildben/_templates_proj/_github-ci.yml",
-    "buildben/_templates_proj/_github-release.yml",
-    "buildben/_templates_proj/_src-dev-distribution-lifecycle.py.tmpl",
-    "buildben/_templates_proj/_src-dev-distribution-uninstall.sh",
-    "buildben/_templates_proj/_src-dev-distribution-uninstall.cmd",
-    "buildben/_templates_proj/_src-dev-distribution-uninstall.ps1",
-    "buildben/_templates_proj/_uninstall.sh",
-    "buildben/_templates_proj/_uninstall.cmd",
-    "buildben_dev.distribution/lifecycle.py",
-    "buildben_dev.distribution/uninstall.sh",
-    "buildben_dev.distribution/uninstall.cmd",
-    "buildben_dev.distribution/uninstall.ps1",
-    "buildben_dev.distribution/prepare-powershell-windows.cmd",
+    "buildben/_templates_proj/_src-distr-make_artifacts.py.tmpl",
+    "buildben/_templates_proj/_src-distr-payload-install.py.tmpl",
+    "buildben/_templates_proj/_src-distr-payload-uninstall.py.tmpl",
+    "buildben/_templates_proj/_src-dev-packaging-release_stage.py.tmpl",
 )
 
 
@@ -54,10 +46,7 @@ def capture_install_snapshot() -> InstallSnapshot:
     """
     import buildben
 
-    package_files = {
-        package: importlib.resources.files(package)
-        for package in ("buildben", "buildben_dev.distribution")
-    }
+    package_files = {"buildben": importlib.resources.files("buildben")}
     resources = tuple(
         resource
         for resource in REQUIRED_RESOURCES

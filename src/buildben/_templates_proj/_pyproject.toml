@@ -17,10 +17,8 @@ readme      = "README.md"
 license     = "MIT"
 requires-python = ">=3.12"
 dependencies = [
-    # Core runtime packages only: imports needed when somebody installs and
-    # uses this package with `python -m pip install -e "."`.
-    "apprc>=0.29.0,<0.30",  # < Config and generated config CLI/TUI
-    "typer",  # < Package-level CLI app and console script
+    "apprc>=0.31.0,<0.32",
+    "typer",
     # "environs",     # < Higher-level .env parsing
     # "structlog",    # < Stdlib-backed structured logging
     # "tyro",         # < CLI from dataclasses
@@ -29,6 +27,9 @@ dependencies = [
     # "openpyxl",     # < Excel files
     # "py-yaml12>=0.1.0",    # < YAML 1.2 parser/emitter
 ]
+
+[project.urls]
+Repository = "https://github.com/<github_username>/<my_project>.git"
 
 # == This Allows refactoring across repo boundaries
 # !! Comment out before packaging !!
@@ -77,7 +78,7 @@ dependencies = [
 #   uv sync --locked --all-extras --all-groups
 [dependency-groups]
 dev = [
-    # === Install from PyPI ===================================
+    "apprc-core[distribution]>=0.31.0,<0.32",
     # --- Interactive development -------
     "jupyterlab",    # < Brings notebook, widgets, ipykernel, etc.
     "ipywidgets",    # < Needed for interactive widgets; also installs/configures widget frontend support.
@@ -86,7 +87,6 @@ dev = [
     "pytest>=8.2",
     "pytest-asyncio",  # < Async testing
     "pytest-xdist",    # < Multi-core testing
-    # "pytest-cov",       # < Code-Coverage
     # --- Code-Quality ---------
     "pyright>=1.1",  # < Type checker
     "ruff>=0.4",  # < Linter and formatter
@@ -100,6 +100,7 @@ dev = [
     # --- IO -----------------------------
     # "sacred",        # < Experiment management
 ]
+gui = ["apprc-gui>=0.31.0,<0.32"]
 
 # =====================================================================
 # === Packaging
@@ -112,8 +113,8 @@ package-dir = { "" = "src"}
 
 # > Autodiscovery:
 [tool.setuptools.packages.find]
-where = ["src"]                       # < Scan only src/ for packages
-# namespaces = false                     # < Implicit namespace packages ok
+where = ["src"]
+exclude = ["<my_project>_distr", "<my_project>_distr.*"]
 
 
 # === Include non-py files *inside* the package =======
@@ -123,8 +124,18 @@ where = ["src"]                       # < Scan only src/ for packages
     "data/**/*.xlsx",
     "images/**/*.{png,jpg}",
 ]
-"<my_project>_dev.distribution" = ["*.sh", "*.cmd", "*.ps1", "*.command"]
 
+[tool.uv.sources]
+apprc-core = { git = "https://github.com/HisQu/apprc.git", rev = "7977db5d5bff9fe202a02b3e03d3d5b0b83bba6c" }
+apprc = { git = "https://github.com/HisQu/apprc.git", subdirectory = "src/apprc_dev/packaging/terminal", rev = "7977db5d5bff9fe202a02b3e03d3d5b0b83bba6c" }
+apprc-gui = { git = "https://github.com/HisQu/apprc.git", subdirectory = "src/apprc_dev/packaging/gui", rev = "7977db5d5bff9fe202a02b3e03d3d5b0b83bba6c" }
+
+[tool.apprc.distribution]
+app-id = "<my_project>"
+apprc-reference = "<my_project>.config.app:APP_RC"
+project-path = "."
+distribution-path = "src/<my_project>_distr"
+launcher-command = "<my_project>"
 # === Include data *outside* the package (e.g. top-level docs/) ====
 # > Installs into <sys.prefix>/share/<my_project>
 # !! Requires a MANIFEST.in! 
@@ -157,6 +168,8 @@ venv = ".venv"
 include = ["src"]
 exclude = [
     "tests", # < Tests may be dirty.
+    "**/*_distr/artifacts",
+    "**/*_distr/payload/app_lifecycle/_support",
     "**/example_data",
     "**/old",
     "**/__pycache__",
@@ -169,6 +182,11 @@ exclude = [
 # Ruff (linter and formatter)
 [tool.ruff]
 line-length = 80
+# > The SDK generator's exact bytes are checked by `just check-artifacts`.
+extend-exclude = [
+    "**/*_distr/artifacts",
+    "**/*_distr/payload/app_lifecycle/_support",
+]
 # unsafe-fixes = true
 
 
