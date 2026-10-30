@@ -21,7 +21,7 @@ ZIPAPP_SUPPORT = (
     "app-install.cmd",
     "bootstrap.ps1",
     "main-installer.pyz",
-    "management-requirements.txt",
+    "main-installer-requirements.txt",
 )
 
 
