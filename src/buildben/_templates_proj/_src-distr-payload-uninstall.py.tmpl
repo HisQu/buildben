@@ -18,7 +18,9 @@ from apprc.distribution.runtime.controllers import (
 
 def main(argv: list[str] | None = None) -> NoReturn:
     """Revalidate an accepted preview and hand off after the real caller exits."""
-    original_pid, expected_revision, forwarded = parse_uninstall_handoff_args(argv)
+    original_pid, expected_revision, forwarded = parse_uninstall_handoff_args(
+        argv
+    )
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--complete", action="store_true")
@@ -40,11 +42,19 @@ def main(argv: list[str] | None = None) -> NoReturn:
     )
     if not preparation.can_execute or preparation.plan is None:
         details = "; ".join(item.message for item in preparation.diagnostics)
-        raise InstallationError(details or "Installation cannot be removed safely.")
-    if expected_revision is not None and preparation.plan.expected_revision != expected_revision:
+        raise InstallationError(
+            details or "Installation cannot be removed safely."
+        )
+    if (
+        expected_revision is not None
+        and preparation.plan.expected_revision != expected_revision
+    ):
         raise InstallationError("Installation changed after uninstall preview.")
     if expected_revision is None and not arguments.yes:
-        if not sys.stdin.isatty() or input("Remove the installed program? [y/N] ").casefold() != "y":
+        if (
+            not sys.stdin.isatty()
+            or input("Remove the installed program? [y/N] ").casefold() != "y"
+        ):
             raise SystemExit("Uninstall cancelled.")
     handoff = start_uninstall_handoff(
         preparation.plan,

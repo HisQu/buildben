@@ -380,11 +380,22 @@ procedure](src/buildben/_templates_proj/_docs-References.md) for the SDK metadat
 probe and exact JSON shape; replace the scaffold's example identities with
 `buildben` and its actual `buildben`/`bube` commands.
 
-Some old noneditable installs from arbitrary, deleted temporary origins lack the
-proof required by the SDK's strict source checks. They remain untouched rather
-than being relabeled as this checkout or silently adopted. Preserve their
-installation, data, observation and available original artifacts for an explicit
-project-specific migration. A missing old source is not a successful cutover.
+For old noneditable installs whose arbitrary temporary source has been deleted,
+do not invent original provenance. Explicitly reinstall from a verified immutable
+source before cutover:
+
+```sh
+./app-install.sh --migrate-legacy --reinstall-legacy --legacy-quiescent \
+  --legacy-source legacy-source.json --layout native
+```
+
+In this mode, `source` selects the verified replacement; the RECORD digest still
+describes the **old installed program**. This replaces its uv-managed program
+environment, not user data or workspaces. The recorded interpreter/backend is
+preserved, and old controllers retire only after the replacement is observed.
+After an interruption, stop old processes again and retry the matching command
+with `--legacy-quiescent`; pending authority supplies the saved source and paths.
+Reinstallation is never an automatic fallback from failed adoption.
 
 For an unmanaged editable pip installation, use that environment's
 `python -m pip uninstall buildben`. For a manually installed uv tool without

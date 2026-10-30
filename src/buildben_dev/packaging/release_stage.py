@@ -140,24 +140,36 @@ def stage_release(
         payload = PayloadTree(staged_payload, modules, resources=resources)
         installer = build_main_installer(spec, payload)
     artifacts = (*render_bootstraps(spec), installer)
+    payload_format = spec.payload_format
+    payload_filename = (
+        "main-installer.pyz" if payload_format == "zipapp" else "main-installer.py"
+    )
+    installer_path = (
+        metadata.distribution_path / "artifacts/installer" / payload_filename
+    )
     destinations = {
         PurePosixPath("app-install.sh"): "app-install.sh",
         PurePosixPath("app-install.cmd"): "app-install.cmd",
         PurePosixPath("bootstrap.ps1"): "bootstrap.ps1",
-        metadata.distribution_path
-        / "artifacts/installer/main-installer.py": "main-installer.py",
+        installer_path: payload_filename,
     }
-    rendered: dict[str, bytes] = {}
+    if payload_format == "zipapp":
+        requirements_path = (
+            metadata.distribution_path
+            / "artifacts/installer/main-installer-requirements.txt"
+        )
+        destinations[requirements_path] = "main-installer-requirements.txt"
+    rendered: dict[str, tuple[bytes, bool]] = {}
     for artifact in artifacts:
         filename = destinations.get(artifact.destination)
         if filename is not None:
             if filename in rendered:
                 raise ValueError(f"Release generator repeated {filename}.")
-            rendered[filename] = artifact.content
+            rendered[filename] = (artifact.content, artifact.executable)
     expected_native = set(destinations.values())
     if set(rendered) != expected_native:
         raise ValueError(
-            "AppRC did not emit the complete script-mode release entry set."
+            f"AppRC did not emit the complete {payload_format}-mode release entry set."
         )
     destination = root / "release" / "assets"
     destination.mkdir(parents=True, exist_ok=True)
@@ -170,15 +182,18 @@ def stage_release(
         )
     for package in (wheel, sdist):
         shutil.copyfile(package, destination / package.name)
-    for filename, content in rendered.items():
-        (destination / filename).write_bytes(content)
+    for filename, (content, executable) in rendered.items():
+        output = destination / filename
+        output.write_bytes(content)
+        if executable:
+            output.chmod(0o755)
     return release_assets.stage(
         destination,
         staged_names,
         repository=repository,
         tag=tag,
         commit=commit,
-        payload_format="script",
+        payload_format=payload_format,
     )
 
 

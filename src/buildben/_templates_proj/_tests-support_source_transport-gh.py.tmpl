@@ -14,7 +14,11 @@ def main() -> int:
     arguments = sys.argv[1:]
     if arguments[:1] == ["api"]:
         endpoint = next(
-            (value for value in arguments[1:] if value.startswith(("repos/", "/repos/"))),
+            (
+                value
+                for value in arguments[1:]
+                if value.startswith(("repos/", "/repos/"))
+            ),
             None,
         )
         if endpoint is None:
@@ -39,7 +43,9 @@ def main() -> int:
         ]
         if len(assets) != 1:
             raise SystemExit("Fixture release asset selection was not unique.")
-        with urllib.request.urlopen(assets[0]["browser_download_url"], timeout=30) as response:
+        with urllib.request.urlopen(
+            assets[0]["browser_download_url"], timeout=30
+        ) as response:
             data = response.read()
         output.mkdir(parents=True, exist_ok=True)
         (output / pattern).write_bytes(data)

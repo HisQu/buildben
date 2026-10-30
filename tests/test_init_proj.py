@@ -59,7 +59,17 @@ def _project_env(project_root: Path) -> dict[str, str]:
     if existing_pythonpath:
         src_paths.append(existing_pythonpath)
     env["PYTHONPATH"] = os.pathsep.join(src_paths)
-    env["BUBE_TEST_TMP_APPRC_DIR"] = str(project_root / ".test-config")
+    env["BUBE_TEST_TMP_LAYOUT"] = "single-root"
+    env["BUBE_TEST_TMP_ROOT"] = str(project_root / ".test-app")
+    for variable, directory in (
+        ("HOME", ".test-home"),
+        ("USERPROFILE", ".test-home"),
+        ("XDG_CONFIG_HOME", ".test-home/.config"),
+        ("XDG_DATA_HOME", ".test-home/.local/share"),
+        ("XDG_STATE_HOME", ".test-home/.local/state"),
+        ("XDG_CACHE_HOME", ".test-home/.cache"),
+    ):
+        env[variable] = str(project_root / directory)
     return env
 
 
@@ -275,22 +285,13 @@ def test_scaffolded_project_runs_apprc_configuration(bube_test_project: Path) ->
     assert "Maintenance" in help_text
     assert "installation" in help_text
     diagnose = json.loads(_runtime_command(project, "diagnose", "--json"))
-    assert diagnose["paths"]["config"] == str(project / ".test-config")
+    assert diagnose["paths"]["config"] == str(project / ".test-app" / "config")
     paths = json.loads(_runtime_command(project, "paths", "--json"))
-    assert paths["paths"]["config"] == str(project / ".test-config")
+    assert paths["paths"]["config"] == str(project / ".test-app" / "config")
     assert paths["exists"]["config"] is False
-    assert not (project / ".test-config").exists()
-    config_paths = json.loads(_runtime_command(project, "config", "paths", "--json"))
-    assert config_paths["config_dir"] == str(project / ".test-config")
-    assert config_paths["config_enabled"] is True
-    before = subprocess.run(
-        [sys.executable, "-m", "bube_test_tmp", "config", "doctor"],
-        cwd=project,
-        env=_project_env(project),
-        capture_output=True,
-        check=False,
-    )
-    assert before.returncode == 1
+    assert not (project / ".test-app" / "config").exists()
+    _runtime_command(project, "config", "doctor")
+    assert not (project / ".test-app" / "config").exists()
     _runtime_command(project, "config", "setup", "--yes")
     _runtime_command(project, "config", "doctor")
     initial = json.loads(_runtime_command(project, "config", "show", "--json"))
@@ -300,8 +301,7 @@ def test_scaffolded_project_runs_apprc_configuration(bube_test_project: Path) ->
     )
     saved = json.loads(_runtime_command(project, "config", "show", "--json"))
     assert saved["config"]["message"] == "Saved value"
-    assert (project / ".test-config" / "apprc.toml").is_file()
-    assert (project / ".test-config" / "apprc.user.env").is_file()
+    assert (project / ".test-app" / "config" / "apprc.user.env").is_file()
     env = _project_env(project)
     env["BUBE_TEST_TMP_MESSAGE"] = "Environment override"
     overridden = subprocess.run(

@@ -21,15 +21,60 @@ from apprc.distribution import (
     read_project_metadata,
     render_bootstraps,
 )
+from apprc.distribution.models import DistributionSpec, ProjectMetadata
+from apprc.distribution.standalone import MANAGEMENT_REQUIREMENTS
 from buildben_distr.make_artifacts import distribution_spec
+from buildben_dev.packaging import release_stage
 from buildben_dev.packaging.release_stage import _locked_runtime_requirements
 from support_source_transport.server import SourceFixture
 
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
 REPOSITORY = "https://github.com/HisQu/buildben.git"
+
+
+def test_zipapp_release_staging_uses_generated_payload_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    generated_remote_consumer: Path,
+) -> None:
+    """Stage a real generated consumer using its authored zipapp specification."""
+
+    source_root = generated_remote_consumer
+    root = tmp_path / "zipapp-consumer"
+
+    def ignore_generated(_directory: str, names: list[str]) -> set[str]:
+        return {name for name in names if name in {".venv", "__pycache__", "release"}}
+
+    shutil.copytree(source_root, root, ignore=ignore_generated)
+    original_spec = distribution_spec
+
+    def zipapp_spec(project_root: Path, metadata: ProjectMetadata) -> DistributionSpec:
+        return dataclasses.replace(
+            original_spec(project_root, metadata),
+            payload_format="zipapp",
+        )
+
+    monkeypatch.setattr(release_stage, "distribution_spec", zipapp_spec)
+    monkeypatch.chdir(root)
+    version = read_project_metadata(root).version
+    commit = "b" * 40
+    release_stage.stage_release(f"v{version}", commit, root=root)
+
+    assets = root / "release" / "assets"
+    names = {path.name for path in assets.iterdir()}
+    assert "main-installer.pyz" in names
+    assert "main-installer-requirements.txt" in names
+    assert "main-installer.py" not in names
+    manifest = json.loads((assets / "release-manifest.json").read_text("utf-8"))
+    assert manifest["payload_format"] == "zipapp"
+    assert manifest["commit"] == commit
+    requirements = assets / "main-installer-requirements.txt"
+    assert requirements.read_text(encoding="utf-8") == "".join(
+        requirement + "\n" for requirement in MANAGEMENT_REQUIREMENTS
+    )
+    installer = assets / "app-install.sh"
+    assert os.name == "nt" or installer.stat().st_mode & 0o111
 
 
 def _main_installer(directory: Path, commit: str, project_root: Path = ROOT) -> Path:
@@ -247,7 +292,18 @@ def _persistent_uv_without_initial_path(
     environment["UV"] = str(selected_uv)
     minimal_bin = tmp_path / "minimal-bootstrap-bin"
     minimal_bin.mkdir()
-    for command in ("cat", "dirname", "git", "mktemp", "pwd", "rm", "sh", "uname"):
+    for command in (
+        "basename",
+        "cat",
+        "dirname",
+        "git",
+        "mktemp",
+        "pwd",
+        "rm",
+        "sed",
+        "sh",
+        "uname",
+    ):
         executable = shutil.which(command)
         if executable is not None:
             (minimal_bin / command).symlink_to(executable)

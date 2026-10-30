@@ -146,6 +146,10 @@ This project follows Semantic Versioning.
   authority retirement. Program-only removal retains resource data/support;
   complete removal requires exact ownership-aware preview and consent. Shared uv,
   shared Python, editable checkouts and workspaces are never implicit targets.
+- Added explicit `--migrate-legacy --reinstall-legacy` for old noneditable programs
+  whose deleted temporary origin cannot be adopted. Independently observed old
+  RECORD evidence and a verified immutable replacement remain distinct; pending
+  recovery reuses recorded source/backend/placement and requires fresh quiescence.
 - Added strict release manifests and offline staging/verification commands. Draft
   retries preserve tag ownership and partial-upload semantics; finalization and
   manual PyPI preflight verify the full package/helper contract without allowing

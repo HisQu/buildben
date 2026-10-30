@@ -1,4 +1,4 @@
-"""Route exact GitHub fixture URLs to the existing loopback server."""
+"""Route exact GitHub fixture URLs to the existing loopback server in subprocesses."""
 
 from __future__ import annotations
 
@@ -21,7 +21,9 @@ if _mapping_path:
     _urlopen = urllib.request.urlopen
 
     def _fixture_urlopen(url, *args, **kwargs):
-        original = url.full_url if isinstance(url, urllib.request.Request) else url
+        original = (
+            url.full_url if isinstance(url, urllib.request.Request) else url
+        )
         if not isinstance(original, str):
             return _urlopen(url, *args, **kwargs)
         parsed = urllib.parse.urlsplit(original)

@@ -155,14 +155,15 @@ resolved before repeating the explicit migration command.
 `--legacy-source` is a JSON file with exactly `source` and
 `distribution_record_digest`. `source` contains the SDK's complete
 `InstallationSource` fields: `kind`, `requirement`, `version`, `digest`,
-`runtime_requirements`, and `runtime_overrides`. Use the actual original
-acquisition and installed observation, not the current checkout or a newer
-release. Nullable fields remain JSON `null`; requirement lists remain arrays.
-The SDK re-probes the recorded backend and checks its installed version against
-the legacy receipt before any cutover. Release/wheel/materialized-main evidence
-must include the original archive digest and observed distribution RECORD
-fingerprint when required by the SDK. This evidence is an explicit migration
-input, not a second discovery receipt.
+`runtime_requirements`, and `runtime_overrides`. Without `--reinstall-legacy`,
+use the actual original acquisition and installed observation, not the current
+checkout or a newer release. Nullable fields remain JSON `null`; requirement
+lists remain arrays. The SDK checks the recorded backend and legacy version
+before cutover. Original wheel/release/materialized-main adoption needs its
+verified archive digest and installed RECORD fingerprint; a version label is
+not source proof. With `--reinstall-legacy`, `source` instead selects a verified
+immutable replacement and the required RECORD digest still identifies the old
+installed program. This is explicit input, not a second discovery receipt.
 
 For example, a previously observed editable source can be represented as:
 
@@ -183,10 +184,10 @@ For example, a previously observed editable source can be represented as:
 Only use that example for a genuinely editable legacy installation, with its
 actual recorded constraints and overrides. An old receipt that records only a
 release label does not prove the original archive bytes or installed origin.
-If that evidence is unavailable, preserve the legacy installation and recover
-its acquisition evidence before migrating; the installer does not silently
-adopt the current checkout. Once a migration is journaled, retry uses the saved
-operation and bound support instead of asking for a new source choice.
+If that evidence is unavailable, use explicit verified replacement below rather
+than silently adopting this checkout. Once replacement is journaled, retry uses
+the saved source/backend/support rather than asking for a new source choice;
+fresh `--legacy-quiescent` confirmation is still required.
 
 To collect the installed metadata without importing old business configuration,
 use the final SDK's ordinary metadata probe with the **recorded tool
@@ -210,8 +211,8 @@ entry point. This produces `version`, `direct_url`, and
 than hashing a different checkout. The cutover runs this probe again and
 compares the result, so collecting metadata does not authorize adoption.
 
-Use the original verified acquisition inputs to fill `source`. An editable
-PEP 610 `direct_url` must name the original absolute project and have
+For adoption without `--reinstall-legacy`, use original verified inputs for `source`.
+An editable PEP 610 `direct_url` must name the original absolute project and have
 `dir_info.editable=true`. A VCS source must retain the actual credential-free
 GitHub repository, complete commit, and subdirectory from its `vcs_info` and
 `subdirectory` fields; represent it as an `index` requirement
@@ -227,10 +228,21 @@ must use its content-addressed staging convention, independently checked
 against the supplied archive digest and installed RECORD fingerprint. A legacy
 release installed from an arbitrary old temporary directory cannot be adopted
 by renaming its provenance to the current checkout or inventing a digest.
-Preserve that installation and its data, retain the observation and available
-original artifacts, and review a project-specific safe migration before
-changing authority. Neither an unavailable old staging directory nor a version
-label alone is a successful migration.
+To replace such an installation from a verified immutable source, use:
+
+```sh
+./app-install.sh --migrate-legacy --reinstall-legacy --legacy-quiescent \
+  --legacy-source legacy-source.json --layout native
+```
+
+Choose an immutable wheel/release archive or full-commit source and its verified
+digest; provide the independently observed **old** RECORD fingerprint. This
+reinstalls the Python program but does not move data or workspaces. The exact
+recorded interpreter/backend is reused. Durable pending authority precedes the
+backend change, and old controllers retire only after strict replacement proof.
+After interruption, stop old processes again and rerun the matching command
+with `--legacy-quiescent`; the pending source remains authoritative even if the
+original temporary directory or source-evidence file is no longer available.
 
 Config, appdata, cache, and state are independent declared capabilities.
 Disabled paths remain absent; an installation record does not enable appdata.

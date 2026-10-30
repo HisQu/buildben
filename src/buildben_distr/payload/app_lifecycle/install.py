@@ -8,7 +8,9 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path, PurePosixPath
@@ -27,11 +29,18 @@ from apprc.definition.paths import Layout, Paths, ResourceKind
 from apprc.distribution.models import AppCapabilities, DistributionSpec, ProjectMetadata
 from apprc.distribution.runtime import (
     bind_install_support,
+    execute_legacy_replacement,
     execute_migration,
     inspect_legacy_receipt,
     install_prepared_application,
+    is_pending_legacy_replacement,
     parse_source_arguments,
+    plan_legacy_replacement,
+    SourceSelection,
     plan_migration,
+    plan_repair,
+    prepare_source,
+    resume_legacy_replacement,
     resume_migration,
     stage_legacy_support,
 )
@@ -275,6 +284,91 @@ def _resume_pending_migration(
     )
 
 
+def _validate_recovery_target(
+    spec: DistributionSpec,
+    inspection: InstallationInspection,
+    arguments: argparse.Namespace,
+    selection: SourceSelection,
+) -> None:
+    """Reject mismatched authority before any saved or external recovery."""
+    record = inspection.require_usable()
+    if record is None:
+        raise RuntimeError("Saved repair requires installation authority.")
+    target = (
+        record.operation.intended
+        if record.operation is not None and record.operation.intended is not None
+        else record.current or record.last_successful
+    )
+    if target is None or target.identity != spec.metadata.identity:
+        raise RuntimeError("Saved repair identity or snapshot is unavailable.")
+    if (
+        arguments.layout is not None
+        and arguments.layout != target.placement.layout.mode
+    ) or (
+        arguments.root is not None and arguments.root != target.placement.layout.root
+    ):
+        raise RuntimeError("Recovery uses the recorded placement; it cannot relocate.")
+    entry = Path(sys.argv[0]).absolute()
+    if (
+        entry.name in {"main-installer.py", "main-installer.pyz"}
+        and arguments.repair
+        and not is_pending_legacy_replacement(inspection)
+        and not (
+            inspection.record is not None and inspection.record.migration is not None
+        )
+        and not (
+            selection.source.matches_observation(target.source)
+            or target.source.matches_observation(selection.source)
+        )
+    ):
+        raise RuntimeError("External repair source differs from captured authority.")
+
+
+def _quiescence_recovery_command(directory: Path) -> str:
+    """Render the exact saved or external repair command for fresh consent."""
+    command = [
+        sys.executable,
+        str(Path(sys.argv[0]).absolute()),
+        "--repair",
+        "--directory",
+        str(directory),
+        "--legacy-quiescent",
+    ]
+    return subprocess.list2cmdline(command) if os.name == "nt" else shlex.join(command)
+
+
+def _resume_pending_legacy_replacement(
+    spec: DistributionSpec,
+    inspection: InstallationInspection,
+    *,
+    quiescent: bool,
+    environment: dict[str, str],
+) -> InstallationInspection:
+    """Resume the recorded replacement using the SDK's retained inputs."""
+    record = inspection.record
+    if (
+        record is None
+        or record.operation is None
+        or record.operation.intended is None
+        or inspection.revision is None
+    ):
+        raise RuntimeError("Pending legacy replacement has no recorded target.")
+    if not quiescent:
+        raise RuntimeError(
+            "Stop every legacy installer, launcher, and uninstaller, then run: "
+            + _quiescence_recovery_command(inspection.directory)
+        )
+    return resume_legacy_replacement(
+        inspection.directory,
+        operation_id=record.operation.operation_id,
+        expected_revision=inspection.revision,
+        quiescent=quiescent,
+        environment=environment,
+        probe_path=Path(sys.path[0]) / "apprc/distribution/runtime/installed_probe.py",
+        python_requirement=spec.metadata.python_requirement,
+    )
+
+
 def _migrate_legacy_receipt(
     bundle: dict[str, Any],
     spec: DistributionSpec,
@@ -283,12 +377,18 @@ def _migrate_legacy_receipt(
     placement: InstallationPlacement,
     source_file: Path,
     environment: dict[str, str],
+    *,
+    reinstall: bool = False,
 ) -> InstallationInspection:
     """Cut over validated legacy support through AppRC's public primitives."""
     legacy = inspect_legacy_receipt(
         legacy_root / "receipt.json",
         distribution=spec.metadata.identity.distribution,
-        command=spec.metadata.identity.commands[0],
+        command=(
+            "buildben"
+            if spec.metadata.identity.distribution == "buildben"
+            else spec.metadata.identity.commands[0]
+        ),
     )
     if not legacy.compatible or legacy.receipt is None or legacy.backend is None:
         details = "; ".join(item.message for item in legacy.diagnostics)
@@ -324,6 +424,30 @@ def _migrate_legacy_receipt(
         runtime_overrides=tuple(values["runtime_overrides"]),
     )
     probe_path = Path(sys.path[0]) / "apprc/distribution/runtime/installed_probe.py"
+    if reinstall:
+        inspection = inspect_installation(directory, app_id=bundle["app_id"])
+        replacement = plan_legacy_replacement(
+            inspection,
+            spec.metadata.identity,
+            source,
+            placement,
+            legacy=legacy,
+            inventory=MigrationInventory(
+                source_root=directory, destination_root=directory
+            ),
+            expected_record_digest=evidence["distribution_record_digest"],
+            quiescent=True,
+        )
+        with tempfile.TemporaryDirectory(prefix="apprc-source-") as staging:
+            prepared = prepare_source(source, Path(staging))
+            return execute_legacy_replacement(
+                replacement,
+                prepared,
+                environment=environment,
+                probe_path=probe_path,
+                support_files=_support_files(bundle["app_id"]),
+                python_requirement=spec.metadata.python_requirement,
+            )
     observed = probe_installed_tool(
         legacy.backend,
         spec.metadata.identity,
@@ -388,6 +512,11 @@ def main() -> int:
         help="Migrate the known legacy Buildben receipt after stopping old helpers.",
     )
     parser.add_argument(
+        "--reinstall-legacy",
+        action="store_true",
+        help="Explicitly replace the legacy program from an immutable --legacy-source.",
+    )
+    parser.add_argument(
         "--legacy-quiescent",
         action="store_true",
         help="Confirm no legacy installer, launcher, or uninstaller is running.",
@@ -395,25 +524,86 @@ def main() -> int:
     parser.add_argument(
         "--legacy-source",
         type=Path,
-        help="JSON source and RECORD evidence for the installed legacy package.",
+        help="JSON source plus independently observed old RECORD SHA-256; "
+        "with --reinstall-legacy, source selects the immutable NEW package.",
     )
+    parser.add_argument("--repair", action="store_true")
+    parser.add_argument("--directory", type=Path)
     arguments = parser.parse_args(list(remaining))
-    if arguments.legacy_quiescent and not arguments.migrate_legacy:
-        parser.error("--legacy-quiescent requires --migrate-legacy.")
+    if arguments.reinstall_legacy and not arguments.migrate_legacy:
+        parser.error("--reinstall-legacy requires --migrate-legacy.")
     if arguments.migrate_legacy and not arguments.legacy_quiescent:
         parser.error(
             "Legacy cutover requires --legacy-quiescent after stopping old helpers."
         )
     if arguments.migrate_legacy and arguments.layout is None:
         parser.error("Legacy cutover requires an explicit --layout choice.")
+    saved_entry = Path(sys.argv[0]).absolute()
+    if saved_entry.name == "repair-installer.py":
+        arguments.repair = True
+        if arguments.directory is None:
+            arguments.directory = saved_entry.parent
+    if arguments.repair and arguments.directory is None:
+        parser.error("--repair requires --directory PATH.")
+    if arguments.repair and (
+        arguments.layout is not None or arguments.root is not None
+    ):
+        parser.error(
+            "--repair uses saved placement; --layout and --root are not allowed."
+        )
+    if arguments.legacy_quiescent and not (
+        arguments.migrate_legacy or arguments.repair
+    ):
+        parser.error("--legacy-quiescent requires --migrate-legacy or --repair.")
     environment = dict(os.environ)
-    directory = installation_directory(bundle["app_id"], environment=environment)
+    if arguments.repair:
+        expected_directory = arguments.directory
+        script = Path(sys.argv[0]).absolute()
+        if (
+            expected_directory is None
+            or not expected_directory.is_absolute()
+            or (
+                script.name == "repair-installer.py"
+                and script.parent.resolve() != expected_directory.resolve()
+            )
+            or script.name
+            not in {"repair-installer.py", "main-installer.py", "main-installer.pyz"}
+        ):
+            raise RuntimeError(
+                "Repair requires an absolute installation directory; saved repair "
+                "must address its own parent."
+            )
+        directory = expected_directory
+    else:
+        directory = installation_directory(bundle["app_id"], environment=environment)
     inspection = inspect_installation(directory, app_id=bundle["app_id"])
+    replacing_legacy = is_pending_legacy_replacement(inspection)
     recovering_migration = (
         inspection.record is not None
         and inspection.record.migration is not None
         and not inspection.record.migration.cleanup_complete
     )
+    if arguments.repair or replacing_legacy or recovering_migration:
+        _validate_recovery_target(spec, inspection, arguments, selection)
+    if replacing_legacy:
+        _resume_pending_legacy_replacement(
+            spec,
+            inspection,
+            quiescent=arguments.legacy_quiescent,
+            environment=environment,
+        )
+        return 0
+    if (
+        recovering_migration
+        and inspection.record is not None
+        and inspection.record.migration is not None
+        and inspection.record.migration.legacy is not None
+        and not arguments.legacy_quiescent
+    ):
+        raise RuntimeError(
+            "Stop every legacy installer, launcher, and uninstaller, then run: "
+            + _quiescence_recovery_command(inspection.directory)
+        )
     inspection = _resume_pending_migration(inspection)
     saved = inspection.record
     if recovering_migration and arguments.migrate_legacy:
@@ -431,9 +621,15 @@ def main() -> int:
                 "A legacy receipt requires explicit cutover with "
                 "--migrate-legacy --legacy-quiescent --layout."
             )
+        if not arguments.legacy_quiescent:
+            parser.error(
+                "Legacy cutover requires --legacy-quiescent after stopping old helpers."
+            )
+        if arguments.layout is None:
+            parser.error("Legacy cutover requires an explicit --layout choice.")
         if arguments.legacy_source is None:
             parser.error(
-                "Legacy cutover requires --legacy-source with installed provenance."
+                "Legacy cutover requires --legacy-source with source and old RECORD evidence."
             )
         placement = _placement(bundle, environment, arguments, inspection)
         inspection = _migrate_legacy_receipt(
@@ -444,6 +640,7 @@ def main() -> int:
             placement,
             arguments.legacy_source,
             environment,
+            reinstall=arguments.reinstall_legacy,
         )
         return 0
     elif has_legacy_receipt:
@@ -453,55 +650,58 @@ def main() -> int:
         )
     elif arguments.migrate_legacy and not recovering_migration:
         raise RuntimeError("No legacy receipt exists at the known native address.")
-    placement = _placement(bundle, environment, arguments, inspection)
-    if (
-        saved is not None
-        and saved.status in {"ready", "removed-retained"}
-        and Path(sys.argv[0]).name == "repair-installer.py"
-    ):
-        explicit_source = any(
-            argument
-            in {
-                "--main",
-                "--version",
-                "--source-mode",
-                "--source-repository",
-                "--source-commit",
-                "--source-package",
-            }
-            for argument in sys.argv[1:]
-        )
-        prior = saved.current or saved.last_successful
-        if prior is not None and not explicit_source:
-            selection = dataclasses.replace(selection, source=prior.source)
     prior = saved.current or saved.last_successful if saved is not None else None
-    if prior is not None:
+    if arguments.repair:
+        if saved is None:
+            raise RuntimeError("Saved repair requires installation authority.")
+        if saved.app_id != bundle["app_id"]:
+            raise RuntimeError("Saved repair identity differs from this installer.")
+        if saved.operation is not None:
+            prior = saved.operation.intended
+        if prior is None or prior.identity != spec.metadata.identity:
+            raise RuntimeError("Saved repair identity or snapshot is unavailable.")
+        selection = dataclasses.replace(selection, source=prior.source)
+        placement = prior.placement
         backend = prior.backend
+        plan = plan_repair(
+            spec.metadata.identity,
+            prior.source,
+            placement,
+            backend,
+            inspection=inspection,
+        )
     else:
-        selected_uv = environment.get("APPRC_UV_PATH") or environment.get("UV")
-        if selected_uv:
-            uv = Path(selected_uv)
-            if not uv.is_absolute() or not uv.is_file():
-                raise RuntimeError(
-                    "The bootstrap-selected absolute uv executable is unavailable."
-                )
-            backend = select_uv_target(
-                uv, environment=environment, invocation_cwd=Path.cwd()
-            )
+        placement = _placement(bundle, environment, arguments, inspection)
+        if prior is not None:
+            backend = prior.backend
         else:
-            executable = shutil.which("uv")
-            if executable is None:
-                raise RuntimeError("uv is required for managed installation")
-            backend = select_uv_target(
-                Path(executable), environment=environment, invocation_cwd=Path.cwd()
-            )
-    plan = plan_install(
-        spec.metadata.identity,
-        selection.source,
-        placement,
-        backend,
-        inspection=inspection,
-    )
+            selected_uv = environment.get("APPRC_UV_PATH") or environment.get("UV")
+            if selected_uv:
+                uv = Path(selected_uv)
+                if not uv.is_absolute() or not uv.is_file():
+                    raise RuntimeError(
+                        "The bootstrap-selected absolute uv executable is unavailable."
+                    )
+                backend = select_uv_target(
+                    uv, environment=environment, invocation_cwd=Path.cwd()
+                )
+            else:
+                executable = shutil.which("uv")
+                if executable is None:
+                    raise RuntimeError("uv is required for managed installation")
+                backend = select_uv_target(
+                    Path(executable),
+                    environment=environment,
+                    invocation_cwd=Path.cwd(),
+                )
+        plan = plan_install(
+            spec.metadata.identity,
+            selection.source,
+            placement,
+            backend,
+            inspection=inspection,
+        )
+    assert plan is not None
     probe_path = Path(sys.path[0]) / "apprc/distribution/runtime/installed_probe.py"
     with tempfile.TemporaryDirectory(prefix="apprc-source-") as staging:
         prepared = selection.prepare(Path(staging))

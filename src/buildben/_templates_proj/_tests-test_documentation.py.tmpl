@@ -14,6 +14,7 @@ DOCS = ROOT / "docs"
 FENCE = re.compile(r"^```[^\n]*\n.*?^```\s*$", re.MULTILINE | re.DOTALL)
 HEADING = re.compile(r"^(#{1,6}) (.+)$", re.MULTILINE)
 
+
 def _heading_slug(heading: str) -> str:
     """Return GitHub's anchor stem for a Markdown heading.
 

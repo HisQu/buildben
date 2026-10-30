@@ -28,16 +28,25 @@ def _payload(root: Path, metadata: ProjectMetadata) -> PayloadTree:
         root / metadata.distribution_path / "payload",
         tuple(
             PurePosixPath("app_lifecycle") / name
-            for name in ("__init__.py", "install.py", "uninstall.py", "actions.py")
+            for name in (
+                "__init__.py",
+                "install.py",
+                "uninstall.py",
+                "actions.py",
+            )
         ),
     )
 
 
-def distribution_spec(root: Path, metadata: ProjectMetadata) -> DistributionSpec:
+def distribution_spec(
+    root: Path, metadata: ProjectMetadata
+) -> DistributionSpec:
     """Build the sole source of distribution identity and runtime inputs."""
     if metadata.identity.apprc_reference is None:
         raise ValueError("tool.apprc.distribution.apprc-reference is required")
-    settings = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    settings = tomllib.loads(
+        (root / "pyproject.toml").read_text(encoding="utf-8")
+    )
     project = cast(dict[str, object], settings["project"])
     module_name, object_name = metadata.identity.apprc_reference.split(":", 1)
     declaration = getattr(importlib.import_module(module_name), object_name)
@@ -48,8 +57,7 @@ def distribution_spec(root: Path, metadata: ProjectMetadata) -> DistributionSpec
         for requirement in declared_dependencies
     )
     runtime_overrides = (
-        "apprc-core @ git+https://github.com/HisQu/apprc.git"
-        f"@{APPRC_COMMIT}",
+        f"apprc-core @ git+https://github.com/HisQu/apprc.git@{APPRC_COMMIT}",
         "apprc @ git+https://github.com/HisQu/apprc.git"
         f"@{APPRC_COMMIT}#subdirectory=src/apprc_dev/packaging/terminal",
     )
@@ -63,7 +71,9 @@ def distribution_spec(root: Path, metadata: ProjectMetadata) -> DistributionSpec
     if not isinstance(dependencies, list) or not all(
         isinstance(requirement, str) for requirement in dependencies
     ):
-        raise ValueError("Project dependencies must be a list of requirement strings.")
+        raise ValueError(
+            "Project dependencies must be a list of requirement strings."
+        )
     urls = project.get("urls", {})
     repository = urls.get("Repository") if isinstance(urls, dict) else None
     return DistributionSpec(
@@ -99,7 +109,9 @@ def main() -> None:
         )
         resources.append(resource)
     write_artifacts(support_resources, check=arguments.check)
-    payload = PayloadTree(root / payload_root, base_payload.modules, resources=tuple(resources))
+    payload = PayloadTree(
+        root / payload_root, base_payload.modules, resources=tuple(resources)
+    )
     write_artifacts(generate_artifacts(spec, payload), check=arguments.check)
 
 
