@@ -182,6 +182,8 @@ This project follows Semantic Versioning.
 - Archive checks in `just release-check` and `just build-release-inputs` validate
   standard normalized wheel and sdist filenames, including generated project
   names containing underscores.
+- Artifact authoring and staging recipes select the locked project interpreter
+  without requiring an activated virtual environment or direnv.
 - Documented the native Windows CI verification procedure in root agent guidance
   and the README; WSL agents must not launch Windows verification executables.
 - Native-proof policy permits an explicit user-authorized main merge/push with a

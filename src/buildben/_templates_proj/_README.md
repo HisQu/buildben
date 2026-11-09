@@ -171,6 +171,8 @@ For a source checkout, first generate its local AppRC artifacts with
 `just check-artifacts` verifies tracked output without rewriting it. A missing
 checkout payload reports the generation command; it never fetches a replacement
 from a remote repository.
+These authoring recipes use uv's locked project environment; an activated virtual
+environment or direnv is not required.
 
 The installer offers native or single-root resource placement when the
 application declares resource capabilities. Use `--layout native` for native

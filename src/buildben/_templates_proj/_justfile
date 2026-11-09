@@ -499,14 +499,14 @@ _release-artifact-check notes_output build_only="false" notes_input="":
     uv run --with twine --no-project -- twine check "${wheels[0]}" "${sdists[0]}"
 
 make-artifacts:
-    PYTHONPATH=src python -m {my_project}_distr.make_artifacts
+    PYTHONPATH=src uv run --locked python -m {my_project}_distr.make_artifacts
 
 check-artifacts:
-    PYTHONPATH=src python -m {my_project}_distr.make_artifacts --check
+    PYTHONPATH=src uv run --locked python -m {my_project}_distr.make_artifacts --check
 
 # Stage only the validated package pair and exact SDK-generated native entries.
 stage-release-assets tag commit:
-    PYTHONPATH=src python -m {my_project}_dev.packaging.release_stage {{quote(tag)}} {{quote(commit)}}
+    PYTHONPATH=src uv run --locked python -m {my_project}_dev.packaging.release_stage {{quote(tag)}} {{quote(commit)}}
 
 # Build standard wheel and sdist once without running the full source matrix.
 build-release-inputs notes_file="":
