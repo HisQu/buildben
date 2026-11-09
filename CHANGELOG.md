@@ -179,6 +179,9 @@ This project follows Semantic Versioning.
   runtime dependency list. Until that AppRC release is published, development,
   CI and tool-install composition use explicit immutable source pins rather
   than assuming a matching package already exists on PyPI.
+- Archive checks in `just release-check` and `just build-release-inputs` validate
+  standard normalized wheel and sdist filenames, including generated project
+  names containing underscores.
 - Documented the native Windows CI verification procedure in root agent guidance
   and the README; WSL agents must not launch Windows verification executables.
 - Native-proof policy permits an explicit user-authorized main merge/push with a

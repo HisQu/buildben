@@ -313,8 +313,8 @@ _release-artifact-check notes_output build_only="false" notes_input="":
         exit 1
     fi
     wheel_distribution="$(printf '%s' 'Buildben' | tr '[:upper:]' '[:lower:]' | tr -s '._-' '_')"
-    sdist_distribution="${wheel_distribution//_/-}"
-    if [[ "$(basename "${wheels[0]}")" != "${wheel_distribution}_${version}_"*.whl ]]; then
+    sdist_distribution="$wheel_distribution"
+    if [[ "$(basename "${wheels[0]}")" != "${wheel_distribution}-${version}-"*.whl ]]; then
         echo "Expected a normalized Buildben wheel for ${version}." >&2
         exit 1
     fi
