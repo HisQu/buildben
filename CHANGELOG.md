@@ -137,6 +137,8 @@ This project follows Semantic Versioning.
   generation and standalone runtime. Bootstraps acquire uv/Python as needed
   without requiring AppRC or the application first. Checkout installs use the
   actual editable project, including dirty source changes.
+  Private OS-temporary aliases are normalized for acquisition without relaxing
+  managed-resource path validation.
 - Added first-install OS-native/single-root selection, explicit persistent
   switching and durable native installation metadata separate from disposable
   state. Layout selection affects declared application resources, not uv's
@@ -150,6 +152,8 @@ This project follows Semantic Versioning.
   whose deleted temporary origin cannot be adopted. Independently observed old
   RECORD evidence and a verified immutable replacement remain distinct; pending
   recovery reuses recorded source/backend/placement and requires fresh quiescence.
+  Retained-only repair covers initial-authority interruption and disappearance
+  of the original archive, evidence file and checkout.
 - Added strict release manifests and offline staging/verification commands. Draft
   retries preserve tag ownership and partial-upload semantics; finalization and
   manual PyPI preflight verify the full package/helper contract without allowing

@@ -90,6 +90,12 @@ choose `--layout native` or `--layout single-root --root ABSOLUTE_PATH`. A
 reinstall reuses saved absolute resource paths unless layout is explicitly
 overridden.
 
+An operating-system temporary directory may itself be a platform alias. The
+installer resolves its private staging directory and read-only bootstrap package
+transport paths before AppRC validation. Source identity and digest checks stay
+unchanged; this does not allow symlinks in installation metadata or managed
+application-resource paths.
+
 Release preparation uses `just check-artifacts`, builds one validated wheel
 and sdist, then runs `just stage-release-assets TAG FULL_COMMIT`. The helper
 stages only the exact package pair and SDK-generated script entries in
@@ -101,13 +107,15 @@ contract. Package builds do not generate artifacts or access the network.
 `app-uninstall.sh` and `app-uninstall.cmd` route through the repository-authored
 uninstall module and saved AppRC controller. The default retains declared
 application resources and installation recovery support. Complete removal
-requires an explicit category selection and confirmation:
+requires selection of every tracked root, or explicit retention consent through
+`--forget-retained`, followed by confirmation. A declared root is tracked even
+when its directory is currently absent.
 
 | Option | Effect |
 | --- | --- |
-| `--complete` | Request complete removal of selected, recorded resources. |
+| `--complete` | Remove lifecycle authority after every tracked root is selected or explicitly retained. |
 | `--category config\|appdata\|cache\|state` | Select one owned resource category; repeat as needed. |
-| `--forget-retained` | Explicitly leave and report retained files where supported. |
+| `--forget-retained` | Consent to leaving unselected or unprovable files on disk while forgetting their installation authority. |
 | `--yes` | Confirm the requested uninstall without an interactive prompt. |
 
 The saved controller is kept under the fixed native
@@ -117,10 +125,10 @@ The saved controller is kept under the fixed native
 business settings to resolve.
 
 Project-specific cleanup belongs in ordinary repository functions called while
-the program remains installed. Cleanup that cannot prove ownership keeps the
-affected resource and installation authority for recovery. Unknown descendants,
-external workspaces, shared uv, and shared Python are not inferred as removal
-targets.
+the program remains installed. Without `--forget-retained`, cleanup that cannot
+prove ownership keeps the affected resource and installation authority for
+recovery. With that explicit consent, retained files are not deleted. External
+workspaces, shared uv, and shared Python are never inferred as removal targets.
 
 ## Installation placement
 

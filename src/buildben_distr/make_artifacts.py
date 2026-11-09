@@ -21,7 +21,7 @@ from apprc.distribution import (
 )
 from apprc.distribution.models import ProjectMetadata
 
-APPRC_COMMIT = "3cdd782c6356975c2d753dd46ca2764c89af8fb0"
+APPRC_COMMIT = "661738cb1415fec8277c21eb5215dbc211aea92f"
 
 
 def _payload(root: Path, metadata: ProjectMetadata) -> PayloadTree:

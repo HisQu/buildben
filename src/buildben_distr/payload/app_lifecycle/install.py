@@ -291,7 +291,12 @@ def _validate_recovery_target(
     selection: SourceSelection,
 ) -> None:
     """Reject mismatched authority before any saved or external recovery."""
-    record = inspection.require_usable()
+    # > Recovery may inspect pending authority that normal startup must reject.
+    record = (
+        inspection.record
+        if inspection.status == "incomplete"
+        else inspection.require_usable()
+    )
     if record is None:
         raise RuntimeError("Saved repair requires installation authority.")
     target = (
@@ -439,7 +444,7 @@ def _migrate_legacy_receipt(
             quiescent=True,
         )
         with tempfile.TemporaryDirectory(prefix="apprc-source-") as staging:
-            prepared = prepare_source(source, Path(staging))
+            prepared = prepare_source(source, Path(staging).resolve())
             return execute_legacy_replacement(
                 replacement,
                 prepared,
@@ -503,6 +508,11 @@ def main() -> int:
     bundle = _bundle()
     spec = _spec(bundle, Path(sys.argv[0]).absolute())
     selection, remaining = parse_source_arguments(spec, sys.argv[1:])
+    # > Resolve transport aliases; keep managed layout paths unchanged.
+    if selection.package_path is not None:
+        selection = dataclasses.replace(
+            selection, package_path=selection.package_path.resolve(strict=True)
+        )
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--layout", choices=("native", "single-root"))
     parser.add_argument("--root", type=Path)
@@ -701,10 +711,10 @@ def main() -> int:
             backend,
             inspection=inspection,
         )
-    assert plan is not None
     probe_path = Path(sys.path[0]) / "apprc/distribution/runtime/installed_probe.py"
+    assert plan is not None
     with tempfile.TemporaryDirectory(prefix="apprc-source-") as staging:
-        prepared = selection.prepare(Path(staging))
+        prepared = selection.prepare(Path(staging).resolve())
         install_prepared_application(
             plan,
             prepared,

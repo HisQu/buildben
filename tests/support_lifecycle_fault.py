@@ -28,6 +28,7 @@ def main() -> None:
         required=True,
     )
     parser.add_argument("--legacy-root", type=Path)
+    parser.add_argument("installer", type=Path)
     arguments, forwarded = parser.parse_known_args()
     run = subprocess.run
     replace = os.replace

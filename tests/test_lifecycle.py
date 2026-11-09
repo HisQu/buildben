@@ -101,8 +101,8 @@ def _create_consumer(
         install = payload / "install.py"
         install_source = install.read_text(encoding="utf-8")
         install_source = install_source.replace(
-            "        prepared = selection.prepare(Path(staging))\n",
-            "        prepared = selection.prepare(Path(staging))\n"
+            "        prepared = selection.prepare(Path(staging).resolve())\n",
+            "        prepared = selection.prepare(Path(staging).resolve())\n"
             "        if selection.source.kind != 'editable':\n"
             '            raise RuntimeError("Custom project setup requires an editable source.")\n'
             "        from .actions import prepare_project\n\n"
@@ -178,16 +178,20 @@ def _run(
 
 
 def _run_launcher_pty(
-    executable: Path, *, cwd: Path, env: dict[str, str], marker: bytes
-) -> tuple[int, bytes]:
-    """Run the actual management launcher until its diagnostic is visible."""
+    executable: Path,
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    marker: bytes,
+    authority: Path,
+) -> int:
+    """Run the real management surface without replacing invalid authority."""
     import fcntl
     import pty
     import termios
 
     environment = env | {"TERM": "xterm-256color", "COLUMNS": "120", "LINES": "40"}
     master, slave = pty.openpty()
-
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
     process = subprocess.Popen(
         [str(executable), "launcher"],
@@ -199,22 +203,33 @@ def _run_launcher_pty(
     )
     os.close(slave)
     output = bytearray()
+    authority_bytes = authority.read_bytes()
     try:
         deadline = time.monotonic() + 20
-        while True:
-            ready = re.sub(rb"\x1b\[[0-?]*[ -/]*[@-~]", b"", bytes(output))
-            if marker in ready and b"Repair" in ready:
-                break
+        while marker not in re.sub(rb"\x1b\[[0-?]*[ -/]*[@-~]", b"", bytes(output)):
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise AssertionError(
-                    f"Launcher did not render {marker!r} and its Repair action: {bytes(output)!r}"
+                    f"Launcher did not reach its management screen: {bytes(output)!r}"
                 )
             readable, _, _ = select.select([master], [], [], remaining)
             if readable:
                 output.extend(os.read(master, 65536))
         os.write(master, b"q")
-        return process.wait(timeout=20), bytes(output)
+        deadline = time.monotonic() + 20
+        while process.poll() is None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise AssertionError("Launcher did not exit after Quit.")
+            readable, _, _ = select.select([master], [], [], min(remaining, 0.25))
+            if readable:
+                try:
+                    output.extend(os.read(master, 65536))
+                except OSError:
+                    break
+        status = process.wait(timeout=5)
+        assert authority.read_bytes() == authority_bytes
+        return status
     finally:
         if process.poll() is None:
             process.terminate()
@@ -281,14 +296,14 @@ def test_generated_consumer_install_uses_installer_location_and_launches(
         env=environment,
     )
     assert shown.returncode == 0, shown.stdout + shown.stderr
-    assert '"status": "invalid"' in shown.stdout
+    assert json.loads(shown.stdout)["status"] == "invalid"
     diagnosed = _run(
         [str(executable), "installation", "doctor", "--json"],
         cwd=unrelated,
         env=environment,
     )
     assert diagnosed.returncode == 1
-    assert '"status": "invalid"' in diagnosed.stdout
+    assert json.loads(diagnosed.stdout)["status"] == "invalid"
     preview = _run(
         [str(executable), "installation", "uninstall", "--dry-run", "--json"],
         cwd=unrelated,
@@ -296,16 +311,14 @@ def test_generated_consumer_install_uses_installer_location_and_launches(
     )
     assert preview.returncode == 0, preview.stdout + preview.stderr
     if os.name != "nt":
-        status, recovery_output = _run_launcher_pty(
+        status = _run_launcher_pty(
             executable,
             cwd=unrelated,
             env=environment,
-            marker=b'"installation_status": "invalid"',
+            marker=b"AppRC launcher",
+            authority=authority,
         )
         assert status == 0
-        rendered = re.sub(rb"\x1b\[[0-?]*[ -/]*[@-~]", b"", recovery_output)
-        assert b'"installation_status": "invalid"' in rendered
-        assert b"Repair" in rendered
     authority.write_bytes(valid_authority)
     launcher = root / ("app-launch.cmd" if os.name == "nt" else "app-launch.sh")
     launch_command = (
@@ -564,11 +577,16 @@ def test_saved_default_uninstall_retains_recovery_support(
 
 
 def test_saved_complete_uninstall_removes_owned_lifecycle_authority(
-    consumer: tuple[Path, dict[str, str], Path],
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Complete removal deletes the recorded program and owned support last."""
-    root, environment, state = consumer
+    """Remove owned authority and program while explicitly retaining custom config."""
+    root, environment, state = _create_consumer(
+        tmp_path,
+        monkeypatch,
+        name="lifecycle_consumer",
+        custom_actions=True,
+    )
     name = "lifecycle_consumer"
     installed = _run(
         [sys.executable, str(_installer(root, name)), "--layout", "native"],
@@ -578,8 +596,21 @@ def test_saved_complete_uninstall_removes_owned_lifecycle_authority(
     assert installed.returncode == 0, installed.stdout + installed.stderr
     executable = Path(environment["UV_TOOL_BIN_DIR"]) / name
     assert executable.is_file()
+    record = json.loads((state / "installation.json").read_text(encoding="utf-8"))
+    config_root = Path(record["placement"]["config_dir"])
+    custom_config = config_root / "custom-settings.toml"
+    custom_config.write_text("user setting = true\n", encoding="utf-8")
     removed = _run(
-        _uninstall_command(state, "--complete", "--yes"),
+        _uninstall_command(
+            state,
+            "--complete",
+            "--category",
+            "config",
+            "--category",
+            "appdata",
+            "--forget-retained",
+            "--yes",
+        ),
         cwd=tmp_path,
         env=environment,
     )
@@ -587,6 +618,12 @@ def test_saved_complete_uninstall_removes_owned_lifecycle_authority(
     assert not executable.exists()
     assert not (state / "installation.json").exists()
     assert not (state / "repair-installer.py").exists()
+    assert custom_config.read_text(encoding="utf-8") == "user setting = true\n"
+    assert not Path(environment["LIFECYCLE_CUSTOM_STATE"]).exists()
+    assert (
+        Path(environment["LIFECYCLE_CUSTOM_RESULT"]).read_text(encoding="utf-8")
+        == "present"
+    )
 
 
 @pytest.mark.skipif(
@@ -612,9 +649,9 @@ def test_launcher_saved_uninstall_waits_for_initiating_process_exit(
     )
     assert installed.returncode == 0, installed.stdout + installed.stderr
     executable = Path(environment["UV_TOOL_BIN_DIR"]) / name
-    environment.update(TERM="xterm-256color", COLUMNS="120", LINES="40")
+    environment.update(TERM="xterm-256color", COLUMNS="120", LINES="60")
     master, slave = pty.openpty()
-    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 60, 120, 0, 0))
     process = subprocess.Popen(
         [str(executable), "launcher"],
         cwd=Path(environment["HOME"]),
@@ -639,18 +676,49 @@ def test_launcher_saved_uninstall_waits_for_initiating_process_exit(
                 continue
             try:
                 output.extend(os.read(master, 65536))
-            except OSError:
-                break
+            except OSError as error:
+                raise AssertionError(
+                    f"Launcher exited before displaying {marker!r}: {bytes(output)!r}"
+                ) from error
+
+    def click_button(label: bytes) -> None:
+        """Click the current rendered label rather than guessing focus order."""
+        read_until(label)
+        rendered = bytes(output)
+        label_at = rendered.rfind(label)
+        positions = tuple(re.finditer(rb"\x1b\[(\d+);(\d+)H", rendered[:label_at]))
+        assert label_at >= 0 and positions, rendered.decode(errors="replace")
+        cursor = positions[-1]
+        prefix = re.sub(
+            rb"\x1b\[[0-?]*[ -/]*[@-~]", b"", rendered[cursor.end() : label_at]
+        ).decode("utf-8")
+        row = int(cursor[1])
+        column = int(cursor[2]) + len(prefix) + 1
+        os.write(
+            master,
+            f"\x1b[<0;{column};{row}M\x1b[<0;{column};{row}m".encode(),
+        )
 
     try:
-        read_until(b"Run lifecycle_consumer")
-        os.write(master, b"\x1b[Z\x1b[Z")
-        os.write(master, b"\r")
-        read_until(b"Remove program")
-        os.write(master, b"\x1b[Z\x1b[Z\r")
+        click_button(b"Uninstall")
+        click_button(b"Remove program")
+        authority = state / "installation.json"
+        deadline = time.monotonic() + 30
+        while process.poll() is None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise AssertionError(
+                    "Launcher did not exit after saved uninstall confirmation: "
+                    + bytes(output).decode(errors="replace")
+                )
+            readable, _, _ = select.select([master], [], [], min(remaining, 0.1))
+            if readable:
+                try:
+                    output.extend(os.read(master, 65536))
+                except OSError:
+                    break
         assert process.wait(timeout=30) == 0, bytes(output).decode(errors="replace")
         deadline = time.monotonic() + 20
-        authority = state / "installation.json"
         while time.monotonic() < deadline:
             if authority.is_file():
                 record = json.loads(authority.read_text(encoding="utf-8"))
@@ -658,7 +726,9 @@ def test_launcher_saved_uninstall_waits_for_initiating_process_exit(
                     break
             time.sleep(0.05)
         record = json.loads(authority.read_text(encoding="utf-8"))
-        assert record["status"] == "removed-retained"
+        assert record["status"] == "removed-retained", bytes(output).decode(
+            errors="replace"
+        )
         assert record["current"] is None
         assert not executable.exists()
         assert (state / "uninstall.sh").is_file()

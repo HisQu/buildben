@@ -126,9 +126,9 @@ exclude = ["<my_project>_distr", "<my_project>_distr.*"]
 ]
 
 [tool.uv.sources]
-apprc-core = { git = "https://github.com/HisQu/apprc.git", rev = "3cdd782c6356975c2d753dd46ca2764c89af8fb0" }
-apprc = { git = "https://github.com/HisQu/apprc.git", subdirectory = "src/apprc_dev/packaging/terminal", rev = "3cdd782c6356975c2d753dd46ca2764c89af8fb0" }
-apprc-gui = { git = "https://github.com/HisQu/apprc.git", subdirectory = "src/apprc_dev/packaging/gui", rev = "3cdd782c6356975c2d753dd46ca2764c89af8fb0" }
+apprc-core = { git = "https://github.com/HisQu/apprc.git", rev = "661738cb1415fec8277c21eb5215dbc211aea92f" }
+apprc = { git = "https://github.com/HisQu/apprc.git", subdirectory = "src/apprc_dev/packaging/terminal", rev = "661738cb1415fec8277c21eb5215dbc211aea92f" }
+apprc-gui = { git = "https://github.com/HisQu/apprc.git", subdirectory = "src/apprc_dev/packaging/gui", rev = "661738cb1415fec8277c21eb5215dbc211aea92f" }
 
 [tool.apprc.distribution]
 app-id = "<my_project>"

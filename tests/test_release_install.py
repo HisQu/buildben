@@ -47,6 +47,7 @@ def test_zipapp_release_staging_uses_generated_payload_contract(
         return {name for name in names if name in {".venv", "__pycache__", "release"}}
 
     shutil.copytree(source_root, root, ignore=ignore_generated)
+    monkeypatch.syspath_prepend(str(root / "src"))
     original_spec = distribution_spec
 
     def zipapp_spec(project_root: Path, metadata: ProjectMetadata) -> DistributionSpec:
