@@ -47,7 +47,7 @@ wheels = [
 [[package]]
 name = "apprc"
 version = "0.31.0"
-source = { git = "https://github.com/HisQu/apprc.git?subdirectory=src%2Fapprc_dev%2Fpackaging%2Fterminal&rev=7977db5d5bff9fe202a02b3e03d3d5b0b83bba6c#7977db5d5bff9fe202a02b3e03d3d5b0b83bba6c" }
+source = { git = "https://github.com/HisQu/apprc.git?subdirectory=src%2Fapprc_dev%2Fpackaging%2Fterminal&rev=3cdd782c6356975c2d753dd46ca2764c89af8fb0#3cdd782c6356975c2d753dd46ca2764c89af8fb0" }
 dependencies = [
     { name = "apprc-core" },
     { name = "prompt-toolkit" },
@@ -59,7 +59,7 @@ dependencies = [
 [[package]]
 name = "apprc-core"
 version = "0.31.0"
-source = { git = "https://github.com/HisQu/apprc.git?rev=7977db5d5bff9fe202a02b3e03d3d5b0b83bba6c#7977db5d5bff9fe202a02b3e03d3d5b0b83bba6c" }
+source = { git = "https://github.com/HisQu/apprc.git?rev=3cdd782c6356975c2d753dd46ca2764c89af8fb0#3cdd782c6356975c2d753dd46ca2764c89af8fb0" }
 dependencies = [
     { name = "filelock" },
     { name = "platformdirs" },
@@ -71,12 +71,13 @@ dependencies = [
 [package.optional-dependencies]
 distribution = [
     { name = "jinja2" },
+    { name = "packaging" },
 ]
 
 [[package]]
 name = "apprc-gui"
 version = "0.31.0"
-source = { git = "https://github.com/HisQu/apprc.git?subdirectory=src%2Fapprc_dev%2Fpackaging%2Fgui&rev=7977db5d5bff9fe202a02b3e03d3d5b0b83bba6c#7977db5d5bff9fe202a02b3e03d3d5b0b83bba6c" }
+source = { git = "https://github.com/HisQu/apprc.git?subdirectory=src%2Fapprc_dev%2Fpackaging%2Fgui&rev=3cdd782c6356975c2d753dd46ca2764c89af8fb0#3cdd782c6356975c2d753dd46ca2764c89af8fb0" }
 dependencies = [
     { name = "apprc-core" },
     { name = "gradio" },
@@ -229,8 +230,8 @@ gui = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "apprc", git = "https://github.com/HisQu/apprc.git?subdirectory=src%2Fapprc_dev%2Fpackaging%2Fterminal&rev=7977db5d5bff9fe202a02b3e03d3d5b0b83bba6c" },
-    { name = "apprc-core", extras = ["distribution"], git = "https://github.com/HisQu/apprc.git?rev=7977db5d5bff9fe202a02b3e03d3d5b0b83bba6c" },
+    { name = "apprc", git = "https://github.com/HisQu/apprc.git?subdirectory=src%2Fapprc_dev%2Fpackaging%2Fterminal&rev=3cdd782c6356975c2d753dd46ca2764c89af8fb0" },
+    { name = "apprc-core", extras = ["distribution"], git = "https://github.com/HisQu/apprc.git?rev=3cdd782c6356975c2d753dd46ca2764c89af8fb0" },
     { name = "graphviz" },
     { name = "pillow" },
     { name = "pyinstrument", specifier = ">=5.1" },
@@ -240,7 +241,7 @@ dev = [
     { name = "ruff", specifier = ">=0.4" },
     { name = "typer" },
 ]
-gui = [{ name = "apprc-gui", git = "https://github.com/HisQu/apprc.git?subdirectory=src%2Fapprc_dev%2Fpackaging%2Fgui&rev=7977db5d5bff9fe202a02b3e03d3d5b0b83bba6c" }]
+gui = [{ name = "apprc-gui", git = "https://github.com/HisQu/apprc.git?subdirectory=src%2Fapprc_dev%2Fpackaging%2Fgui&rev=3cdd782c6356975c2d753dd46ca2764c89af8fb0" }]
 
 [[package]]
 name = "certifi"
@@ -853,11 +854,11 @@ wheels = [
 
 [[package]]
 name = "packaging"
-version = "25.0"
+version = "26.3"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a1/d4/1fc4078c65507b51b96ca8f8c3ba19e6a61c8253c72794544580a7b6c24d/packaging-25.0.tar.gz", hash = "sha256:d443872c98d677bf60f6a1f2f8c1cb748e8fe762d2bf9d3148b5599295b0fc4f", size = 165727, upload-time = "2025-04-19T11:48:59.673Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7d/fa/3944b40b07da9ce895c0e6303a5ab7d53da063554f534556b134a54d6093/packaging-26.3.tar.gz", hash = "sha256:94edc256424af38762eb31306eed28beb9f0efc50a8837492c9d6fd6004aed79", size = 313412, upload-time = "2026-08-04T18:15:28.737Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/20/12/38679034af332785aac8774540895e234f4d07f7545804097de4b666afd8/packaging-25.0-py3-none-any.whl", hash = "sha256:29572ef2b1f17581046b3a2227d5c611fb25ec70ca1ba8554b24b0e69331a484", size = 66469, upload-time = "2025-04-19T11:48:57.875Z" },
+    { url = "https://files.pythonhosted.org/packages/63/34/ba1c580383c9eada3711951fef0795c80b829a078d72188184bcab9dd527/packaging-26.3-py3-none-any.whl", hash = "sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c", size = 129956, upload-time = "2026-08-04T18:15:27.159Z" },
 ]
 
 [[package]]

@@ -893,6 +893,7 @@ def test_legacy_receipt_conflicts_then_cutover_preserves_runnable_recovery(
             env=environment,
         )
         assert generated.returncode == 0, generated.stdout + generated.stderr
+    observed_legacy = None
     if legacy_package == "replacement":
         import dataclasses
         from urllib.parse import urlsplit
@@ -1037,6 +1038,7 @@ def test_legacy_receipt_conflicts_then_cutover_preserves_runnable_recovery(
     retained_payload: Path | None = None
     if legacy_package == "replacement":
         app_id = project["tool"]["apprc"]["distribution"]["app-id"]
+        assert isinstance(app_id, str)
         if os.name == "nt":
             appdata = Path(environment["LOCALAPPDATA"]) / app_id / "appdata" / "appdata"
         elif sys.platform == "darwin":
@@ -1184,6 +1186,7 @@ def test_legacy_receipt_conflicts_then_cutover_preserves_runnable_recovery(
             ),
             encoding="utf-8",
         )
+    pending = None
     if interruption is not None:
         installer = _installer(root, "lifecycle_consumer")
         driver = Path(__file__).parent / "support_lifecycle_fault.py"
@@ -1256,6 +1259,7 @@ def test_legacy_receipt_conflicts_then_cutover_preserves_runnable_recovery(
         elif interruption in {"before-backend", "after-backend"}:
             saved_repair = state / "repair-installer.py"
             assert saved_repair.is_file()
+            assert pending is not None
             intended = pending["operation"]["intended"]
             assert intended["source"] == source
             assert intended["backend"] == prior["backend"]
@@ -1300,6 +1304,7 @@ def test_legacy_receipt_conflicts_then_cutover_preserves_runnable_recovery(
             assert retained_payload.read_text(encoding="utf-8") == (
                 "preserve user payload\n"
             )
+            assert observed_legacy is not None
             assert isinstance(observed_legacy.args, list)
             replacement_observed = _run(
                 observed_legacy.args, cwd=tmp_path, env=environment
