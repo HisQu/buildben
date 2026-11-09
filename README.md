@@ -79,6 +79,8 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 
 1. [`buildben`: build-benedictions](#buildben-build-benedictions)
    1. [📦 Installation](#-installation)
+      1. [Native installer entries](#native-installer-entries)
+      1. [Authoring lifecycle artifacts](#authoring-lifecycle-artifacts)
       1. [Windows installer verification procedure](#windows-installer-verification-procedure)
       1. [Unix installer staging verification](#unix-installer-staging-verification)
       1. [Uninstall](#uninstall)
@@ -95,9 +97,12 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 <!-- == Installation ============================================== -->
 ## 📦 Installation
 
-### Prerequisites:
-- Python installed on your OS (and you know its executable in your `$PATH`)
-- A Package manager (`apt`, `brew`, `winget`, etc.)
+### Prerequisites
+
+Editable pip installation needs Python `>=3.12` and a virtual environment.
+The native installer can provision uv/Python without administrator privileges;
+it does not require the application or AppRC to be installed first. Network
+access is needed for selected sources, Python and unresolved dependencies.
 
 ### 🏃Quick & Dirty:
 ```bash
@@ -106,104 +111,137 @@ cd buildben
 python -m pip install -e "."    # venv recommended
 ```
 
-### 🏗️ Full Install (recommended): 
+### Native installer entries
 
-<!-- 
-#### 1. Install [`pipx`](https://pipx.pypa.io/stable/installation/):
-To use `buildben`  globally and to keep the OS-python clean, we recommend `pipx`.
-```bash
-sudo apt install pipx        # For Ubuntu
-# brew install pipx          # For MacOS
-# py -m pip install --user pipx   # For Windows (Not tested!)
-pipx ensurepath                   # Add pipx to PATH, if not already done
-pipx upgrade-all                  # !! Never run pipx with sudo !!
+> [!IMPORTANT]
+> This checkout prepares Buildben 0.12 and AppRC 0.31; changing the source version
+> does not publish either package. Until a matching Buildben release exists, use
+> the checkout entries below rather than expecting new assets in an older release.
+> The committed immutable AppRC source pins bridge the unpublished dependency.
+
+From a complete checkout, run the local project entry:
+
+```sh
+./app-install.sh
 ```
--->
-### One-line installation
 
-The installer bootstraps from the current `main` branch in both modes. By
-default it installs the latest stable release source distribution;
-`--version X.Y.Z` selects a specific stable release. Release installs use the
-published release artifact. `--main` instead installs one snapshot of the
-current remote `main` branch, pinned to the commit resolved for that invocation
-and its committed `uv.lock`; it does not use local checkout changes or require
-a GitHub release or Actions artifact.
+```powershell
+.\app-install.cmd
+```
 
-`--main` requires GitHub access. Public access uses anonymous GitHub requests;
-authenticated access uses GitHub CLI as described below. Main may contain
-unreleased code whose CI has not passed. The installed package version comes
-from `pyproject.toml` and may match a release; the installer prints the source
-commit SHA to identify the snapshot. Omit `--main`, or use `--version`, to
-install a release again.
+This installs the actual editable application project, including dirty local
+changes. It does not archive `HEAD` or silently replace missing local payload
+with downloaded code. If tracked artifacts are missing/stale, the author runs
+`just make-artifacts`; CI uses `just check-artifacts` without rewriting.
+Ordinary `python -m pip install -e .` remains supported and unmanaged by this
+uv-tool lifecycle.
+
+Once matching release assets have been published, the explicitly release-mode
+native entry is usable by itself. Download it into a separate working directory:
+
+```sh
+curl -fL --output app-install.sh \
+  https://github.com/HisQu/buildben/releases/latest/download/app-install.sh
+chmod u+x app-install.sh
+./app-install.sh
+```
+
+```powershell
+Invoke-WebRequest -Uri 'https://github.com/HisQu/buildben/releases/latest/download/app-install.cmd' -OutFile app-install.cmd
+.\app-install.cmd
+```
+
+Release mode selects one matching installer/package identity and validates its
+manifest and exact source digest. It must not independently combine a newer
+installer with an older package. A raw checkout wrapper is not a standalone
+release asset: downloading just that wrapper cannot supply its local payload.
 
 | Selection | Installer behavior |
 | --- | --- |
-| *(no source option)* | Install the latest published stable source archive. |
+| Complete checkout, no source override | Install the actual local project editable. |
+| Release-native entry, no source override | Install the latest published stable source distribution. |
 | `--version X.Y.Z` | Install the selected published stable release. |
-| `--main` | Install one captured commit from remote `main` with its committed `uv.lock`. |
+| `--main` | Resolve remote main once and install that captured commit's matching source/runtime inputs. |
 
+`--main` cannot be combined with `--version`; it requires GitHub access and may
+select unreleased code. The installer reports the captured source commit, since
+the package version alone may also identify a release. Public access uses
+anonymous requests. For authenticated access use `--github-client gh` after
+`gh auth login` and `gh auth setup-git`; curl does not inherit gh credentials,
+and private VCS dependencies still need Git authentication.
 
-#### Linux & macOS
+For an AppRC application, first installation offers OS-native versus single-root
+placement, displays exact enabled resource paths, and explains the distinction:
 
-Latest stable release:
+- **Application resources:** config, persistent appdata, disposable cache and
+  operational state, only when individually declared by the application.
+- **Program environment:** Python, the uv-managed virtual environment and its
+  dependencies. Choosing an application root does not relocate these.
+- **Installation metadata:** durable support at a fixed native address, outside
+  a chosen single root and outside disposable state.
 
-```sh
-installer="$(curl -fsSL 'https://raw.githubusercontent.com/HisQu/buildben/main/src/buildben_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" --
-```
-
-Specific stable release: append `--version X.Y.Z` to the installer arguments.
-
-Current remote `main` snapshot:
-
-```sh
-installer="$(curl -fsSL 'https://raw.githubusercontent.com/HisQu/buildben/main/src/buildben_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" -- --main
-```
-
-Authenticated latest stable release:
-
-```sh
-installer="$(gh api -H 'Accept: application/vnd.github.raw+json' 'repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" -- --github-client gh
-```
-
-Authenticated current remote `main` snapshot:
+Reinstallation keeps saved placement unless explicitly switched:
 
 ```sh
-installer="$(gh api -H 'Accept: application/vnd.github.raw+json' 'repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" -- --github-client gh --main
+./app-install.sh --layout native
+./app-install.sh --layout single-root --root "/absolute/path/application-files"
 ```
-
-#### Windows
-
-Latest stable release:
 
 ```powershell
-$s = Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/HisQu/buildben/main/src/buildben_dev/distribution/install-windows.ps1'; if ([string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n")))
+.\app-install.cmd --layout single-root --root 'D:\ApplicationFiles'
 ```
 
-Specific stable release: append `'--version' 'X.Y.Z'` to the scriptblock invocation.
+`--root` is valid only with single-root and must be absolute; native accepts no
+root. A switch preserves previous owned resource locations as retired targets;
+it does not automatically move arbitrary databases or user projects. Invocation
+layout controls and `apprc.defaults.env` are not persistence for installer choices.
 
-Current remote `main` snapshot:
+Buildben itself declares no AppRC data capabilities and has no AppRC runtime
+dependency. It therefore creates no config/appdata/cache/state resource roots.
+Its durable `installation.json` and current-platform support use:
 
-```powershell
-$s = Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/HisQu/buildben/main/src/buildben_dev/distribution/install-windows.ps1'; if ([string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n"))) '--main'
+| OS | Buildben installation directory |
+| --- | --- |
+| Linux | `${XDG_DATA_HOME:-~/.local/share}/buildben/installation` |
+| macOS | `~/Library/Application Support/buildben/installation` |
+| Windows | `%LOCALAPPDATA%\buildben\installation` |
+
+The source generator lives in `src/buildben_distr/`; generated applications own
+the corresponding `<app>_distr` package. Its ordinary-Python payload controls
+project setup/cleanup while reusing AppRC's shared runtime. Run `app-launch.sh`
+or `app-launch.cmd` to invoke saved application launch support; launch never
+installs/syncs an environment. Buildben launches its direct CLI, while generated
+AppRC applications expose their installed Textual `launcher` command.
+
+### Authoring lifecycle artifacts
+
+Keep project-specific prerequisites and cleanup in
+`src/<app>_distr/payload/app_lifecycle/`; keep distribution identity and composition
+in `src/<app>_distr/make_artifacts.py`. These are authoring inputs, not another
+installed application package or an alternative lifecycle engine.
+
+After changing those inputs:
+
+```sh
+uv sync --locked --all-groups
+just make-artifacts
+just check-artifacts
 ```
 
-Authenticated latest stable release:
+Commit the authored inputs and their generated outputs together. `check-artifacts`
+compares expected bytes without rewriting them. Neither package build hooks nor
+an end user's launch should regenerate artifacts or fetch missing checkout code.
+Before publication, the development sources and tool-install runtime overrides
+must point to the same immutable AppRC commit; a uv development source alone
+does not control the installed application's dependencies.
 
-```powershell
-$s = gh api -H 'Accept: application/vnd.github.raw+json' 'repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-windows.ps1'; if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n"))) '--github-client' 'gh'
-```
-
-Authenticated current remote `main` snapshot:
-
-```powershell
-$s = gh api -H 'Accept: application/vnd.github.raw+json' 'repos/HisQu/buildben/contents/src/buildben_dev/distribution/install-windows.ps1'; if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n"))) '--github-client' 'gh' '--main'
-```
-
-`--main` cannot be combined with `--version`. For authenticated access, install [GitHub CLI](https://cli.github.com/), then
-run `gh auth login` and `gh auth setup-git`. Public downloads use anonymous
-access; `curl` does not inherit gh credentials. Private VCS dependencies still
-need Git authentication independently of release visibility. BuildBen and
-generated applications do not require administrator privileges.
+Generated AppRC applications group management commands in the **Maintenance**
+help panel instead of mixing them with business commands. Use `<app> --help`,
+`<app> installation show --json`, `<app> installation doctor`, and
+`<app> installation uninstall --dry-run` for inspection; `<app> launcher` opens
+the installed Textual launcher. These management entrypoints must remain usable
+when business configuration is missing. Buildben itself keeps its direct CLI
+and does not acquire an AppRC runtime dependency merely to provide installation.
 
 ### Windows installer verification procedure
 
@@ -211,8 +249,8 @@ Use the existing `windows-latest` matrix in the
 [`installation` CI job](.github/workflows/ci.yml) for native Windows evidence.
 Extend the existing [release-install tests](tests/test_release_install.py),
 not copied installer functions or a separate harness. Exercise the real
-installer through both `.ps1` file execution with `-File` and the documented
-downloaded-text `ScriptBlock.Create` invocation.
+installer through the native `.cmd` entry and PowerShell helper, including file
+execution with `-File` and downloaded-text `ScriptBlock.Create` invocation.
 
 On the native Windows runner, run:
 
@@ -238,9 +276,11 @@ A separately authorized, independent native Windows runner is an alternative;
 this WSL terminal is not. Observe CI runs with Linux `gh` and record the actual
 run and results; configured CI is not evidence that a run completed. If permissions,
 billing, or secrets block CI, record the concrete blocker and leave Windows proof
-and main-branch delivery pending. Do not change billing, policy, or security
-settings or publish artifacts to bypass the blocker. Branch pushes require
-explicit authorization.
+and release readiness pending. Main-branch integration normally waits for that
+proof, but an explicit user decision may authorize merge/push with the native
+gap clearly recorded. That override does not make Linux results Windows evidence
+or authorize a release. Do not change billing, policy, or security settings or
+publish artifacts to bypass the blocker. Pushes still require explicit authorization.
 
 ### Unix installer staging verification
 
@@ -249,7 +289,9 @@ The maintained [consumer tests](tests/test_release_install.py) exercise release
 and pinned-main sources through both the canonical installer and the Unix
 installer rendered by the real scaffolder. Cover physical and symlinked
 temporary parents, actual installation, saved uninstallation, and cleanup.
-The existing macOS `installation` jobs must execute successfully too.
+The existing macOS `installation` jobs must execute successfully before release;
+main integration with that native gap requires the same explicit user override
+described in the [Windows procedure](#windows-installer-verification-procedure).
 
 Normalize only the newly created installer-owned staging root before deriving
 extracted-source paths. A macOS system alias such as `/var` must not make valid
@@ -257,55 +299,109 @@ staging fail lifecycle validation. Do not resolve arbitrary lifecycle or
 preflight inputs to bypass their link checks; keep the rejection coverage in
 [`tests/test_lifecycle.py`](tests/test_lifecycle.py).
 
-The rendered Unix cases reuse the real BuildBen source package with
-`--skip-config`: they prove staging, lifecycle recording, installation, and
-uninstallation, not a generated application's configuration wizard.
+Generated-consumer cases must invoke the real scaffolder and AppRC generator,
+then install that consumer's own source—not reuse Buildben as a stand-in.
+Keep both kinds of evidence: canonical Buildben exercises a zero-data
+application, while generated applications exercise declared resources and
+project-specific setup/cleanup alongside the shared lifecycle.
 
 ### Uninstall
 
-New installer-based installations save an offline uninstaller outside the tool
-environment. Run the native path printed by the installer, or use
-`./uninstall.sh` / `.\uninstall.cmd` from this checkout to dispatch to it:
+Installer-based installations save inspection/removal support outside the
+removable application environment. Use the native path printed by installation,
+or dispatch through the complete checkout:
 
 ```sh
-./uninstall.sh --dry-run
-./uninstall.sh --yes
+./app-uninstall.sh --dry-run
+./app-uninstall.sh --yes
 ```
 
-On Unix, support is saved under
-`${XDG_STATE_HOME:-$HOME/.local/state}/buildben/installation`; `XDG_STATE_HOME`
-must be absolute. On Windows it is under `%LOCALAPPDATA%\buildben\installation`;
-`LOCALAPPDATA` is required. The saved launcher uses an absolute base Python
-3.12+ interpreter, not Buildben's removable environment or Python from PATH.
-Keep that interpreter available. The saved helper and private `receipt.json`
-remain after removal for recovery and safe repeated invocation.
-Its receipt stays bound to that saved directory even if a later shell changes
-`XDG_STATE_HOME` or `LOCALAPPDATA`; it does not switch to another installation.
+```powershell
+.\app-uninstall.cmd --dry-run
+.\app-uninstall.cmd --yes
+```
 
-`--dry-run` previews without mutation or downloads. `--yes` confirms package
-removal only; without a terminal it is required for mutation. Default removal
-keeps user data, uv, shared Python, caches, and shell configuration. Buildben
-does not use AppRC itself and rejects `--clean-appdata` and `--apprc-dir`.
-Generated applications provide their own explicitly mounted `appdata` commands.
+Default removal is **program-only**. It verifies actual backend absence, retains
+reconnectable placement/support and records `removed-retained`, not a fictitious
+installed version. For generated applications it retains every config/appdata/
+cache/state resource. Buildben has none. Editable checkout files, workspaces,
+shared uv/Python, shell configuration and unrelated tools are never implicit
+removal targets. There is no inherited legacy `--remove-uv` permission.
 
-`--remove-uv` is a separate request, not an override of ownership checks. uv can
-be removed only when this installer bootstrapped it, all recorded binary hashes
-still match, and both the recorded and default uv tool inventories permit it.
-Other projects may still use uv even when no tools remain; there is no global
-idle detection or lock against concurrent uv commands. Removal unlinks only
-recorded binaries, uv last; it never recursively removes uv directories.
+Complete removal is separate. Buildben's zero-resource example removes its
+remaining owned support/authority after confirming the preview:
 
-For an older installation with no receipt, use
-`./uninstall.sh --uv /absolute/path/to/uv --yes` (or the Windows equivalent).
-This explicit recovery mode removes only the package and cannot clean data or
-remove uv. A malformed receipt is retained for inspection. With a valid receipt,
-`--uv` cannot select a different installation. If its saved interpreter is no
-longer available, use `uv tool uninstall buildben` directly with the original
-`UV_TOOL_DIR` and `UV_TOOL_BIN_DIR`. Older selected releases without lifecycle
-support print this direct-removal diagnostic instead of claiming a receipt.
+```sh
+./app-uninstall.sh --dry-run --complete
+./app-uninstall.sh --complete --yes
+```
 
-For an editable pip installation, use that environment's
-`python -m pip uninstall buildben`; the uv lifecycle is not a pip requirement.
+Generated applications additionally select exact owned resource categories with
+repeatable `--category config|appdata|cache|state`. Persistent config/appdata
+deletion needs explicit consent; `--yes` does not bypass ownership, unknown-file,
+revision or generation checks. `--forget-retained` names retained files in its
+preview and deliberately leaves them unmanaged; it never means they were deleted.
+
+Saved inspection/dry-run is read-only: no uv bootstrap, downloads, environment
+creation or resource initialization. It needs an already available suitable
+Python; otherwise it reports that prerequisite. Mutating removal may provision
+its pinned management dependencies through uv, but uses the saved app-specific
+procedure instead of downloading newer cleanup code. Keep the recorded uv/base
+Python available. The independent controller waits for the actual caller and its
+owned foreground children to exit before deleting the environment.
+
+Incomplete work retains progress and a matching saved/external recovery command.
+Unknown contents and provider failures retain authority rather than claiming
+complete deletion. Complete removal deletes `installation.json` last; afterward
+only lock retirement and empty-container cleanup may occur. Safe lock residue
+under contention is reported, not used as permission to delete a new generation.
+
+Existing legacy `receipt.json` installations require explicit migration. Stop old
+installers, launchers and uninstallers first, then use the complete checkout:
+
+```sh
+./app-install.sh --migrate-legacy --legacy-quiescent \
+  --legacy-source legacy-source.json --layout native
+```
+
+Use `app-install.cmd` on Windows. The first cutover needs the explicit layout and
+source evidence; a journaled interruption resumes from the durable migration.
+Known Windows in-place or old POSIX state-directory support is inspected, and
+known old runnable entries are retired before new authority becomes active.
+Unknown files are not adopted.
+
+`legacy-source.json` has exactly `source` and `distribution_record_digest`.
+The source contains `kind`, `requirement`, `version`, `digest`,
+`runtime_requirements` and `runtime_overrides`, using the actual original
+acquisition and observed installed metadata—not this checkout or a guessed hash.
+The installer re-probes the recorded backend and compares the legacy version and
+required installed `RECORD` fingerprint. See the [source-evidence collection
+procedure](src/buildben/_templates_proj/_docs-References.md) for the SDK metadata
+probe and exact JSON shape; replace the scaffold's example identities with
+`buildben` and its actual `buildben`/`bube` commands.
+
+For old noneditable installs whose arbitrary temporary source has been deleted,
+do not invent original provenance. Explicitly reinstall from a verified immutable
+source before cutover:
+
+```sh
+./app-install.sh --migrate-legacy --reinstall-legacy --legacy-quiescent \
+  --legacy-source legacy-source.json --layout native
+```
+
+In this mode, `source` selects the verified replacement; the RECORD digest still
+describes the **old installed program**. This replaces its uv-managed program
+environment, not user data or workspaces. The recorded interpreter/backend is
+preserved, and old controllers retire only after the replacement is observed.
+After an interruption, stop old processes again and retry the matching command
+with `--legacy-quiescent`; pending authority supplies the saved source and paths.
+Reinstallation is never an automatic fallback from failed adoption.
+
+For an unmanaged editable pip installation, use that environment's
+`python -m pip uninstall buildben`. For a manually installed uv tool without
+managed authority, use `uv tool uninstall buildben` with its original
+`UV_TOOL_DIR`/`UV_TOOL_BIN_DIR`; do not fabricate a receipt or treat another
+environment discovered on PATH as its owner.
 
 
 ### Install from a cloned repository

@@ -1,0 +1,111 @@
+"""Generate deterministic AppRC lifecycle artifacts for this application."""
+
+from __future__ import annotations
+
+import argparse
+import importlib
+import tomllib
+from pathlib import Path, PurePosixPath
+from typing import cast
+
+from apprc.distribution import (
+    AppCapabilities,
+    Artifact,
+    DistributionSpec,
+    PayloadTree,
+    generate_artifacts,
+    install_support_files,
+    inspect_capabilities,
+    read_project_metadata,
+    write_artifacts,
+)
+from apprc.distribution.models import ProjectMetadata
+
+APPRC_COMMIT = "661738cb1415fec8277c21eb5215dbc211aea92f"
+
+
+def _payload(root: Path, metadata: ProjectMetadata) -> PayloadTree:
+    return PayloadTree(
+        root / metadata.distribution_path / "payload",
+        tuple(
+            PurePosixPath("app_lifecycle") / name
+            for name in ("__init__.py", "install.py", "uninstall.py", "actions.py")
+        ),
+    )
+
+
+def distribution_spec(root: Path, metadata: ProjectMetadata) -> DistributionSpec:
+    """Build the sole source of distribution identity and runtime inputs."""
+    settings = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    project = cast(dict[str, object], settings["project"])
+    capabilities = AppCapabilities()
+    runtime_overrides: tuple[str, ...] = ()
+    if metadata.identity.apprc_reference is not None:
+        module_name, object_name = metadata.identity.apprc_reference.split(":", 1)
+        declaration = getattr(importlib.import_module(module_name), object_name)
+        capabilities = inspect_capabilities(declaration)
+        runtime_overrides = (
+            f"apprc-core @ git+https://github.com/HisQu/apprc.git@{APPRC_COMMIT}",
+            "apprc @ git+https://github.com/HisQu/apprc.git"
+            f"@{APPRC_COMMIT}#subdirectory=src/apprc_dev/packaging/terminal",
+        )
+        declared_dependencies = project.get("dependencies", [])
+        if isinstance(declared_dependencies, list) and any(
+            isinstance(requirement, str) and "apprc-gui" in requirement
+            for requirement in declared_dependencies
+        ):
+            runtime_overrides = (
+                *runtime_overrides,
+                "apprc-gui @ git+https://github.com/HisQu/apprc.git"
+                f"@{APPRC_COMMIT}#subdirectory=src/apprc_dev/packaging/gui",
+            )
+    dependencies = project.get("dependencies", [])
+    if not isinstance(dependencies, list) or not all(
+        isinstance(requirement, str) for requirement in dependencies
+    ):
+        raise ValueError("Project dependencies must be a list of requirement strings.")
+    urls = project.get("urls", {})
+    repository = urls.get("Repository") if isinstance(urls, dict) else None
+    if repository is None and metadata.identity.distribution == "buildben":
+        repository = "https://github.com/HisQu/buildben.git"
+    return DistributionSpec(
+        metadata=metadata,
+        capabilities=capabilities,
+        repository_url=repository,
+        runtime_requirements=tuple(dependencies),
+        runtime_overrides=runtime_overrides,
+    )
+
+
+def main() -> None:
+    """Render authored payload and check or write its declared outputs."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true")
+    arguments = parser.parse_args()
+    root = Path(__file__).resolve().parents[2]
+    metadata = read_project_metadata(root)
+    spec = distribution_spec(root, metadata)
+    base_payload = _payload(root, metadata)
+    payload_root = metadata.distribution_path / "payload"
+    resources: list[PurePosixPath] = []
+    support_resources = []
+    for relative, content in install_support_files(spec, base_payload).items():
+        resource = PurePosixPath("app_lifecycle/_support") / relative
+        support_resources.append(
+            Artifact(
+                payload_root / resource,
+                content,
+                relative.name in {"launch.sh", "uninstall.sh"},
+                root,
+            )
+        )
+        resources.append(resource)
+    write_artifacts(support_resources, check=arguments.check)
+    payload = PayloadTree(
+        root / payload_root, base_payload.modules, resources=tuple(resources)
+    )
+    write_artifacts(generate_artifacts(spec, payload), check=arguments.check)
+
+
+if __name__ == "__main__":
+    main()

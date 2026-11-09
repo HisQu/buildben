@@ -74,6 +74,7 @@ def _project_directories(project_root: Path, name: str) -> list[Path]:
     """
     return [
         project_root / "tests",
+        project_root / "tests" / "support_source_transport",
         project_root / "assets",
         project_root / "examples",
         project_root / "docs",
@@ -82,8 +83,9 @@ def _project_directories(project_root: Path, name: str) -> list[Path]:
         project_root / ".github" / "workflows",
         project_root / ".github" / "workflows_inactive",
         project_root / "src" / name,
+        project_root / "src" / f"{name}_distr" / "payload" / "app_lifecycle",
+        project_root / "src" / f"{name}_distr" / "artifacts",
         project_root / "src" / f"{name}_dev" / "packaging",
-        project_root / "src" / f"{name}_dev" / "distribution",
         project_root / "src" / name / "cli",
         project_root / "src" / name / "config",
         project_root / "src" / name / "config" / "sections",
@@ -159,75 +161,83 @@ def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path
         / "config"
         / "apprc.defaults.env",
         "_utils-stdlib.py.tmpl": project_root / "src" / name / "utils" / "stdlib.py",
-        "_src-dev-packaging-release_notes.py.tmpl": project_root
-        / "src"
-        / f"{name}_dev"
-        / "packaging"
-        / "release_notes.py",
-        "_src-dev-packaging-install_smoke.py.tmpl": project_root
-        / "src"
-        / f"{name}_dev"
-        / "packaging"
-        / "install_smoke.py",
-        "_MANIFEST.in": project_root / "MANIFEST.in",
-        "_src-dev-distribution-install-linux-macos.sh": project_root
-        / "src"
-        / f"{name}_dev"
-        / "distribution"
-        / "install-linux-macos.sh",
-        "_src-dev-distribution-install-windows.ps1": project_root
-        / "src"
-        / f"{name}_dev"
-        / "distribution"
-        / "install-windows.ps1",
-        "_src-dev-distribution-install-windows.cmd": project_root
-        / "src"
-        / f"{name}_dev"
-        / "distribution"
-        / "install-windows.cmd",
-        "_src-dev-distribution-prepare-powershell-windows.cmd": project_root
-        / "src"
-        / f"{name}_dev"
-        / "distribution"
-        / "prepare-powershell-windows.cmd",
         "_src-dev-packaging-release_assets.py.tmpl": project_root
         / "src"
         / f"{name}_dev"
         / "packaging"
         / "release_assets.py",
-        "_src-dev-distribution-install-macos.command": project_root
+        "_src-dev-packaging-release_notes.py.tmpl": project_root
         / "src"
         / f"{name}_dev"
-        / "distribution"
-        / "install-macos.command",
-        "_src-dev-distribution-lifecycle.py.tmpl": project_root
+        / "packaging"
+        / "release_notes.py",
+        "_src-dev-packaging-release_manifest.py.tmpl": project_root
         / "src"
         / f"{name}_dev"
-        / "distribution"
-        / "lifecycle.py",
-        "_src-dev-distribution-uninstall.sh": project_root
+        / "packaging"
+        / "release_manifest.py",
+        "_src-dev-packaging-release_stage.py.tmpl": project_root
         / "src"
         / f"{name}_dev"
-        / "distribution"
-        / "uninstall.sh",
-        "_src-dev-distribution-uninstall.cmd": project_root
+        / "packaging"
+        / "release_stage.py",
+        "_src-dev-packaging-install_smoke.py.tmpl": project_root
         / "src"
         / f"{name}_dev"
-        / "distribution"
-        / "uninstall.cmd",
-        "_src-dev-distribution-uninstall.ps1": project_root
+        / "packaging"
+        / "install_smoke.py",
+        "_src-distr-make_artifacts.py.tmpl": project_root
         / "src"
-        / f"{name}_dev"
-        / "distribution"
-        / "uninstall.ps1",
-        "_uninstall.sh": project_root / "uninstall.sh",
-        "_uninstall.cmd": project_root / "uninstall.cmd",
-        "_install-linux-macos.sh": project_root / "install-linux-macos.sh",
-        "_install-windows.cmd": project_root / "install-windows.cmd",
-        "_install-macos.command": project_root / "install-macos.command",
+        / f"{name}_distr"
+        / "make_artifacts.py",
+        "_src-distr-payload-init.py.tmpl": project_root
+        / "src"
+        / f"{name}_distr"
+        / "payload"
+        / "app_lifecycle"
+        / "__init__.py",
+        "_src-distr-payload-install.py.tmpl": project_root
+        / "src"
+        / f"{name}_distr"
+        / "payload"
+        / "app_lifecycle"
+        / "install.py",
+        "_src-distr-payload-uninstall.py.tmpl": project_root
+        / "src"
+        / f"{name}_distr"
+        / "payload"
+        / "app_lifecycle"
+        / "uninstall.py",
+        "_src-distr-payload-actions.py.tmpl": project_root
+        / "src"
+        / f"{name}_distr"
+        / "payload"
+        / "app_lifecycle"
+        / "actions.py",
+        "_MANIFEST.in": project_root / "MANIFEST.in",
         "_tests-test_package.py.tmpl": project_root
         / "tests"
         / f"test_{name}_package.py",
+        "_tests-support_source_transport-server.py.tmpl": project_root
+        / "tests"
+        / "support_source_transport"
+        / "server.py",
+        "_tests-support_source_transport-sitecustomize.py.tmpl": project_root
+        / "tests"
+        / "support_source_transport"
+        / "sitecustomize.py",
+        "_tests-support_source_transport-gh": project_root
+        / "tests"
+        / "support_source_transport"
+        / "gh",
+        "_tests-support_source_transport-gh.py.tmpl": project_root
+        / "tests"
+        / "support_source_transport"
+        / "gh.py",
+        "_tests-support_source_transport-gh.cmd": project_root
+        / "tests"
+        / "support_source_transport"
+        / "gh.cmd",
         "_tests-test_documentation.py.tmpl": project_root
         / "tests"
         / "test_documentation.py",
@@ -284,7 +294,6 @@ def _project_placeholders(name: str, github_user: str) -> dict[str, str]:
         "<initial_version>": "0.1.0",
         "{initial_version}": "0.1.0",
         "<distribution_name>": distribution,
-        "<configure_app>": "true",
     }
 
 
@@ -310,7 +319,11 @@ def _create_init_files(project_root: Path, name: str) -> None:
     utils.create_init_dot_py(package_root)
     utils.create_init_dot_py(project_root / "src" / f"{name}_dev")
     utils.create_init_dot_py(project_root / "src" / f"{name}_dev" / "packaging")
-    utils.create_init_dot_py(project_root / "src" / f"{name}_dev" / "distribution")
+    utils.create_init_dot_py(project_root / "src" / f"{name}_distr")
+    utils.create_init_dot_py(project_root / "src" / f"{name}_distr" / "payload")
+    utils.create_init_dot_py(
+        project_root / "src" / f"{name}_distr" / "payload" / "app_lifecycle"
+    )
     utils.create_init_dot_py(package_root / "cli", imports=["app"])
     utils.create_init_dot_py(
         package_root / "utils",

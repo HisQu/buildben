@@ -72,12 +72,8 @@ Treat this as the parking lot for actionable problems discovered while working b
 
 1. [Backlog](#backlog)
    1. [Table Of Contents](#table-of-contents)
-2. [YYYY-MM-DD](#yyyy-mm-dd)
-   1. [P3 / E1 \[Code smell\] -  *Lorem ipsum dolor*](#p3--e1-code-smell----lorem-ipsum-dolor)
-   2. [P1 / E3 \[Bug risk\] -  *dolor sit amet*](#p1--e3-bug-risk----dolor-sit-amet)
-4. [YYYY-MM-DD](#yyyy-mm-dd-1)
-   1. [P3 \[Code smell\] -  *Amet consectetur adipiscing elit*](#p3-code-smell----amet-consectetur-adipiscing-elit)
-   2. [P1 \[Bug risk\] -  *Elit sed do eiusmod*](#p1-bug-risk----elit-sed-do-eiusmod)
+2. [2026-10-30](#2026-10-30)
+   1. [P2 / E2 \[Tooling\] - *Native installation proof remains pending*](#p2--e2-tooling---native-installation-proof-remains-pending)
 
 <br>
 
@@ -87,30 +83,11 @@ Treat this as the parking lot for actionable problems discovered while working b
 
 
 
-<!-- Example, remove this during first pass -->
+# 2026-10-30
 
-# YYYY-MM-DD
-
-## P3 / E1 [Code smell] -  *Lorem ipsum dolor*
-- **Area:** `sit/amet`
-- **Observed while:** amet consectetur adipiscing elit
-- **Evidence:** elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua
-- **Why not fixed now:** aliqua ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat
-- **Suggested next step:** Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-
-
-## P1 / E3 [Bug risk] -  *dolor sit amet*
-- **Area:** `amet/consectetur/adipiscing`
-- ...
-
-<br>
-
-# YYYY-MM-DD
-
-## P3 [Code smell] -  *Amet consectetur adipiscing elit*
-- **Area:** `elit/sed/do/eiusmod`
-- ...
-
-## P1 [Bug risk] -  *Elit sed do eiusmod*
-- **Area:** `eiusmod/tempor/incididunt/ut/labore`
-- ...
+## P2 / E2 [Tooling] - *Native installation proof remains pending*
+- **Area:** `.github/workflows/ci.yml`, `tests/test_release_install.py`, `tests/test_lifecycle.py`
+- **Observed while:** implementing the AppRC-backed installation lifecycle from WSL Linux.
+- **Evidence:** native Windows/macOS execution is not available in this session. Linux execution cannot establish Windows handle-sharing, registry integration, PowerShell/cmd bootstrap and actual-process removal handoff, or macOS native temporary-directory aliases.
+- **Why not fixed now:** the user explicitly authorized main-branch integration with native proof pending, prohibited Windows executables from WSL, and did not authorize a new runner, billing/security changes or a release.
+- **Suggested next step:** collect results from the maintained native installation jobs before a release. Exercise real canonical/generated consumers, Windows cmd and PowerShell file/downloaded-text entries, and macOS staging aliases. Follow the [Windows procedure](README.md#windows-installer-verification-procedure) and [Unix staging procedure](README.md#unix-installer-staging-verification); do not treat CI configuration or Linux results as native proof.

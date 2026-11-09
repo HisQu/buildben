@@ -116,14 +116,14 @@ persistent data. AppRC supplies configuration commands and a terminal editor.
 
 1. [`{my_project}`: A Template](#project-overview)
 2. [Installation](#installation)
-   1. [One-Line Install](#one-line-install)
-   2. [Install from a Cloned Repository](#install-from-a-cloned-repository)
+   1. [Install a release](#install-a-release)
+   2. [Install from a checkout](#install-from-a-checkout)
    3. [Uninstall](#uninstall)
 3. [Usage](#usage)
-   1. [First-Time Use](#first-time-use)
-   2. [Use Feature X](#use-feature-x)
-   3. [Use Feature Y](#use-feature-y)
+   1. [Use Feature X](#use-feature-x)
+   2. [Use Feature Y](#use-feature-y)
 4. [Documentation](#documentation)
+
 
 ---
 
@@ -132,149 +132,110 @@ persistent data. AppRC supplies configuration commands and a terminal editor.
 
 # Installation
 
-Use Python 3.12 or newer.
+The installer uses Python 3.12 or newer through `uv`. If `uv` is not available,
+it installs the official user-scoped `uv` executable and lets `uv` provision a
+compatible Python; no system Python or administrator access is required.
 
 <br>
 
-## One-Line Install
+## Install a release
 
-The installer bootstraps from the current `main` branch in both modes. By
-default it installs the latest stable release source distribution; append
-`--version X.Y.Z` to select a specific stable release. Release installation
-uses the published release artifact. `--main` instead installs one snapshot of
-the current remote `main`, pinned to the commit resolved for that invocation
-and its committed `uv.lock`; it does not install local or uncommitted checkout
-changes, and requires no GitHub release or Actions artifact.
-
-`--main` requires GitHub access. Public access uses anonymous HTTPS; authenticated
-access uses GitHub CLI and requires the setup below. Main may contain unreleased
-code whose CI has not passed. The installed version comes from `pyproject.toml`
-and may match a release; the installer prints the source commit SHA to identify
-the snapshot. Omit `--main`, or use `--version`, to install a release again.
-`--main` and `--version` cannot be combined.
-
-| Selection | Installer behavior |
-| --- | --- |
-| *(no source option)* | Install the latest published stable source archive. |
-| `--version X.Y.Z` | Install the selected published stable release. |
-| `--main` | Install one captured commit from remote `main` with its committed `uv.lock`. |
-
-For authenticated access, install [GitHub CLI](https://cli.github.com/), then run
-`gh auth login` and `gh auth setup-git`. Pass `--github-client gh` to use it;
-public downloads and curl do not inherit gh credentials. Private VCS
-dependencies independently require Git credentials. Windows installation does
-not require administrator privileges.
-
-Public and authenticated installer commands for Linux, macOS, and Windows are
-shown below for reference; the examples remain commented out.
-
-<!--
-#### For Linux & macOS
+The generated release-mode native entry can run by itself. It acquires and
+verifies the matching source and release manifest; adjacent manifest and
+`main-installer.py` files are not required. Downloading the complete release
+asset set is an optional workflow when you want to inspect or retain those
+assets locally.
 
 ```shell
-installer="$(curl -fsSL 'https://raw.githubusercontent.com/<github_username>/<my_project>/main/src/<my_project>_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" --
+gh release download vX.Y.Z --repo <github_username>/<my_project>
+./app-install.sh
 ```
 
-```shell
-installer="$(gh api -H 'Accept: application/vnd.github.raw+json' 'repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" -- --github-client gh
-```
-
-#### For Windows
+On Windows, run the downloaded `app-install.cmd` instead:
 
 ```powershell
-$url = 'https://raw.githubusercontent.com/<github_username>/<my_project>/main/src/<my_project>_dev/distribution/install-windows.ps1'; $s = Invoke-RestMethod -Uri $url; if ([string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n")))
+gh release download vX.Y.Z --repo <github_username>/<my_project>
+.\app-install.cmd
 ```
 
-```powershell
-$s = gh api -H 'Accept: application/vnd.github.raw+json' 'repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-windows.ps1'; if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n"))) '--github-client' 'gh'
-```
-```shell
-installer="$(curl -fsSL 'https://raw.githubusercontent.com/<github_username>/<my_project>/main/src/<my_project>_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" -- --main
-```
+The default source selection installs the pinned source archive. `--version
+X.Y.Z` selects a specific published release, and `--main` resolves the
+repository's current `main` to one immutable commit for that invocation. These
+choices cannot be combined. `--github-client gh` selects authenticated GitHub
+CLI downloads; public downloads do not inherit GitHub CLI credentials. Private
+VCS dependencies separately require Git credentials. Windows installation
+does not require administrator privileges.
 
-```shell
-installer="$(gh api -H 'Accept: application/vnd.github.raw+json' 'repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-linux-macos.sh')" && test -n "$installer" && bash -c "$installer" -- --github-client gh --main
-```
+For a source checkout, first generate its local AppRC artifacts with
+`just make-artifacts`, then use `./app-install.sh` or `.\app-install.cmd`.
+`just check-artifacts` verifies tracked output without rewriting it. A missing
+checkout payload reports the generation command; it never fetches a replacement
+from a remote repository.
 
-```powershell
-$url = 'https://raw.githubusercontent.com/<github_username>/<my_project>/main/src/<my_project>_dev/distribution/install-windows.ps1'; $s = Invoke-RestMethod -Uri $url; if ([string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n"))) '--main'
-```
+The installer offers native or single-root resource placement when the
+application declares resource capabilities. Use `--layout native` for native
+locations or `--layout single-root --root ABSOLUTE_PATH` for a single root.
+Reinstallation keeps the saved absolute placement unless an explicit layout
+override is supplied. Buildben itself declares no application data paths.
 
-```powershell
-$s = gh api -H 'Accept: application/vnd.github.raw+json' 'repos/<github_username>/<my_project>/contents/src/<my_project>_dev/distribution/install-windows.ps1'; if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($s -join "`n"))) { throw 'Could not download the installer.' }; & ([scriptblock]::Create(($s -join "`n"))) '--github-client' 'gh' '--main'
-```
--->
-
-After installation, the installer runs `{my_project} config setup`, which guides
-you through initial configuration.
+Configuration setup is optional and does not block installation management.
 
 <br>
 
-## Install from a Cloned Repository
+## Install from a checkout
 
-Clone the repository and install it with Python and pip. This workflow does not
-require uv:
+Clone the repository, synchronize its locked authoring environment, and
+generate local AppRC artifacts before running the checkout installer:
 
 ```shell
 git clone https://github.com/<github_username>/<my_project>.git
 cd <my_project>
+uv sync --locked --all-extras --all-groups
+just make-artifacts
 ```
 
-### For Linux & macOS
+On Linux and macOS, run:
 
 ```shell
-python -m venv .venv
-.venv/bin/python -m pip install -e .
-.venv/bin/{my_project} config setup
-.venv/bin/{my_project} --help
+./app-install.sh --layout native
+{my_project} launcher
 ```
 
-### For Windows
+On Windows, run:
 
 ```powershell
-py -m venv .venv
-& '.\.venv\Scripts\python.exe' -m pip install -e .
-& '.\.venv\Scripts\{my_project}.exe' config setup
-& '.\.venv\Scripts\{my_project}.exe' --help
+.\app-install.cmd --layout native
+{my_project} launcher
 ```
+
+The checkout install is editable and uses the actual project files, including
+uncommitted changes. It does not alter the repository's saved source revision.
+Use `just check-artifacts` to check generated outputs without rewriting them.
 
 <br>
 
 ## Uninstall
 
-For a one-line installation, run the saved native uninstaller printed during
-installation. The checkout shortcuts `./uninstall.sh` and `.\uninstall.cmd`
-dispatch to that same offline helper. Start with `--dry-run`; use `--yes` to
-confirm package removal without a terminal. Data and uv are kept by default.
-
-The helper lives outside the removable tool environment at
-`${XDG_STATE_HOME:-$HOME/.local/state}/<distribution_name>/installation` on Unix
-or `%LOCALAPPDATA%\<distribution_name>\installation` on Windows. Unix
-`XDG_STATE_HOME` must be absolute; Windows requires `LOCALAPPDATA`.
-It uses the recorded base Python 3.12+ interpreter, which must remain available.
-The helper and receipt survive removal so repeated invocation remains safe.
-The saved helper keeps its own package-removal receipt even if a later shell
-changes `XDG_STATE_HOME` or `LOCALAPPDATA`.
-
-To inspect and explicitly clean AppRC-managed data before removal:
+Run `./app-uninstall.sh` on Linux or macOS, or `.\app-uninstall.cmd` on Windows.
+The default removes the managed program and retains declared resources and
+installation recovery support. Complete removal requires an explicit request:
 
 ```shell
-{my_project} appdata paths --json
-{my_project} appdata clean --dry-run
-./uninstall.sh --clean-appdata --yes
+./app-uninstall.sh --complete --category config --category appdata --yes
 ```
 
-On Windows use `.\uninstall.cmd --clean-appdata --yes`. `--yes` alone never
-consents to cleanup or uv removal. `--apprc-dir PATH` explicitly selects the
-managed directory for cleanup. Cleanup retains external payloads and unmanaged
-data, and stops removal if its preview or application command fails. The helper
-rejects cleanup targets that would delete its saved recovery support.
+Use the same options with `app-uninstall.cmd` on Windows. Only select resource
+categories that the application declared; unknown files and external data are
+not inferred as cleanup targets. The saved uninstall code invokes any
+repository-owned cleanup before removing the installed program. Inspection and
+recovery use `{my_project} installation show`, `{my_project} installation
+doctor`, and `{my_project} installation repair`.
 
-`--remove-uv` requests a separate, conservative ownership check and confirmation.
-Even an empty tool inventory does not prove other projects no longer use uv.
-See the [removal guide](docs/How-To-User-Guides.md#remove-an-installation) for
-eligibility, legacy recovery, and editable pip installations, and the
-[uninstaller reference](docs/References.md#uninstaller-reference) for all options.
+The saved controller is stored under the fixed native `installation/` address,
+separate from application data. Repeated commands do not redirect it when the
+shell's `HOME`, XDG variables, or `LOCALAPPDATA` change.
+
+<br>
 
 
 <!-- ====================================================================== -->
@@ -283,30 +244,23 @@ eligibility, legacy recovery, and editable pip installations, and the
 
 # Usage
 
-Before using first, time, config with. 
-
-
-<br>
-
-## First-Time Use
-
-The starter reads typed settings and manages a directory for persistent data.
-This POSIX example keeps that data next to the checkout:
+The installed command and AppRC management remain available before business
+setup. Run these commands from the installed application environment:
 
 ```shell
-export {MY_PROJECT}_APPRC_DIR="$PWD/.demo-config"
 {my_project} version
 {my_project} diagnose --json
-{my_project} config setup --yes --storage-root ../{my_project}-data
-{my_project} config doctor
-{my_project} config set app.message "Hello local storage" --scope storage
+{my_project} installation show
 {my_project} config show --json
+{my_project} launcher
 ```
 
-With `{MY_PROJECT}_MESSAGE` unset, the output includes `Hello local storage`.
-The [storage explanation](docs/Explanations.md#storage) describes where data and
-settings live. Open `{my_project} config edit` to inspect and edit settings in
-the terminal, or [register another storage](docs/How-To-User-Guides.md#switch-storage).
+Application resources use the paths declared by `APP_RC`. Config, appdata,
+cache, and state are independent capabilities; disabled paths stay absent and
+installation management does not enable them. The `installation/` authority is
+separate from application data. See the
+[filesystem capabilities](docs/Explanations.md#filesystem-capabilities) and
+[installation placement reference](docs/References.md#installation-placement).
 
 
 

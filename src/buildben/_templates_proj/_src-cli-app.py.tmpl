@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from importlib import metadata
 from pathlib import Path
@@ -36,22 +37,46 @@ def _package_version() -> str:
 
 
 def _diagnose_payload() -> dict[str, object]:
-    """Inspect package and AppRC paths without requiring selected storage.
+    """Inspect package and installation authority without requiring business settings.
 
-    :return: JSON-compatible package, interpreter, and file locations.
+    :return: JSON-compatible package, installation, and component paths.
     """
     schema = APP_RC.schema
-    paths = APP_RC.manage().paths
+    inspection = APP_RC.installation().inspect()
+    path_error = None
+    try:
+        paths = APP_RC.paths()
+    except rc.InstallationError as error:
+        paths = None
+        path_error = str(error)
     return {
-        "apprc_dir": str(paths.root),
-        "apprc_dir_env_key": schema.apprc_dir_env_key,
-        "registry_path": str(paths.apprc_toml),
         "cwd": str(Path.cwd()),
+        "installation_directory": str(inspection.directory),
+        "installation_status": inspection.status,
+        "installation_diagnostics": [
+            diagnostic.message for diagnostic in inspection.diagnostics
+        ],
+        "path_error": path_error,
+        "paths": (
+            {
+                kind: str(path) if path is not None else None
+                for kind, path in (
+                    ("config", paths.config_dir),
+                    ("appdata", paths.appdata_dir),
+                    ("cache", paths.cache_dir),
+                    ("state", paths.state_dir),
+                    ("logs", paths.logs_dir),
+                )
+            }
+            if paths is not None
+            else None
+        ),
+        "layout_env_key": schema.layout_env_key,
+        "root_env_key": schema.root_env_key,
         "package": PACKAGE_NAME,
         "package_file": str(Path(<my_project>.__file__).resolve()),
         "python_executable": sys.executable,
         "python_version": sys.version,
-        "storage_selector_env_key": schema.storage_selector_env_key,
         "version": _package_version(),
     }
 
@@ -59,22 +84,36 @@ def _diagnose_payload() -> dict[str, object]:
 def _config_show_payload(
     state: rc.cli.DefaultConfigCliState,
 ) -> dict[str, object]:
-    """Build the configuration report from this command's ResolvedConfig.
+    """Build a report from this command's captured path and config snapshot.
 
     :param state: CLI state containing the current resolution.
-    :return: Application settings and selected storage for JSON output.
+    :return: Application settings, paths, and workspace selection.
     """
     assert state.resolved is not None
     resolved = state.resolved
     config = resolved.build(<MyProject>Config)
-    selection = resolved.selection
-    assert selection is not None
+    workspace = resolved.workspace
     return {
         "package": PACKAGE_NAME,
         "version": _package_version(),
-        "storage_name": selection.storage_name,
-        "storage_root": str(selection.root),
-        "storage_count": resolved.storage_count,
+        "paths": {
+            kind: str(path) if path is not None else None
+            for kind, path in (
+                ("config", resolved.paths.config_dir),
+                ("appdata", resolved.paths.appdata_dir),
+                ("cache", resolved.paths.cache_dir),
+                ("state", resolved.paths.state_dir),
+                ("logs", resolved.paths.logs_dir),
+            )
+        },
+        "workspace": (
+            {
+                "name": workspace.workspace_name,
+                "root": str(workspace.root),
+            }
+            if workspace is not None
+            else None
+        ),
         "config": config.app.to_dict(),
     }
 
@@ -88,20 +127,14 @@ def _setup_app_logging(level: str | int = "INFO", **_: object) -> None:
     logging.basicConfig(level=level)
 
 
-rc.cli.mount_appdata_cli(app, APP_RC)
-
-rc.cli.mount_config_cli(
+rc.cli.mount_app_cli(
     app,
     APP_RC,
-    storage_required=True,
     runtime_policy=rc.cli.CliRuntimePolicy(
         runtime_independent_commands={
+            "launcher": rc.cli.RuntimeIndependentCommand(skip_empty=True),
             "version": rc.cli.RuntimeIndependentCommand(skip_empty=True),
             "diagnose": rc.cli.RuntimeIndependentCommand(skip_empty=True),
-            "appdata": rc.cli.RuntimeIndependentCommand(
-                action_prefixes={("paths",), ("clean",)},
-                skip_empty=True,
-            ),
         },
         extra_cli_flag_options={"--json"},
     ),
@@ -109,6 +142,45 @@ rc.cli.mount_config_cli(
     setup_logging=_setup_app_logging,
     logger=LOG,
 )
+
+
+@app.command("launcher")
+def launcher_cmd(ctx: typer.Context) -> None:
+    """Open the optional installed AppRC launcher."""
+    context = rc.cli.installation_command_context_from(ctx)
+    if context is None:
+        raise RuntimeError("Launcher recovery context was not prepared.")
+    controls = context.runtime_options
+    executable = Path(sys.executable).with_name(
+        PACKAGE_NAME + (".exe" if os.name == "nt" else "")
+    )
+    arguments = tuple(rc.cli.cli_runtime_options_to_args(controls))
+    rc.tui.run_launcher(
+        APP_RC,
+        spec=rc.tui.LauncherSpec(
+            actions=(
+                rc.tui.LauncherAction(
+                    id="main",
+                    label="Run <my_project>",
+                    argv=lambda _launcher, _interactive: (
+                        str(executable),
+                        *arguments,
+                    ),
+                    group="main",
+                    interactive=True,
+                ),
+            ),
+            title="<my_project>",
+        ),
+        options=rc.ResolveOptions(
+            workspace=controls.workspace,
+            layout=controls.layout,
+            env_files=controls.env_files,
+            env_file_overrides_os_environ=controls.env_file_overrides_os_environ,
+            load_dotenv_layers=controls.load_dotenv_layers,
+        ),
+        environment=context.environment,
+    )
 
 
 @app.command("version")

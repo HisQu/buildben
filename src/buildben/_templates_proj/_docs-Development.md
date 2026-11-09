@@ -14,6 +14,7 @@ and checks, and submission guidance. This page explains the deeper procedures.
   - [Static figure rules](#static-figure-rules)
 - [Verify and release](#verify-and-release)
   - [Verification](#verification)
+  - [Authored installation artifacts](#authored-installation-artifacts)
   - [Windows installer verification procedure](#windows-installer-verification-procedure)
   - [Unix installer staging verification](#unix-installer-staging-verification)
   - [Releases](#releases)
@@ -153,9 +154,9 @@ For documentation, run the generated project's maintained checks:
 .venv/bin/python -m pytest tests/test_documentation.py
 ```
 
-These validate the six `docs/` pages' grouped outlines and ordinary local
-Markdown links in the README, CONTRIBUTING, AGENTS, and docs pages. They check
-local files and heading anchors, not remote URLs or GitHub's exact rendering.
+These check ordinary local Markdown links in the README, CONTRIBUTING, AGENTS,
+and docs pages. They verify local files and heading anchors, not remote URLs,
+GitHub's exact rendering, prose accuracy, or whether navigation is useful.
 
 Execute changed examples in disposable directories and compare their output
 and file changes with the prose. Preview the affected documents as well: the
@@ -166,6 +167,33 @@ Report the commands and observed results, including failures, missing
 prerequisites, and omitted checks. Keep the corresponding behavior unverified
 until the relevant scenario has actually run.
 
+## Authored installation artifacts
+
+The repository-owned lifecycle composition lives under
+`src/{my_project}_distr/payload/app_lifecycle/`. Edit those ordinary Python
+modules to add application setup or cleanup; installed helpers contain the
+authored payload and do not import the development-only `_distr` package.
+
+After editing the payload, regenerate the deterministic SDK outputs with
+`just make-artifacts`. CI and read-only review use `just check-artifacts`,
+which fails on missing or drifted outputs without rewriting files. Artifact
+generation uses the locked AppRC authoring dependency; package builds do not
+run generation or network access implicitly. The application wheel excludes
+`{my_project}_distr`, while the source archive includes the generator, authored
+payload, generated artifacts, and six `app-install`, `app-launch`, and
+`app-uninstall` wrappers for POSIX and Windows.
+
+This scaffold pins AppRC development and installer-management sources to a
+verified immutable commit in `pyproject.toml` and generated
+`DistributionSpec.runtime_overrides`. Remove those source overrides only after
+the corresponding AppRC release is available from the configured package index.
+The `[distribution]` extra is authoring-only; tool-install overrides pin the
+plain core and terminal packages without adding Jinja to the application's
+runtime. A GUI override is included only when `apprc-gui` is an authored normal
+runtime dependency. Merely declaring an optional GUI extra does not install it;
+if the installer explicitly selects that feature, author its matching runtime
+override alongside that selection in `make_artifacts.py`.
+
 ## Windows installer verification procedure
 
 > [!IMPORTANT]
@@ -175,73 +203,49 @@ until the relevant scenario has actually run.
 > with a Windows virtual environment, subprocess wrapper, or alternate launcher.
 > Use independent native Windows CI for Windows execution.
 
-Use the existing [CI workflow](../.github/workflows/ci.yml) for the exact commit
-under review. Its `installation` job has native `windows-latest` cells for
-Python 3.12 and 3.13, running `just release-install-smoke`. Inspect the job logs
-and report the commit, job, command, and observed result rather than treating a
+
+Use the existing [CI workflow](../.github/workflows/ci.yml) for the exact
+commit under review. Its native `windows-latest` cells exercise the generated
+consumer installer through `.cmd` and PowerShell entrypoints; the source
+smoke also runs through the actual scaffolder output. Inspect job logs and
+report the commit, job, command, and observed result rather than treating a
 workflow's presence as proof.
 
-That recipe builds and extracts the project's sdist, installs it directly with
-`uv tool install`, checks CLI help and the installed package snapshot, records
-the installation, and exercises the saved native uninstaller while preserving
-configuration and data sentinels. It does **not** execute `install-windows.ps1`
-or the installer `.cmd` wrappers. A successful package-install smoke therefore
-does not establish Windows installer-entrypoint correctness.
+Keep file invocation and downloaded-text invocation as separate scenarios.
+Linux tests and static inspection are not Windows execution proof. CMD quoting,
+PowerShell preflight, HKCU behavior, and executable-in-use handling remain
+unverified until native coverage completes.
 
-For an installer change, distinguish that existing package coverage from the
-following native Windows evidence:
-
-1. Exercise the actual
-   [`src/{my_project}_dev/distribution/install-windows.ps1`](../src/{my_project}_dev/distribution/install-windows.ps1)
-   file, not functions copied into a separate harness.
-2. Exercise the documented downloaded `[scriptblock]::Create(...)` invocation
-   from the [Windows one-line installation instructions](How-To-User-Guides.md#for-windows),
-   with the downloaded content corresponding to the commit being verified.
-   File invocation alone does not establish behavior in a downloaded script block.
-3. Check that installer helpers share a mutable state object created locally
-   for each invocation. Do not replace that shared object with copied scalar
-   variables or `$script:` state: nested and downloaded script-block scopes
-   must observe the same invocation-local updates without leaking state.
-
-BuildBen's own native Windows regression tests exercise its canonical installer
-and the project installer rendered through the real project scaffolder. That
-central template coverage is separate from this generated project's CI package
-smoke; this starter does not generate a `tests/test_release_install.py` suite or
-a `-k windows_installer` test command. Do not claim generated installer proof
-from the package smoke or a copied-function harness. Record any actual-file or
-downloaded-entrypoint scenario that has not run as unverified.
-
-Linux tests and static inspection are useful evidence only for the behavior
-they exercise; they are not Windows execution proof. Capturing output,
-`-NoProfile`, and `-NonInteractive` do not isolate a Windows console. Treat
-`CREATE_NO_WINDOW` as an unverified workaround, not a verified cure for console
-or control-event behavior.
-
-If native Windows CI cannot run, report the blocker and keep Windows proof and
-verification-dependent delivery pending. Do not launch Windows executables
-from WSL to compensate, and do not change billing, runner policy, execution
-policy, permissions, or other security settings to unblock verification.
+From WSL, never launch native Windows verification executables directly or
+through helpers. This includes PowerShell, Windows Python/pytest, `cmd.exe`,
+and Windows `uv`. If native Windows CI cannot run, report the blocker and keep
+Windows proof pending; do not change runner policy, billing, permissions, or
+security settings to bypass it.
 
 ## Unix installer staging verification
 
-Unix staging changes need actual installer-entrypoint evidence, not only the
-generated CI package-install smoke. BuildBen's maintained
-[source-installer tests](https://github.com/HisQu/buildben/blob/main/tests/test_release_install.py)
-render this Unix installer with matching project identity and run real source
-installation and saved uninstallation with physical and symlinked temporary
-parents. That central template coverage is separate from this project's
-direct-package smoke.
+The generated project's maintained
+`tests/test_{my_project}_package.py` is run by `just release-install-smoke`.
+It serves the staged release assets and immutable-main source archive through
+the existing loopback fixture, then invokes the generated installer entries
+and saved uninstaller as real subprocesses. The cases record the installed
+source/backend, verify the captured main commit, launch the installed command,
+and confirm program-only removal retains the receipt and unrelated data.
 
-Canonicalize only a newly created installer-owned staging root before deriving
-extracted-source paths. Keep lifecycle and preflight link checks intact; do not
-resolve arbitrary helper inputs, alter fixtures, or skip a failing smoke to hide
-a production failure. Record missing project-specific installer evidence as
-unverified rather than claiming it from another project's CI.
+POSIX cases run outside the checkout with isolated HOME, XDG, and uv roots,
+including physical and symlinked temporary parents. They exercise the selected
+GitHub client and a restricted initial PATH; another maintained case removes
+uv and Python from that PATH so the actual official uv bootstrap must provision
+the persistent executable before installation. That case needs access to the
+official uv download service. Windows CI separately runs `.cmd`, PowerShell
+`-File`, and downloaded-text entries; macOS CI retains the native temporary
+directory alias case. These CI definitions do not prove execution: report
+Windows/macOS results as pending until their native jobs have run.
 
-Those central rendered Unix cases use the real BuildBen package with
-`--skip-config`, because BuildBen does not provide a generated application's
-configuration command. They do not establish this project's configuration-wizard
-behavior.
+The loopback transport supplies the committed consumer's release and source
+bytes; it does not mock the installer, package manager, source validation, or
+uninstall result. A direct-package smoke or Linux run cannot establish Windows
+quoting, PowerShell handoff, or macOS native filesystem behavior.
 
 ## Releases
 
@@ -288,15 +292,13 @@ notes in the GitHub release body. Normal CI exercises direct sdist installation
 on all six native OS/Python cells; the release job performs one Python 3.12 wheel
 installation smoke and does not build platform installers.
 
-The generated `just release-install-smoke` isolates HOME, AppRC/state, and uv
-locations, validates the source archive version, and records its direct uv tool
-installation with the stdlib lifecycle helper. It uses the saved native
-uninstaller and verifies retained sentinels rather than deleting uv directly.
-This direct-install route does not claim bootstrap ownership of its supplied uv.
-Follow the [Windows installer verification procedure](#windows-installer-verification-procedure)
-for the distinction between package-install coverage and installer-entrypoint
-proof. Linux execution cannot establish CMD quoting, PowerShell preflight, or
-executable-in-use behavior.
+The generated `just release-install-smoke` isolates HOME, XDG, and uv
+locations, installs through the actual generated AppRC entrypoints, and checks
+saved management and removal while preserving user data. It does not delete
+shared uv or Python. Follow the [Windows installer verification
+procedure](#windows-installer-verification-procedure) for native entrypoint
+coverage. Linux execution cannot establish CMD quoting, PowerShell behavior, or
+macOS filesystem aliases.
 
 `just build-release-inputs` accepts an optional positional path to already
 validated release notes:

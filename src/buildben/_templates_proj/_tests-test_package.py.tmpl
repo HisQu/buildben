@@ -1,10 +1,622 @@
-"""Basic generated-package smoke coverage."""
+"""Generated consumer checks for real source installs and retained removal."""
 
 from __future__ import annotations
 
+import dataclasses
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import tomllib
+import venv
+from pathlib import Path, PurePosixPath
+from urllib.request import urlopen
 
-def test_package_imports() -> None:
-    """Keep the generated test suite non-empty and importable."""
-    import {my_project}
+import pytest
 
-    assert {my_project}.__name__ == "{my_project}"
+from apprc.distribution import (
+    PayloadTree,
+    build_main_installer,
+    install_support_files,
+    read_project_metadata,
+)
+from apprc.user_files.installation.discovery import installation_directory
+from {my_project}_dev.packaging.release_stage import (
+    _locked_runtime_requirements,
+)
+from {my_project}_distr.make_artifacts import distribution_spec
+from support_source_transport.server import SourceFixture
+
+ROOT = Path(__file__).resolve().parents[1]
+TESTS = ROOT / "tests"
+
+
+def test_checkout_management_is_read_only_without_business_settings(
+    tmp_path: Path,
+) -> None:
+    """Inspect an unmanaged consumer without initializing user resources."""
+    environment = os.environ.copy()
+    for key in (
+        "HOME",
+        "USERPROFILE",
+        "XDG_DATA_HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_CACHE_HOME",
+        "LOCALAPPDATA",
+    ):
+        environment[key] = str(tmp_path / key.casefold())
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "{my_project}",
+            "installation",
+            "show",
+            "--json",
+        ],
+        cwd=ROOT,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    inspection = json.loads(result.stdout)
+    assert inspection["status"] == "missing"
+    metadata = read_project_metadata(ROOT)
+    assert not installation_directory(
+        metadata.identity.app_id, environment=environment
+    ).exists()
+
+
+def _project_identity():
+    metadata = read_project_metadata(ROOT)
+    spec = distribution_spec(ROOT, metadata)
+    settings = tomllib.loads(
+        (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    repository = settings["project"].get("urls", {}).get("Repository")
+    if not isinstance(repository, str) or not repository:
+        pytest.fail(
+            "Generated project metadata must declare its GitHub repository."
+        )
+    version = settings["project"]["version"]
+    return metadata, spec, repository, f"v{version}", version
+
+
+def _main_installer(metadata, spec, commit: str, destination: Path) -> Path:
+    spec = dataclasses.replace(
+        spec,
+        source_mode="main",
+        release_commit=commit,
+        runtime_requirements=tuple(
+            dict.fromkeys(
+                (
+                    *spec.runtime_requirements,
+                    *_locked_runtime_requirements(ROOT),
+                )
+            )
+        ),
+    )
+    payload_root = ROOT / metadata.distribution_path / "payload"
+    modules = tuple(
+        PurePosixPath("app_lifecycle") / filename
+        for filename in (
+            "__init__.py",
+            "install.py",
+            "uninstall.py",
+            "actions.py",
+        )
+    )
+    with tempfile.TemporaryDirectory(
+        prefix="consumer-main-payload-"
+    ) as temporary:
+        staged = Path(temporary) / "payload"
+        shutil.copytree(payload_root, staged)
+        base_payload = PayloadTree(staged, modules)
+        resources: list[PurePosixPath] = []
+        for relative, content in install_support_files(
+            spec, base_payload
+        ).items():
+            resource = PurePosixPath("app_lifecycle/_support") / relative
+            target = staged.joinpath(*resource.parts)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
+            resources.append(resource)
+        payload = PayloadTree(staged, modules, resources=tuple(resources))
+        artifact = build_main_installer(spec, payload)
+        destination.write_bytes(artifact.content)
+    return destination
+
+
+def _smoke_commit() -> str:
+    """Require source-smoke inputs only when the release recipe supplies one."""
+    archive = os.environ.get("INSTALLER_SMOKE_MAIN_SOURCE")
+    commit = os.environ.get("INSTALLER_SMOKE_MAIN_COMMIT")
+    if bool(archive) != bool(commit):
+        pytest.fail(
+            "INSTALLER_SMOKE_MAIN_SOURCE and INSTALLER_SMOKE_MAIN_COMMIT "
+            "must be supplied together."
+        )
+    if not archive or not commit:
+        pytest.skip(
+            "Source-installer scenarios require the release smoke inputs."
+        )
+    if not Path(archive).is_file():
+        pytest.fail(f"Source archive does not exist: {archive}")
+    if len(commit) != 40 or any(
+        character not in "0123456789abcdef" for character in commit
+    ):
+        pytest.fail(
+            "INSTALLER_SMOKE_MAIN_COMMIT must be a full lowercase commit hash."
+        )
+    return commit
+
+
+def _source_fixture(tmp_path: Path, commit: str) -> SourceFixture:
+    metadata, spec, repository, tag, _version = _project_identity()
+    assets = ROOT / "release" / "assets"
+    archive_name = os.environ.get("INSTALLER_SMOKE_MAIN_SOURCE")
+    if not archive_name:
+        pytest.fail(
+            "Set INSTALLER_SMOKE_MAIN_SOURCE to the maintained source archive."
+        )
+    archive = Path(archive_name)
+    if not archive.is_file():
+        pytest.fail(f"Source archive does not exist: {archive}")
+    if not assets.is_dir():
+        pytest.fail(
+            "Run the release staging recipe before source-install smoke."
+        )
+    requested_source = os.environ.get("INSTALLER_SMOKE_SOURCE")
+    if requested_source:
+        source = Path(requested_source)
+        staged = assets / source.name
+        if (
+            not source.is_file()
+            or not staged.is_file()
+            or source.read_bytes() != staged.read_bytes()
+        ):
+            pytest.fail(
+                "Staged release bytes differ from INSTALLER_SMOKE_SOURCE."
+            )
+    main_installer = _main_installer(
+        metadata, spec, commit, tmp_path / "main-installer.py"
+    )
+    return SourceFixture(
+        assets_directory=assets,
+        main_installer=main_installer,
+        main_installer_path=(
+            metadata.distribution_path.as_posix()
+            + "/artifacts/installer/main-installer.py"
+        ),
+        main_archive=archive,
+        repository=repository,
+        commit=commit,
+        tag=tag,
+        moving_commit=("0" if commit != "0" * 40 else "1") * 40,
+        moving_archive=b"a moved branch must not replace its captured source commit",
+    )
+
+
+def _smoke_environment(
+    tmp_path: Path,
+    fixture: SourceFixture,
+    *,
+    restricted: bool,
+    symlink_tmp: bool,
+) -> dict[str, str]:
+    environment = os.environ.copy()
+    for key, name in {
+        "HOME": "home",
+        "USERPROFILE": "home",
+        "XDG_CONFIG_HOME": "config",
+        "XDG_DATA_HOME": "data",
+        "XDG_STATE_HOME": "state",
+        "XDG_CACHE_HOME": "cache",
+        "LOCALAPPDATA": "local-appdata",
+        "UV_CACHE_DIR": "uv-cache",
+        "UV_TOOL_DIR": "uv-tools",
+        "UV_TOOL_BIN_DIR": "uv-bin",
+        "TEMP": "temporary",
+        "TMP": "temporary",
+    }.items():
+        path = tmp_path / name
+        path.mkdir(parents=True, exist_ok=True)
+        environment[key] = str(path)
+    environment["TMPDIR"] = environment["TEMP"]
+    if symlink_tmp:
+        if os.name == "nt":
+            pytest.skip("The temporary-directory alias case is POSIX-only.")
+        alias = tmp_path / "temporary-alias"
+        alias.symlink_to(environment["TMPDIR"], target_is_directory=True)
+        environment["TMPDIR"] = str(alias)
+    parent_venv = tmp_path / "active-parent-venv"
+    venv.EnvBuilder(with_pip=False).create(parent_venv)
+    environment["VIRTUAL_ENV"] = str(parent_venv)
+    environment["PYTHON"] = sys.executable
+    environment["INSTALLER_SMOKE_API_URL"] = fixture.base_url + "/api"
+    environment.pop("UV", None)
+    support = tmp_path / "transport-client"
+    support.mkdir()
+    for name in ("gh", "gh.py", "gh.cmd", "sitecustomize.py"):
+        shutil.copy2(TESTS / "support_source_transport" / name, support / name)
+    if os.name != "nt":
+        (support / "gh").chmod(0o700)
+    mapping = tmp_path / "url-map.json"
+    mapping.write_text(json.dumps(fixture.url_map), encoding="utf-8")
+    environment["INSTALLER_SMOKE_URL_MAP"] = str(mapping)
+    environment["PYTHONPATH"] = os.pathsep.join(
+        item
+        for item in (
+            str(support),
+            str(ROOT / "src"),
+            environment.get("PYTHONPATH", ""),
+        )
+        if item
+    )
+    uv = shutil.which("uv")
+    if uv is None:
+        pytest.fail("Source smoke requires an existing real uv executable.")
+    environment["APPRC_UV_PATH"] = str(Path(uv).resolve())
+    if restricted:
+        persistent = Path(environment["HOME"]) / ".local" / "bin"
+        persistent.mkdir(parents=True)
+        shutil.copy2(uv, persistent / "uv")
+        environment["UV"] = str(persistent / "uv")
+        required = {
+            "basename",
+            "sh",
+            "cat",
+            "mktemp",
+            "rm",
+            "dirname",
+            "pwd",
+            "uname",
+            "git",
+            "sed",
+        }
+        tools = {name: shutil.which(name) for name in required}
+        missing = sorted(name for name, value in tools.items() if value is None)
+        if missing:
+            pytest.fail(
+                "Restricted source smoke lacks required shell tools: "
+                + ", ".join(missing)
+            )
+        path = tmp_path / "path"
+        path.mkdir()
+        for name, executable in tools.items():
+            (path / name).symlink_to(executable)
+        if os.environ.get("INSTALLER_SMOKE_CLIENT", "curl") == "gh":
+            shutil.copy2(support / "gh", path / "gh")
+            shutil.copy2(support / "gh.py", path / "gh.py")
+            (path / "gh").chmod(0o700)
+        environment["PATH"] = str(path)
+    else:
+        environment["PATH"] = os.pathsep.join(
+            (str(support), environment.get("PATH", ""))
+        )
+    caller = tmp_path / "outside-checkout"
+    caller.mkdir()
+    environment["INSTALLER_SMOKE_CALLER"] = str(caller)
+    return environment
+
+
+def _run(
+    arguments: list[str], environment: dict[str, str]
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        arguments,
+        cwd=Path(environment["INSTALLER_SMOKE_CALLER"]),
+        env=environment,
+        text=True,
+        capture_output=True,
+        timeout=240,
+        check=False,
+    )
+
+
+def _install_and_assert(
+    fixture: SourceFixture,
+    environment: dict[str, str],
+    *,
+    mode: str,
+    entrypoint: Path | list[str],
+    windows_cmd: bool,
+    expected_uv: Path | None = None,
+) -> None:
+    if isinstance(entrypoint, Path):
+        arguments = [str(entrypoint)]
+        if mode == "main":
+            arguments.append("--main")
+        if os.environ.get("INSTALLER_SMOKE_CLIENT", "curl") == "gh":
+            arguments.extend(("--github-client", "gh"))
+        arguments.extend(("--layout", "native"))
+        if windows_cmd:
+            arguments = ["cmd.exe", "/d", "/c", *arguments]
+    else:
+        arguments = list(entrypoint)
+        if os.environ.get("INSTALLER_SMOKE_CLIENT", "curl") == "gh":
+            arguments.extend(("--github-client", "gh"))
+        arguments.extend(("--layout", "native"))
+    result = _run(arguments, environment)
+    assert result.returncode == 0, result.stdout + result.stderr
+    fixture.close()
+    temporary = Path(environment["TMPDIR"])
+    assert not tuple(temporary.glob("apprc-source-*"))
+    assert not tuple(temporary.glob("apprc-main-*"))
+    assert not tuple(temporary.glob("apprc-release-*"))
+    metadata = read_project_metadata(ROOT)
+    command = metadata.identity.commands[0]
+    executable = Path(environment["UV_TOOL_BIN_DIR"]) / command
+    if os.name == "nt":
+        executable = executable.with_suffix(".exe")
+    assert executable.is_file()
+    assert fixture.main_resolution_count == (1 if mode == "main" else 0)
+    assert fixture.main_archive_requests == (
+        [fixture.commit] if mode == "main" else []
+    )
+    help_result = _run([str(executable), "--help"], environment)
+    assert help_result.returncode == 0, help_result.stdout + help_result.stderr
+    installation = installation_directory(
+        metadata.identity.app_id, environment=environment
+    )
+    receipt = installation / "installation.json"
+    installed = json.loads(receipt.read_text(encoding="utf-8"))
+    assert installed["status"] == "ready"
+    assert installed["current"] is not None
+    if mode == "main":
+        assert fixture.commit in json.dumps(installed["current"]["source"])
+    if expected_uv is not None:
+        assert str(expected_uv) in json.dumps(installed["current"]["backend"])
+    sentinel = installation.parent / "unowned.txt"
+    sentinel.write_text("preserve unrelated data\n", encoding="utf-8")
+    uninstall = installation / (
+        "uninstall.cmd" if os.name == "nt" else "uninstall.sh"
+    )
+    assert uninstall.is_file()
+    remove = [str(uninstall), "--yes"]
+    if os.name == "nt":
+        remove = ["cmd.exe", "/d", "/c", *remove]
+    removed = _run(remove, environment)
+    assert removed.returncode == 0, removed.stdout + removed.stderr
+    final = json.loads(receipt.read_text(encoding="utf-8"))
+    assert final["status"] == "removed-retained"
+    assert final["current"] is None
+    assert final["last_successful"] is not None
+    assert sentinel.read_text(encoding="utf-8") == "preserve unrelated data\n"
+    assert not executable.exists()
+    assert not (
+        Path(environment["UV_TOOL_DIR"]) / metadata.identity.distribution
+    ).exists()
+
+
+@pytest.mark.parametrize("mode", ["release", "main"])
+@pytest.mark.parametrize("restricted_path", [False, True])
+@pytest.mark.parametrize("symlink_tmp", [False, True])
+def test_source_install_smoke(
+    tmp_path: Path,
+    mode: str,
+    restricted_path: bool,
+    symlink_tmp: bool,
+) -> None:
+    """Install through public release/main entries from outside the checkout."""
+    if os.name == "nt" and restricted_path:
+        pytest.skip(
+            "The minimal POSIX PATH fixture is not available on Windows."
+        )
+    if os.name == "nt" and symlink_tmp:
+        pytest.skip("The temporary-directory alias case is POSIX-only.")
+    client = os.environ.get("INSTALLER_SMOKE_CLIENT", "curl")
+    if client not in {"curl", "gh"}:
+        pytest.fail("INSTALLER_SMOKE_CLIENT must be curl or gh.")
+    commit = _smoke_commit()
+    fixture = _source_fixture(tmp_path, commit)
+    try:
+        environment = _smoke_environment(
+            tmp_path,
+            fixture,
+            restricted=restricted_path,
+            symlink_tmp=symlink_tmp,
+        )
+        assets = ROOT / "release" / "assets"
+        entrypoint = (
+            assets
+            / ("app-install.cmd" if os.name == "nt" else "app-install.sh")
+            if mode == "release"
+            else ROOT
+            / ("app-install.cmd" if os.name == "nt" else "app-install.sh")
+        )
+        _install_and_assert(
+            fixture,
+            environment,
+            mode=mode,
+            entrypoint=entrypoint,
+            windows_cmd=os.name == "nt",
+        )
+    finally:
+        fixture.close()
+
+
+@pytest.mark.skipif(
+    os.name != "nt", reason="Native PowerShell coverage runs on Windows."
+)
+@pytest.mark.parametrize("entry", ["file", "downloaded-text"])
+def test_windows_installer_entries(
+    tmp_path: Path, entry: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Run the PowerShell bootstrap as a file and as downloaded text."""
+    monkeypatch.setenv("INSTALLER_SMOKE_CLIENT", "gh")
+    commit = _smoke_commit()
+    fixture = _source_fixture(tmp_path, commit)
+    try:
+        environment = _smoke_environment(
+            tmp_path, fixture, restricted=False, symlink_tmp=False
+        )
+        bootstrap = ROOT / "release" / "assets" / "bootstrap.ps1"
+        if entry == "file":
+            command = [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(bootstrap),
+                "--main",
+            ]
+        else:
+            with urlopen(
+                f"{fixture.base_url}/assets/bootstrap.ps1", timeout=30
+            ) as response:
+                downloaded = response.read().decode("utf-8")
+            downloaded_file = tmp_path / "downloaded-bootstrap.ps1"
+            downloaded_file.write_text(downloaded, encoding="utf-8")
+            literal = str(downloaded_file).replace("'", "''")
+            command = [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                f"$script = [ScriptBlock]::Create("
+                f"[IO.File]::ReadAllText('{literal}')); & $script --main",
+            ]
+        _install_and_assert(
+            fixture,
+            environment,
+            mode="main",
+            entrypoint=command,
+            windows_cmd=False,
+        )
+    finally:
+        fixture.close()
+
+
+def _official_uv_environment(
+    tmp_path: Path, fixture: SourceFixture
+) -> tuple[dict[str, str], Path]:
+    environment = _smoke_environment(
+        tmp_path, fixture, restricted=False, symlink_tmp=False
+    )
+    environment.pop("UV", None)
+    environment.pop("APPRC_UV_PATH", None)
+    persistent_name = "uv.exe" if os.name == "nt" else "uv"
+    persistent_uv = (
+        Path(environment["HOME"]) / ".local" / "bin" / persistent_name
+    )
+    if persistent_uv.exists():
+        persistent_uv.unlink()
+    if os.name == "nt":
+        original_path = environment["PATH"].split(os.pathsep)
+        filtered = []
+        for entry in original_path:
+            directory = Path(entry)
+            available = (
+                "uv.exe",
+                "python.exe",
+                "python3.exe",
+                "uv",
+                "python",
+                "python3",
+            )
+            if any((directory / name).is_file() for name in available):
+                continue
+            filtered.append(entry)
+        powershell = (
+            Path(os.environ["SystemRoot"])
+            / "System32"
+            / "WindowsPowerShell"
+            / "v1.0"
+        )
+        filtered.append(str(powershell))
+        environment["PATH"] = os.pathsep.join(filtered)
+        assert shutil.which("uv", path=environment["PATH"]) is None
+        assert shutil.which("python", path=environment["PATH"]) is None
+    else:
+        tools = {
+            "sh",
+            "curl",
+            "git",
+            "cat",
+            "mktemp",
+            "rm",
+            "dirname",
+            "pwd",
+            "uname",
+            "mkdir",
+            "chmod",
+            "mv",
+            "tar",
+            "rmdir",
+            "grep",
+            "cut",
+            "tr",
+            "head",
+            "sed",
+            "sleep",
+            "cp",
+            "ln",
+            "realpath",
+            "awk",
+            "sort",
+            "wc",
+            "basename",
+            "sha256sum",
+            "ldd",
+        }
+        path = tmp_path / "official-bootstrap-path"
+        path.mkdir()
+        for name in tools:
+            executable = shutil.which(name)
+            if executable is None:
+                pytest.fail(f"Official uv bootstrap smoke requires {name}.")
+            (path / name).symlink_to(executable)
+        for name in (
+            "sysctl",
+            "sw_vers",
+            "tail",
+            "gzip",
+            "install",
+            "which",
+            "getconf",
+        ):
+            executable = shutil.which(name)
+            if executable is not None:
+                (path / name).symlink_to(executable)
+        if os.environ.get("INSTALLER_SMOKE_CLIENT", "curl") == "gh":
+            support = tmp_path / "transport-client"
+            shutil.copy2(support / "gh", path / "gh")
+            shutil.copy2(support / "gh.py", path / "gh.py")
+            (path / "gh").chmod(0o700)
+        environment["PATH"] = str(path)
+        assert shutil.which("uv", path=environment["PATH"]) is None
+        assert shutil.which("python", path=environment["PATH"]) is None
+        assert shutil.which("python3", path=environment["PATH"]) is None
+    return environment, persistent_uv
+
+
+def test_official_uv_bootstrap_installs_without_initial_python_or_uv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bootstrap the official uv binary, then complete a real main-source install."""
+    monkeypatch.setenv("INSTALLER_SMOKE_CLIENT", "curl")
+    commit = _smoke_commit()
+    fixture = _source_fixture(tmp_path, commit)
+    try:
+        environment, selected_uv = _official_uv_environment(tmp_path, fixture)
+        entrypoint = ROOT / (
+            "app-install.cmd" if os.name == "nt" else "app-install.sh"
+        )
+        _install_and_assert(
+            fixture,
+            environment,
+            mode="main",
+            entrypoint=entrypoint,
+            windows_cmd=os.name == "nt",
+            expected_uv=selected_uv,
+        )
+        assert selected_uv.is_file()
+    finally:
+        fixture.close()

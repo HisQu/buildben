@@ -22,6 +22,7 @@ This project follows Semantic Versioning.
 
 1. [Buildben Changelog](#buildben-changelog)
 2. [\[Unreleased\]](#unreleased)
+3. [\[0.12.0\] - 2026-10-29](#0120---2026-10-29)
 3. [\[0.11.3\] - 2026-10-22](#0113---2026-10-22)
 3. [\[0.11.2\] - 2026-10-22](#0112---2026-10-22)
 3. [\[0.11.1\] - 2026-10-21](#0111---2026-10-21)
@@ -55,6 +56,65 @@ This project follows Semantic Versioning.
 
 ### 💥 Breaking changes
 
+<br>
+
+### ➕ Added
+
+<br>
+
+### 💔 Changed
+
+<br>
+
+### ⚠️ Deprecated
+
+<br>
+
+### 🗑️ Removed
+
+<br>
+
+### 🔨 Fixed
+
+<br>
+
+### 🔒 Security
+
+<br>
+
+---
+
+<br>
+
+<!-- ======================================================== -->
+
+# [0.12.0] - 2026-10-29
+
+<br>
+
+### 💥 Breaking changes
+
+- Breaking: Generated applications now use AppRC 0.31's independent resource,
+  persistent installation and grouped maintenance contracts. Affected: existing
+  template consumers using the old AppRC storage/appdata commands or old receipt.
+  Migration: update declarations/mounting and use the explicit AppRC migration
+  guide; legacy procedures must be quiescent and retired before activating
+  `installation.json`. Do not infer an old layout or rerun `init-proj` over an
+  existing project.
+- Breaking: Replaced `_dev/distribution` and platform-specific root installer
+  copies with authored `<app>_distr` composition and the six `app-install`,
+  `app-launch` and `app-uninstall` `.sh`/`.cmd` wrappers. Affected: repository
+  automation and applications maintaining copied lifecycle code. Migration:
+  preserve project actions in the new ordinary-Python payload, regenerate with
+  `just make-artifacts`, and use `just check-artifacts` in CI. Application wheels
+  exclude the author-only `_distr` package; sdists include required inputs/output.
+- Breaking: GitHub releases now require an exact package/native-helper asset set
+  and `release-manifest.json`, not just a wheel and sdist. Affected: release
+  automation and consumers assuming a two-file GitHub release. Migration: stage
+  final release entries, validate the manifest's app/distribution/version/commit,
+  sizes and SHA-256 hashes, and upload its exact assets. PyPI input remains only
+  the validated wheel and sdist.
+
 - Breaking: New scaffolds use root `BACKLOG.md` instead of `TODO.md` for deferred
   work. Consumers linking to the old path must rename their existing durable
   backlog and update those links, preserving all entries. Do not rerun
@@ -67,24 +127,37 @@ This project follows Semantic Versioning.
 ### ➕ Added
 
 - Added `--main` to the terminal installers and generated-project installers.
-  It installs one captured GitHub main commit with that snapshot's committed
-  `uv.lock`; published stable releases remain the default.
+  It installs one captured GitHub main commit with matching source/runtime inputs;
+  published stable releases remain the default.
 - New projects include a root `CONTRIBUTING.md` for shared contributor/agent
   conventions and quick-start commands, with README-style headings and spacing.
 - Generated documentation tests validate local navigation across README,
   CONTRIBUTING, AGENTS, and the detailed documentation pages.
-- Installer-based installations now save a private receipt, standalone stdlib
-  lifecycle helper, and native offline uninstaller outside the application
-  environment. Removal preserves data and uv by default, records completion for
-  safe repeats, and supports explicit package-only recovery for legacy installs.
-  Saved launchers keep their original receipt even when later shell state
-  directory variables point elsewhere.
-- Generated applications mount AppRC's `appdata paths` and `appdata clean`
-  commands. Optional uninstall-time cleanup previews managed targets and rejects
-  overlap with saved recovery files before removing the package.
-- Optional uv removal requires recorded bootstrap ownership, unchanged binary
-  hashes, eligible recorded/default tool inventories, and separate consent.
-  Shared Python, caches, shell configuration, and unrelated data remain intact.
+- Added repository-owned install/uninstall composition using AppRC's shared
+  generation and standalone runtime. Bootstraps acquire uv/Python as needed
+  without requiring AppRC or the application first. Checkout installs use the
+  actual editable project, including dirty source changes.
+  Private OS-temporary aliases are normalized for acquisition without relaxing
+  managed-resource path validation.
+- Added first-install OS-native/single-root selection, explicit persistent
+  switching and durable native installation metadata separate from disposable
+  state. Layout selection affects declared application resources, not uv's
+  program environment or dependencies; capabilities remain independently optional.
+- Added saved inspection/removal support outside the removable environment,
+  independent actual-process exit handoff, resumable recovery and generation-safe
+  authority retirement. Program-only removal retains resource data/support;
+  complete removal requires exact ownership-aware preview and consent. Shared uv,
+  shared Python, editable checkouts and workspaces are never implicit targets.
+- Added explicit `--migrate-legacy --reinstall-legacy` for old noneditable programs
+  whose deleted temporary origin cannot be adopted. Independently observed old
+  RECORD evidence and a verified immutable replacement remain distinct; pending
+  recovery reuses recorded source/backend/placement and requires fresh quiescence.
+  Retained-only repair covers initial-authority interruption and disappearance
+  of the original archive, evidence file and checkout.
+- Added strict release manifests and offline staging/verification commands. Draft
+  retries preserve tag ownership and partial-upload semantics; finalization and
+  manual PyPI preflight verify the full package/helper contract without allowing
+  helper assets into PyPI publication.
 
 <br>
 
@@ -101,21 +174,23 @@ This project follows Semantic Versioning.
   CONTRIBUTING owns shared rules and everyday setup/checks; Development retains
   deeper guides. Agent instructions link to these canonical rules rather than
   maintaining duplicate copies.
-- New generated applications require `apprc>=0.29.0,<0.30`; Buildben retains
-  an empty runtime dependency list. Generated installation smoke and the native
-  installer matrix use saved uninstall launchers rather than direct uv removal.
+- New generated applications require `apprc>=0.31.0,<0.32`, with
+  `apprc-core[distribution]` authoring dependencies. Buildben retains an empty
+  runtime dependency list. Until that AppRC release is published, development,
+  CI and tool-install composition use explicit immutable source pins rather
+  than assuming a matching package already exists on PyPI.
+- Archive checks in `just release-check` and `just build-release-inputs` validate
+  standard normalized wheel and sdist filenames, including generated project
+  names containing underscores.
 - Documented the native Windows CI verification procedure in root agent guidance
   and the README; WSL agents must not launch Windows verification executables.
+- Native-proof policy permits an explicit user-authorized main merge/push with a
+  recorded Windows/macOS gap. It still forbids Windows executables from WSL,
+  treats configured CI as unrun until observed, and requires separate release
+  authorization and native release evidence.
 
 <br>
 
-### ⚠️ Deprecated
-
-<br>
-
-### 🗑️ Removed
-
-<br>
 
 ### 🔨 Fixed
 
@@ -131,9 +206,6 @@ This project follows Semantic Versioning.
 
 <br>
 
-### 🔒 Security
-
-<br>
 
 ---
 
