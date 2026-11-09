@@ -231,6 +231,10 @@ just check-artifacts
 Commit the authored inputs and their generated outputs together. `check-artifacts`
 compares expected bytes without rewriting them. Neither package build hooks nor
 an end user's launch should regenerate artifacts or fetch missing checkout code.
+
+The artifact authoring and staging recipes select the locked project environment
+through uv. They do not require an activated virtual environment or direnv.
+
 Before publication, the development sources and tool-install runtime overrides
 must point to the same immutable AppRC commit; a uv development source alone
 does not control the installed application's dependencies.
