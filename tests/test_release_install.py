@@ -389,17 +389,21 @@ def test_source_install_smoke(
         moving_commit=moving_commit,
         moving_archive=b"the moved branch must not replace the captured source",
     )
-    installation_root = tmp_path
+    acquisition_root = tmp_path
     if symlink_parent:
-        installation_root = tmp_path.parent / f"{tmp_path.name}-alias"
-        installation_root.symlink_to(tmp_path, target_is_directory=True)
-    environment = _install_environment(installation_root)
+        acquisition_root = tmp_path.parent / f"{tmp_path.name}-alias"
+        acquisition_root.symlink_to(tmp_path, target_is_directory=True)
+    environment = _install_environment(tmp_path)
+    # > Alias acquisition only; managed authority and backend homes stay physical.
+    temporary = str(acquisition_root / "temporary")
+    for name in ("TMPDIR", "TEMP", "TMP"):
+        environment[name] = temporary
     selected_uv = (
         _persistent_uv_without_initial_path(environment, tmp_path)
         if initial_path == "restricted"
         else None
     )
-    mapping = installation_root / "source-url-map.json"
+    mapping = acquisition_root / "source-url-map.json"
     mapping.write_text(json.dumps(fixture.url_map), encoding="utf-8")
     environment["INSTALLER_SMOKE_URL_MAP"] = str(mapping)
     environment["INSTALLER_SMOKE_API_URL"] = fixture.api_url
