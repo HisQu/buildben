@@ -114,10 +114,10 @@ python -m pip install -e "."    # venv recommended
 ### Native installer entries
 
 > [!IMPORTANT]
-> This checkout prepares Buildben 0.12 and AppRC 0.31; changing the source version
-> does not publish either package. Until a matching Buildben release exists, use
-> the checkout entries below rather than expecting new assets in an older release.
-> The committed immutable AppRC source pins bridge the unpublished dependency.
+> This checkout prepares Buildben 0.12 and integrates AppRC 0.32 from immutable
+> source pins; changing source versions does not publish either package. Until a
+> matching Buildben release exists, use the checkout entries below rather than
+> expecting new assets in an older release.
 
 From a complete checkout, run the local project entry:
 
@@ -360,46 +360,24 @@ complete deletion. Complete removal deletes `installation.json` last; afterward
 only lock retirement and empty-container cleanup may occur. Safe lock residue
 under contention is reported, not used as permission to delete a new generation.
 
-Existing legacy `receipt.json` installations require explicit migration. Stop old
-installers, launchers and uninstallers first, then use the complete checkout:
+Legacy Buildben receipts are not adopted by the current installer or AppRC
+installation authority. Finish any operation started by the old installer
+before removing its managed program. Back up user data first, and use the old
+generation's own removal procedure with its resource-preserving option; if that
+procedure cannot clearly preserve the resource directories, stop and resolve
+that with the old generation before proceeding. Do not fabricate a current
+installation record from a receipt or version label. After the old managed
+program is removed and its resources are preserved, install the current
+checkout as a fresh installation:
 
 ```sh
-./app-install.sh --migrate-legacy --legacy-quiescent \
-  --legacy-source legacy-source.json --layout native
+./app-install.sh --layout native
 ```
 
-Use `app-install.cmd` on Windows. The first cutover needs the explicit layout and
-source evidence; a journaled interruption resumes from the durable migration.
-Known Windows in-place or old POSIX state-directory support is inspected, and
-known old runnable entries are retired before new authority becomes active.
-Unknown files are not adopted.
-
-`legacy-source.json` has exactly `source` and `distribution_record_digest`.
-The source contains `kind`, `requirement`, `version`, `digest`,
-`runtime_requirements` and `runtime_overrides`, using the actual original
-acquisition and observed installed metadata—not this checkout or a guessed hash.
-The installer re-probes the recorded backend and compares the legacy version and
-required installed `RECORD` fingerprint. See the [source-evidence collection
-procedure](src/buildben/_templates_proj/_docs-References.md) for the SDK metadata
-probe and exact JSON shape; replace the scaffold's example identities with
-`buildben` and its actual `buildben`/`bube` commands.
-
-For old noneditable installs whose arbitrary temporary source has been deleted,
-do not invent original provenance. Explicitly reinstall from a verified immutable
-source before cutover:
-
-```sh
-./app-install.sh --migrate-legacy --reinstall-legacy --legacy-quiescent \
-  --legacy-source legacy-source.json --layout native
-```
-
-In this mode, `source` selects the verified replacement; the RECORD digest still
-describes the **old installed program**. This replaces its uv-managed program
-environment, not user data or workspaces. The recorded interpreter/backend is
-preserved, and old controllers retire only after the replacement is observed.
-After an interruption, stop old processes again and retry the matching command
-with `--legacy-quiescent`; pending authority supplies the saved source and paths.
-Reinstallation is never an automatic fallback from failed adoption.
+Use `app-install.cmd` on Windows. Current installation authority does not
+recognize schema-1 receipts or recover their operations. The unmanaged editable
+pip and uv tool removal guidance below applies only when no managed installation
+authority exists.
 
 For an unmanaged editable pip installation, use that environment's
 `python -m pip uninstall buildben`. For a manually installed uv tool without
@@ -493,25 +471,31 @@ It checks Actions artifact storage, not GitHub Release uploads, PyPI publication
 or application correctness.
 
 The starter has a Typer CLI, `python -m <my_project>` support, and AppRC
-configuration. It enables named storage without a user dotenv. One `APP_RC`
-declaration registers typed sections; a config bundle passes those sections to
-application code. The `config` commands initialize storage, edit settings, and
-open the terminal editor. The generated docs and `AGENTS.md` require consistent
-component names and links inside the paragraphs and tables where they are useful.
+configuration. Its `APP_RC` enables the `config` and `appdata` capabilities,
+without enabling user dotenv support by default. The shared declaration
+registers typed config sections; a config bundle passes those sections to
+application code. Use `config init` and `appdata init` to initialize the
+respective resource categories and ownership markers. `config setup` is
+available when user dotenv is enabled.
 
 > [!IMPORTANT]
-> Generated projects require `apprc>=0.29.0,<0.30` and its matching `apprc-core`.
-> Buildben itself still has no runtime dependencies. Existing projects are not
-> rewritten automatically.
+> Generated projects use AppRC 0.32 source-pinned SDK packages (`apprc`,
+> `apprc-core`, and optional `apprc-gui`). Buildben itself has no AppRC runtime
+> dependency, and the source pins do not claim that a matching SDK release has
+> been published.
 
-To verify generated projects with that dependency available, run
-`uv run --locked --with 'apprc>=0.29.0,<0.30' python -m pytest`.
-For local AppRC changes, install matching locally built `apprc-core` and `apprc`
-wheels, set `APPRC_ARTIFACTS` to their directory, and use
-`UV_FIND_LINKS="$APPRC_ARTIFACTS"` for generated consumer installs. Local wheel
-paths belong in the verification environment, not production requirements.
-Missing AppRC is an unmet verification prerequisite; skipped generated-runtime
-checks do not establish compatibility.
+The maintained `tests/test_init_proj.py` and `tests/test_lifecycle.py` suites
+scaffold real generated projects and exercise their SDK-generated artifacts and
+consumer lifecycle. Run both full modules for local generated-consumer
+verification:
+
+```sh
+uv run --locked python -m pytest tests/test_init_proj.py tests/test_lifecycle.py
+```
+
+When working against a local AppRC source change, provide its matching local
+packages through the repository's existing test environment; do not replace the
+immutable generated-project source pins with a released-version range.
 
 #### Create virtual environment (``/.direnv``):
 

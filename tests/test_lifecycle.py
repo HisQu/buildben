@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
-import shutil
 import select
-import subprocess
+import shutil
 import struct
+import subprocess
 import sys
 import time
 import tomllib
@@ -634,9 +633,9 @@ def test_launcher_saved_uninstall_waits_for_initiating_process_exit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Run the actual Textual launcher and its saved uninstall handoff in a PTY."""
+    import fcntl
     import pty
     import termios
-    import fcntl
 
     root, environment, state = _create_consumer(
         tmp_path, monkeypatch, name="lifecycle_consumer", custom_actions=True
@@ -846,635 +845,152 @@ def test_generated_support_directory_link_is_rejected(
         module._support_files(app_id)
 
 
-@pytest.mark.parametrize(
-    ("legacy_package", "interruption"),
-    [
-        ("editable", None),
-        ("wheel", None),
-        ("replacement", None),
-        ("replacement", "before-backend"),
-        ("replacement", "after-backend"),
-        ("replacement", "authority"),
-        ("replacement", "retire"),
-        ("replacement", "ready-order"),
-        ("editable", "retire"),
-        ("editable", "promote"),
-        ("editable", "receipt"),
-    ],
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"),
+    reason="Linux resource migration paths.",
 )
-def test_legacy_receipt_conflicts_then_cutover_preserves_runnable_recovery(
+def test_saved_installer_resumes_interrupted_current_resource_migration(
     consumer: tuple[Path, dict[str, str], Path],
     tmp_path: Path,
-    interruption: str | None,
-    legacy_package: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Keep legacy authority intact when conflicts prevent a safe cutover."""
+    """Resume schema-2 resource moves through the maintained installer."""
+    import apprc as rc
+    from apprc.definition.installation import (
+        InstallationPlacement,
+        InventoryEntry,
+        MigrationInventory,
+    )
+    from apprc.definition.paths import Layout, ResourceKind
+    from apprc.user_files.app_home.writes import file_revision
+
     root, environment, state = consumer
-    project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
-    metadata = project["project"]
-    distribution = re.sub(r"[-_.]+", "-", metadata["name"]).lower()
-    command = next(iter(metadata["scripts"]))
     installed = _run(
         _install_command(root, "--layout", "native"),
         cwd=tmp_path,
         env=environment,
     )
     assert installed.returncode == 0, installed.stdout + installed.stderr
-    prior = json.loads((state / "installation.json").read_text(encoding="utf-8"))[
-        "current"
-    ]
-    assert prior is not None
-    source = prior["source"]
-    record_digest = prior["distribution_record_digest"]
-    wheel_to_restore: tuple[Path, bytes] | None = None
-    legacy_python = Path(sys.executable).resolve()
-    if legacy_package == "wheel":
-        from apprc.definition.installation import InstallationSource
-        import dataclasses
-        from apprc.distribution import read_project_metadata
-        from apprc.distribution.runtime import installed_probe
-        from apprc.distribution.runtime.acquisition import prepare_source
-        from apprc.distribution.runtime.probe import probe_installed_tool
-        from apprc.user_files.installation.discovery import inspect_installation
-        from apprc.distribution.runtime.backend import (
-            external_base_python,
-            install_uv_tool,
-            select_uv_target,
-        )
-        from buildben_distr.make_artifacts import APPRC_COMMIT
 
-        built = _run(["uv", "build", "--wheel"], cwd=root, env=environment)
-        assert built.returncode == 0, built.stdout + built.stderr
-        wheels = tuple((root / "dist").glob("*.whl"))
-        assert len(wheels) == 1
-        overrides = (
-            f"apprc-core @ git+https://github.com/HisQu/apprc.git@{APPRC_COMMIT}",
-            f"apprc @ git+https://github.com/HisQu/apprc.git@{APPRC_COMMIT}"
-            "#subdirectory=src/apprc_dev/packaging/terminal",
-        )
-        wheel_digest = hashlib.sha256(wheels[0].read_bytes()).hexdigest()
-        wheel_source = InstallationSource(
-            "wheel",
-            str(wheels[0]),
-            version=metadata["version"],
-            digest=wheel_digest,
-            runtime_overrides=overrides,
-        )
-        target = select_uv_target(
-            Path(environment["APPRC_UV_PATH"]),
-            environment=environment,
-            invocation_cwd=tmp_path,
-        )
-        prepared = prepare_source(wheel_source, tmp_path / "legacy-acquisition")
-        install_uv_tool(
-            target,
-            dataclasses.replace(wheel_source, requirement=prepared.requirement),
-            environment=environment,
-            python_requirement=">=3.12",
-        )
-        legacy_python = external_base_python(target.tool_dir / distribution)
-        identity = read_project_metadata(root).identity
-        current_record = inspect_installation(state, app_id=identity.app_id).record
-        assert current_record is not None
-        observed = probe_installed_tool(
-            target,
-            identity,
-            wheel_source,
-            current_record.placement,
-            probe_path=Path(installed_probe.__file__).absolute(),
-            environment=environment,
-            acquisition_requirement=prepared.requirement,
-            acquisition_digest=prepared.digest,
-        )
-        source = json.loads(json.dumps(dataclasses.asdict(observed.source)))
-        record_digest = observed.distribution_record_digest
-        wheel_to_restore = (wheels[0], wheels[0].read_bytes())
-        wheels[0].unlink()
-        shutil.rmtree(tmp_path / "legacy-acquisition")
-        project_file = root / "pyproject.toml"
-        text = project_file.read_text(encoding="utf-8")
-        text = text.replace(
-            f'version     = "{metadata["version"]}"', 'version     = "0.2.0"'
-        )
-        project_file.write_text(text, encoding="utf-8")
-        generated = _run(
-            [sys.executable, "-m", "lifecycle_consumer_distr.make_artifacts"],
-            cwd=root,
-            env=environment,
-        )
-        assert generated.returncode == 0, generated.stdout + generated.stderr
-    observed_legacy = None
-    if legacy_package == "replacement":
-        import dataclasses
-        from urllib.parse import urlsplit
-        from urllib.request import url2pathname
-
-        from apprc.definition.installation import InstallationSource
-        from apprc.distribution import read_project_metadata
-        from apprc.distribution.runtime import installed_probe
-        from apprc.distribution.runtime.backend import (
-            external_base_python,
-            select_uv_target,
-            tool_interpreter,
-        )
-        from buildben_distr.make_artifacts import APPRC_COMMIT
-
-        identity = read_project_metadata(root).identity
-        overrides = (
-            f"apprc-core @ git+https://github.com/HisQu/apprc.git@{APPRC_COMMIT}",
-            f"apprc @ git+https://github.com/HisQu/apprc.git@{APPRC_COMMIT}"
-            "#subdirectory=src/apprc_dev/packaging/terminal",
-        )
-        legacy_source_root = tmp_path / "legacy-source-archive"
-        shutil.copytree(
-            root,
-            legacy_source_root,
-            ignore=shutil.ignore_patterns(
-                ".git", ".venv", "__pycache__", "*.pyc", "dist"
-            ),
-        )
-        target = select_uv_target(
-            Path(environment["APPRC_UV_PATH"]),
-            environment=environment,
-            invocation_cwd=tmp_path,
-        )
-        legacy_python = Path(sys.executable).resolve()
-        historical_install = _run(
-            [
-                str(target.executable),
-                "tool",
-                "install",
-                "--force",
-                "--python",
-                str(legacy_python),
-                "--from",
-                str(legacy_source_root),
-                "--with",
-                overrides[0],
-                "--with",
-                overrides[1],
-                distribution,
-            ],
+    executable = Path(environment["UV_TOOL_BIN_DIR"]) / "lifecycle_consumer"
+    for command in (("config", "init"), ("appdata", "init")):
+        initialized = _run(
+            [str(executable), *command],
             cwd=tmp_path,
             env=environment,
         )
-        assert historical_install.returncode == 0, (
-            historical_install.stdout + historical_install.stderr
-        )
-        legacy_python = external_base_python(target.tool_dir / distribution)
-        observed_legacy = _run(
-            [
-                str(tool_interpreter(target, distribution)),
-                "-I",
-                str(Path(installed_probe.__file__).absolute()),
-                "--distribution",
-                distribution,
-                "--app-id",
-                identity.app_id,
-                "--import-package",
-                identity.import_package,
-                *(
-                    item
-                    for command_name in identity.commands
-                    for item in ("--command", command_name)
-                ),
-            ],
-            cwd=tmp_path,
-            env=environment,
-        )
-        assert observed_legacy.returncode == 0, (
-            observed_legacy.stdout + observed_legacy.stderr
-        )
-        legacy_observation = json.loads(observed_legacy.stdout)
-        assert legacy_observation["version"] == metadata["version"]
-        assert isinstance(legacy_observation["distribution_record_digest"], str)
-        assert len(legacy_observation["distribution_record_digest"]) == 64
-        direct_url = legacy_observation["direct_url"]
-        assert isinstance(direct_url, dict)
-        source_url = direct_url["url"]
-        assert isinstance(source_url, str)
-        assert Path(url2pathname(urlsplit(source_url).path)).resolve() == (
-            legacy_source_root.resolve()
-        )
-        assert isinstance(direct_url.get("dir_info"), dict)
-        assert direct_url["dir_info"].get("editable", False) is False
-        record_digest = legacy_observation["distribution_record_digest"]
-        shutil.rmtree(legacy_source_root)
-        assert not legacy_source_root.exists()
-        project_file = root / "pyproject.toml"
-        text = project_file.read_text(encoding="utf-8")
-        text = text.replace(
-            f'version     = "{metadata["version"]}"', 'version     = "0.2.0"'
-        )
-        project_file.write_text(text, encoding="utf-8")
-        generated = _run(
-            [sys.executable, "-m", "lifecycle_consumer_distr.make_artifacts"],
-            cwd=root,
-            env=environment,
-        )
-        assert generated.returncode == 0, generated.stdout + generated.stderr
-        built = _run(["uv", "build", "--wheel"], cwd=root, env=environment)
-        assert built.returncode == 0, built.stdout + built.stderr
-        replacement_wheels = tuple((root / "dist").glob("*.whl"))
-        assert len(replacement_wheels) == 1
-        replacement_digest = hashlib.sha256(
-            replacement_wheels[0].read_bytes()
-        ).hexdigest()
-        replacement_source = InstallationSource(
-            "wheel",
-            str(replacement_wheels[0]),
-            version="0.2.0",
-            digest=replacement_digest,
-            runtime_overrides=overrides,
-        )
-        source = json.loads(json.dumps(dataclasses.asdict(replacement_source)))
-    source_file = tmp_path / "legacy-source-evidence.json"
-    source_file.write_text(
-        json.dumps({"source": source, "distribution_record_digest": record_digest}),
-        encoding="utf-8",
-    )
+        assert initialized.returncode == 0, initialized.stdout + initialized.stderr
 
-    legacy_base = (
-        Path(environment["LOCALAPPDATA"])
-        if os.name == "nt"
-        else Path(environment["XDG_STATE_HOME"])
-    )
-    legacy_root = legacy_base / distribution / "installation"
-    if state.exists():
-        shutil.rmtree(state)
-    if legacy_root.exists():
-        shutil.rmtree(legacy_root)
-    legacy_root.mkdir(parents=True)
-    retained_payload: Path | None = None
-    if legacy_package == "replacement":
-        app_id = project["tool"]["apprc"]["distribution"]["app-id"]
-        assert isinstance(app_id, str)
-        if os.name == "nt":
-            appdata = Path(environment["LOCALAPPDATA"]) / app_id / "appdata" / "appdata"
-        elif sys.platform == "darwin":
-            appdata = (
-                Path(environment["HOME"])
-                / "Library"
-                / "Application Support"
-                / app_id
-                / "appdata"
-                / "appdata"
-            )
-        else:
-            appdata = (
-                Path(environment["XDG_DATA_HOME"]) / app_id / "appdata" / "appdata"
-            )
-        appdata.mkdir(parents=True, exist_ok=True)
-        retained_payload = appdata / "replacement-payload.txt"
-        retained_payload.write_text("preserve user payload\n", encoding="utf-8")
-        missing_quiescence = _run(
-            _install_command(
-                root,
-                "--migrate-legacy",
-                "--reinstall-legacy",
-                "--layout",
-                "native",
-                "--legacy-source",
-                str(source_file),
-            ),
-            cwd=tmp_path,
-            env=environment,
-        )
-        assert missing_quiescence.returncode != 0
-        assert not (state / "installation.json").exists()
-    receipt = {
-        "schema_version": 1,
-        "distribution": distribution,
-        "command": command,
-        "version": metadata["version"],
-        "source_ref": f"v{metadata['version']}",
-        "python": str(legacy_python),
-        "uv": environment["APPRC_UV_PATH"],
-        "tool_dir": environment["UV_TOOL_DIR"],
-        "tool_bin_dir": environment["UV_TOOL_BIN_DIR"],
-        "appdata_supported": False,
-        "uv_bootstrapped": False,
-        "uv_binaries": [],
-        "package_removed": False,
+    project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    app_id = project["tool"]["apprc"]["distribution"]["app-id"]
+    manager = rc.AppRC(
+        app_id=app_id,
+        paths=rc.Paths(config=True, appdata=True),
+    ).installation(environment=environment)
+    inspection = manager.inspect()
+    record = inspection.record
+    assert record is not None
+    assert record.status == "ready"
+    source_roots: dict[ResourceKind, Path | None] = {
+        "config": record.placement.config_dir,
+        "appdata": record.placement.appdata_dir,
     }
+    assert all(path is not None for path in source_roots.values())
+    appdata_root = source_roots["appdata"]
+    assert appdata_root is not None
+    payload = appdata_root / "migration-payload.bin"
+    payload.write_bytes(b"preserve this application data")
 
-    invalid_reinstall = _run(
-        _install_command(root, "--reinstall-legacy"),
-        cwd=tmp_path,
-        env=environment,
+    destination_root = tmp_path / "migrated resources"
+    destinations: list[Path] = []
+    entries: list[InventoryEntry] = []
+    for kind, source_root in source_roots.items():
+        assert source_root is not None
+        assert source_root.is_dir()
+        for source in sorted(source_root.rglob("*")):
+            if source.is_dir():
+                continue
+            assert source.is_file() and not source.is_symlink()
+            relative = source.relative_to(source_root)
+            destination = destination_root / kind / relative
+            entries.append(InventoryEntry(source, "file", file_revision(source), kind))
+            destinations.append(destination)
+    assert any(entry.path.name == ".apprc-owner.json" for entry in entries)
+    assert payload in {entry.path for entry in entries}
+    owner_marker_contents = {
+        kind: (source_root / ".apprc-owner.json").read_bytes()
+        for kind, source_root in source_roots.items()
+        if source_root is not None
+    }
+    placement = InstallationPlacement(
+        Layout.single_root(destination_root),
+        config_dir=destination_root / "config",
+        appdata_dir=destination_root / "appdata",
+        capabilities=record.placement.capabilities,
     )
-    assert invalid_reinstall.returncode != 0
-    (legacy_root / "receipt.json").write_text(json.dumps(receipt), encoding="utf-8")
-    for name in (
-        "lifecycle.py",
-        "uninstall.sh",
-        "uninstall.cmd",
-        "uninstall.ps1",
-        "prepare-powershell-windows.cmd",
-    ):
-        (legacy_root / name).write_text("legacy support\n", encoding="utf-8")
-    unknown = legacy_root / "unknown-user-file.txt"
-    unknown.write_text("preserve unknown content\n", encoding="utf-8")
+    inventory = MigrationInventory(
+        tmp_path,
+        destination_root,
+        tuple(entries),
+        tuple(destinations),
+    )
+    plan = manager.plan_migration(
+        placement,
+        inventory=inventory,
+        quiescent=True,
+    )
+    original_rename = Path.rename
 
-    migration = (
-        "--migrate-legacy",
-        "--legacy-quiescent",
-        "--legacy-source",
-        str(source_file),
-        "--layout",
-        "native",
-    )
-    explicit_migration = (
-        (*migration, "--reinstall-legacy")
-        if legacy_package == "replacement"
-        else migration
-    )
-    unrequested = _run(
-        _install_command(root, "--layout", "native"),
-        cwd=tmp_path,
-        env=environment,
-    )
-    assert unrequested.returncode != 0
-    assert (legacy_root / "receipt.json").is_file()
-    missing_layout = _run(
-        _install_command(root, "--migrate-legacy", "--legacy-quiescent"),
-        cwd=tmp_path,
-        env=environment,
-    )
-    assert missing_layout.returncode != 0
-    assert (legacy_root / "receipt.json").is_file()
-    blocked = _run(
-        _install_command(root, *migration),
-        cwd=tmp_path,
-        env=environment,
-    )
-    assert blocked.returncode != 0
-    assert (legacy_root / "receipt.json").is_file()
-    assert unknown.read_text(encoding="utf-8") == "preserve unknown content\n"
-    executable = Path(environment["UV_TOOL_BIN_DIR"]) / (
-        command + (".exe" if os.name == "nt" else "")
-    )
-    assert executable.is_file()
+    def interrupt_after_payload_move(source: Path, destination: Path) -> Path:
+        moved = original_rename(source, destination)
+        if source == payload:
+            raise RuntimeError("simulated interruption after resource move")
+        return moved
 
-    if legacy_package == "replacement":
-        replacement_blocked = _run(
-            _install_command(root, *explicit_migration),
-            cwd=tmp_path,
-            env=environment,
-        )
-        assert replacement_blocked.returncode != 0
-        assert (legacy_root / "receipt.json").is_file()
-        assert executable.is_file()
-        assert not (state / "installation.json").exists()
-    unknown.unlink()
-    if legacy_package == "replacement":
-        strict_adoption = _run(
-            _install_command(root, *migration), cwd=tmp_path, env=environment
-        )
-        assert strict_adoption.returncode != 0
-        assert (legacy_root / "receipt.json").is_file()
-        assert executable.is_file()
-        assert not (state / "installation.json").exists()
-        wrong_record = json.loads(source_file.read_text(encoding="utf-8"))
-        wrong_record["distribution_record_digest"] = "0" * 64
-        source_file.write_text(json.dumps(wrong_record), encoding="utf-8")
-        mismatched = _run(
-            _install_command(root, *explicit_migration),
-            cwd=tmp_path,
-            env=environment,
-        )
-        assert mismatched.returncode != 0
-        assert not (state / "installation.json").exists()
-        assert (legacy_root / "receipt.json").is_file()
-        assert executable.is_file()
-        source_file.write_text(
-            json.dumps(
-                {
-                    "source": source,
-                    "distribution_record_digest": record_digest,
-                }
-            ),
-            encoding="utf-8",
-        )
-    pending = None
-    if interruption is not None:
-        installer = _installer(root, "lifecycle_consumer")
-        driver = Path(__file__).parent / "support_lifecycle_fault.py"
-        interrupted_arguments = [
-            sys.executable,
-            str(driver),
-            "--boundary",
-            interruption,
-        ]
-        if interruption == "ready-order":
-            interrupted_arguments.extend(("--legacy-root", str(legacy_root)))
-        interrupted_arguments.extend((str(installer), *explicit_migration))
-        interrupted = _run(
-            interrupted_arguments,
-            cwd=tmp_path,
-            env=environment,
-        )
-        if interruption == "ready-order":
-            assert interrupted.returncode == 0, interrupted.stdout + interrupted.stderr
-        else:
-            assert interrupted.returncode != 0
-            pending = json.loads(
-                (state / "installation.json").read_text(encoding="utf-8")
-            )
-            if legacy_package == "replacement" and interruption != "retire":
-                assert pending["migration"] is None
-                assert pending["operation"]["kind"] == "replace"
-            elif legacy_package == "replacement":
-                assert pending["migration"] is not None
-                assert pending["operation"]["kind"] == "migrate"
-            else:
-                assert pending["migration"] is not None
-                assert not pending["migration"]["cleanup_complete"]
-            if legacy_package == "replacement":
-                pending_before_recovery = (state / "installation.json").read_bytes()
-                missing_consent = _run(
-                    [
-                        sys.executable,
-                        str(_installer(root, "lifecycle_consumer")),
-                        "--repair",
-                        "--directory",
-                        str(state),
-                    ],
-                    cwd=tmp_path,
-                    env=environment,
-                )
-                assert missing_consent.returncode != 0
-                recovery_message = missing_consent.stdout + missing_consent.stderr
-                assert "--legacy-quiescent" in recovery_message
-                assert "--repair" in recovery_message
-                assert str(_installer(root, "lifecycle_consumer")) in recovery_message
-                assert str(state) in recovery_message
-                assert sys.executable in recovery_message
-                assert (
-                    state / "installation.json"
-                ).read_bytes() == pending_before_recovery
-    if legacy_package == "replacement" and interruption is not None:
-        if interruption == "ready-order":
-            migrated = _run(
-                [
-                    sys.executable,
-                    str(state / "repair-installer.py"),
-                    "--repair",
-                    "--directory",
-                    str(state),
-                ],
-                cwd=tmp_path,
-                env=environment,
-            )
-        elif interruption in {"before-backend", "after-backend"}:
-            saved_repair = state / "repair-installer.py"
-            assert saved_repair.is_file()
-            assert pending is not None
-            intended = pending["operation"]["intended"]
-            assert intended["source"] == source
-            assert intended["backend"] == prior["backend"]
-            assert intended["placement"] == prior["placement"]
-            pending_operation_id = pending["operation"]["operation_id"]
-            replacement_archive = Path(source["requirement"])
-            replacement_content = replacement_archive.read_bytes()
-            replacement_archive.unlink()
-            source_file.unlink()
-            unavailable_checkout = root.with_name(root.name + "-unavailable")
-            root.rename(unavailable_checkout)
-            assert not root.exists()
-            assert not replacement_archive.exists()
-            assert not source_file.exists()
-            migrated = _run(
-                [
-                    sys.executable,
-                    str(saved_repair),
-                    "--repair",
-                    "--directory",
-                    str(state),
-                    "--legacy-quiescent",
-                ],
-                cwd=tmp_path,
-                env=environment,
-            )
-            assert migrated.returncode == 0, migrated.stdout + migrated.stderr
-            recovered = json.loads(
-                (state / "installation.json").read_text(encoding="utf-8")
-            )
-            assert recovered["status"] == "ready"
-            assert recovered["operation"] is None
-            assert recovered["migration"]["operation_id"] == pending_operation_id
-            assert recovered["migration"]["cleanup_complete"]
-            assert recovered["current"]["source"] == intended["source"]
-            assert recovered["current"]["backend"] == intended["backend"]
-            assert recovered["current"]["placement"] == intended["placement"]
-            assert recovered["current"]["version"] == "0.2.0"
-            assert not (legacy_root / "receipt.json").exists()
-            assert not (legacy_root / "lifecycle.py").exists()
-            assert retained_payload is not None
-            assert retained_payload.read_text(encoding="utf-8") == (
-                "preserve user payload\n"
-            )
-            assert observed_legacy is not None
-            assert isinstance(observed_legacy.args, list)
-            replacement_observed = _run(
-                observed_legacy.args, cwd=tmp_path, env=environment
-            )
-            assert replacement_observed.returncode == 0, (
-                replacement_observed.stdout + replacement_observed.stderr
-            )
-            replacement_metadata = json.loads(replacement_observed.stdout)
-            assert replacement_metadata["version"] == "0.2.0"
-            assert (
-                replacement_metadata["distribution_record_digest"]
-                == (recovered["current"]["distribution_record_digest"])
-            )
-            replacement_command = _run(
-                [str(executable), "--help"], cwd=tmp_path, env=environment
-            )
-            assert replacement_command.returncode == 0, (
-                replacement_command.stdout + replacement_command.stderr
-            )
-            assert not root.exists()
-            assert not replacement_archive.exists()
-            unavailable_checkout.rename(root)
-            replacement_archive.write_bytes(replacement_content)
-        else:
-            source_file.unlink()
-            if interruption == "retire":
-                recovery_command = [
-                    sys.executable,
-                    str(_installer(root, "lifecycle_consumer")),
-                    *explicit_migration,
-                ]
-            else:
-                recovery_command = [
-                    sys.executable,
-                    str(_installer(root, "lifecycle_consumer")),
-                    "--repair",
-                    "--directory",
-                    str(state),
-                    "--legacy-quiescent",
-                ]
-            migrated = _run(
-                recovery_command,
-                cwd=tmp_path,
-                env=environment,
-            )
-    else:
-        migrated = _run(
-            _install_command(root, *explicit_migration),
-            cwd=tmp_path,
-            env=environment,
-        )
-    assert migrated.returncode == 0, migrated.stdout + migrated.stderr
-    assert not (legacy_root / "receipt.json").exists()
-    assert not (legacy_root / "lifecycle.py").exists()
-    if retained_payload is not None:
-        assert retained_payload.read_text(encoding="utf-8") == "preserve user payload\n"
-    record = json.loads((state / "installation.json").read_text(encoding="utf-8"))
-    assert record["status"] == "ready"
-    assert record["migration"]["cleanup_complete"]
-    assert record["current"]["version"] == (
-        "0.2.0" if legacy_package == "replacement" else metadata["version"]
-    )
-    assert record["current"]["source"] == source
-    assert executable.is_file()
-    for filename in ("launch-command.json", "uninstall.py", "repair-installer.py"):
-        assert (state / filename).is_file()
-    launched = _run([str(executable), "--help"], cwd=tmp_path, env=environment)
-    assert launched.returncode == 0, launched.stdout + launched.stderr
-    launch_command = (
-        ["cmd.exe", "/d", "/c", str(state / "launch.cmd"), "--help"]
-        if os.name == "nt"
-        else [str(state / "launch.sh"), "--help"]
-    )
-    saved_launch = _run(launch_command, cwd=tmp_path, env=environment)
-    assert saved_launch.returncode == 0, saved_launch.stdout + saved_launch.stderr
-    inspected = _run(
+    monkeypatch.setattr(Path, "rename", interrupt_after_payload_move)
+    with pytest.raises(RuntimeError, match="simulated interruption"):
+        manager.migrate(plan, quiescent=True)
+    monkeypatch.setattr(Path, "rename", original_rename)
+
+    pending = manager.inspect()
+    assert pending.status == "incomplete"
+    assert pending.record is not None and pending.record.operation is not None
+    assert pending.record.operation.kind == "migrate"
+    assert pending.record.migration is not None
+    assert pending.record.migration.phase == "staged"
+    assert pending.revision is not None
+    unknown = appdata_root / "unlisted-user-content.txt"
+    unknown.write_text("leave unlisted content untouched", encoding="utf-8")
+
+    resumed = _run(
         [
             sys.executable,
-            str(state / "inspection.py"),
+            str(_installer(root, "lifecycle_consumer")),
+            "--repair",
             "--directory",
             str(state),
-            "--app-id",
-            project["tool"]["apprc"]["distribution"]["app-id"],
         ],
         cwd=tmp_path,
         env=environment,
     )
-    assert inspected.returncode == 0, inspected.stdout + inspected.stderr
-    if wheel_to_restore is not None:
-        wheel_path, wheel_content = wheel_to_restore
-        wheel_path.write_bytes(wheel_content)
-    repaired = _run(
-        [sys.executable, str(state / "repair-installer.py")],
-        cwd=tmp_path,
-        env=environment,
+    assert resumed.returncode == 0, resumed.stdout + resumed.stderr
+
+    final = manager.inspect()
+    assert final.status == "ready"
+    assert final.record is not None
+    assert final.record.operation is None
+    assert final.record.migration is not None
+    assert final.record.migration.phase == "activated"
+    assert final.record.placement == placement
+    assert final.record.current is not None
+    assert final.record.current.placement == placement
+    assert (destination_root / "appdata" / payload.name).read_bytes() == (
+        b"preserve this application data"
     )
-    assert repaired.returncode == 0, repaired.stdout + repaired.stderr
-    removed = _run(_uninstall_command(state), cwd=tmp_path, env=environment)
-    assert removed.returncode == 0, removed.stdout + removed.stderr
-    final = json.loads((state / "installation.json").read_text(encoding="utf-8"))
-    assert final["status"] == "removed-retained"
-    assert final["current"] is None
-    assert not executable.exists()
+    assert (
+        destination_root / "appdata" / ".apprc-owner.json"
+    ).read_bytes() == owner_marker_contents["appdata"]
+    assert (
+        destination_root / "config" / ".apprc-owner.json"
+    ).read_bytes() == owner_marker_contents["config"]
+    assert unknown.read_text(encoding="utf-8") == "leave unlisted content untouched"

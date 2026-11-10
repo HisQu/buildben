@@ -54,7 +54,7 @@ Application resources use declared paths captured for the invocation; see
 | `{my_project} launcher` | Open the optional single-event-loop installed launcher. |
 | `{my_project} installation show [--json]` | Inspect installation authority without mutation. |
 | `{my_project} installation doctor [--json]` | Diagnose installation state without resolving business settings. |
-| `{my_project} installation migrate --dry-run` | Preview recognized legacy migration without writes. |
+| `{my_project} installation migrate --dry-run` | Preview an explicit resource or layout migration without writes. |
 | `{my_project} installation repair [--installer PATH]` | Repair the saved installation using explicit matching support. |
 | `{my_project} installation uninstall --dry-run` | Preview the selected uninstall without mutation. |
 | `{my_project} config show --json` | Print the application config payload from its captured runtime snapshot. |
@@ -142,120 +142,19 @@ resource locations. Changing layout does not move the installed program or
 automatically move existing resource contents.
 
 
-The legacy Buildben receipt is recognized only at
-`%LOCALAPPDATA%/<normalized-distribution>/installation/receipt.json` on Windows
-or `${XDG_STATE_HOME:-~/.local/state}/<normalized-distribution>/installation/receipt.json`
-on POSIX. To cut it over, first stop legacy installers, launchers, and
-uninstallers. Then explicitly choose a layout, provide verified installed-source
-evidence, and confirm quiescence:
+Buildben does not adopt legacy installer receipts. The installer uses current
+AppRC installation authority and lifecycle behavior; an old receipt is not a
+source of installation identity, ownership, or recovery state. Install or
+repair from an explicitly selected source rather than attempting receipt
+adoption.
 
-```sh
-./app-install.sh --migrate-legacy --legacy-quiescent --legacy-source legacy-source.json --layout native
-./app-install.sh --migrate-legacy --legacy-quiescent --legacy-source legacy-source.json --layout single-root --root ABSOLUTE_PATH
-```
-
-Use `app-install.cmd` for Windows. The cutover validates the recorded uv
-backend and known helper files; unknown files block migration and remain
-untouched until reviewed. If a durable migration is interrupted, the installer
-resumes that recorded migration on its next run. Preflight conflicts must be
-resolved before repeating the explicit migration command.
-
-`--legacy-source` is a JSON file with exactly `source` and
-`distribution_record_digest`. `source` contains the SDK's complete
-`InstallationSource` fields: `kind`, `requirement`, `version`, `digest`,
-`runtime_requirements`, and `runtime_overrides`. Without `--reinstall-legacy`,
-use the actual original acquisition and installed observation, not the current
-checkout or a newer release. Nullable fields remain JSON `null`; requirement
-lists remain arrays. The SDK checks the recorded backend and legacy version
-before cutover. Original wheel/release/materialized-main adoption needs its
-verified archive digest and installed RECORD fingerprint; a version label is
-not source proof. With `--reinstall-legacy`, `source` instead selects a verified
-immutable replacement and the required RECORD digest still identifies the old
-installed program. This is explicit input, not a second discovery receipt.
-
-For example, a previously observed editable source can be represented as:
-
-```json
-{
-  "source": {
-    "kind": "editable",
-    "requirement": "/absolute/original/project",
-    "version": null,
-    "digest": null,
-    "runtime_requirements": [],
-    "runtime_overrides": []
-  },
-  "distribution_record_digest": null
-}
-```
-
-Only use that example for a genuinely editable legacy installation, with its
-actual recorded constraints and overrides. An old receipt that records only a
-release label does not prove the original archive bytes or installed origin.
-If that evidence is unavailable, use explicit verified replacement below rather
-than silently adopting this checkout. Once replacement is journaled, retry uses
-the saved source/backend/support rather than asking for a new source choice;
-fresh `--legacy-quiescent` confirmation is still required.
-
-To collect the installed metadata without importing old business configuration,
-use the final SDK's ordinary metadata probe with the **recorded tool
-environment's interpreter**, not the `python` entry in the old receipt (that
-may be an external base interpreter):
-
-```sh
-probe="$(uv run --locked python -c 'from apprc.distribution.runtime import installed_probe; print(installed_probe.__file__)')"
-"/absolute/recorded/tool-dir/<normalized-distribution>/bin/python" "$probe" \
-  --distribution "<normalized-distribution>" \
-  --app-id "<actual-app-id>" \
-  --import-package "<my_project>" \
-  --command "<my_project>" > legacy-observation.json
-```
-
-On Windows, use the recorded tool environment's `Scripts/python.exe` with the
-same probe path and arguments. Add one `--command` for each actual installed
-entry point. This produces `version`, `direct_url`, and
-`distribution_record_digest` from that environment. Match `version` to
-`receipt.json`; copy the observed RECORD digest into the evidence file rather
-than hashing a different checkout. The cutover runs this probe again and
-compares the result, so collecting metadata does not authorize adoption.
-
-For adoption without `--reinstall-legacy`, use original verified inputs for `source`.
-An editable PEP 610 `direct_url` must name the original absolute project and have
-`dir_info.editable=true`. A VCS source must retain the actual credential-free
-GitHub repository, complete commit, and subdirectory from its `vcs_info` and
-`subdirectory` fields; represent it as an `index` requirement
-`git+https://github.com/OWNER/REPO.git@FULL_COMMIT#subdirectory=PROJECT_PATH`.
-Use the observed installed version, not this checkout's version. For an SDK
-content-addressed wheel or release source, obtain the original archive SHA-256,
-source locator, constraints, and overrides from the verified acquisition
-manifest or retained artifact; the installed observation alone does not
-reconstruct those original inputs.
-
-There is a further strict SDK boundary: noneditable wheel/release origins
-must use its content-addressed staging convention, independently checked
-against the supplied archive digest and installed RECORD fingerprint. A legacy
-release installed from an arbitrary old temporary directory cannot be adopted
-by renaming its provenance to the current checkout or inventing a digest.
-To replace such an installation from a verified immutable source, use:
-
-```sh
-./app-install.sh --migrate-legacy --reinstall-legacy --legacy-quiescent \
-  --legacy-source legacy-source.json --layout native
-```
-
-Choose an immutable wheel/release archive or full-commit source and its verified
-digest; provide the independently observed **old** RECORD fingerprint. This
-reinstalls the Python program but does not move data or workspaces. The exact
-recorded interpreter/backend is reused. Durable pending authority precedes the
-backend change, and old controllers retire only after strict replacement proof.
-After interruption, stop old processes again and rerun the matching command
-with `--legacy-quiescent`; the pending source remains authoritative even if the
-original temporary directory or source-evidence file is no longer available.
+The current `installation migrate` management command is for explicit resource
+and layout migration. A recorded migration resumes from its current lifecycle
+authority after interruption. The fixed native `installation/` directory
+remains separate from appdata and other declared resource capabilities.
 
 Config, appdata, cache, and state are independent declared capabilities.
 Disabled paths remain absent; an installation record does not enable appdata.
-The fixed native `installation/` directory is separate from these purgeable
-resources and remains available for inspection and recovery.
 
 <br>
 

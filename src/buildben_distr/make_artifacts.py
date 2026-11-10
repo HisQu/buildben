@@ -14,14 +14,14 @@ from apprc.distribution import (
     DistributionSpec,
     PayloadTree,
     generate_artifacts,
-    install_support_files,
     inspect_capabilities,
+    install_support_files,
     read_project_metadata,
     write_artifacts,
 )
 from apprc.distribution.models import ProjectMetadata
 
-APPRC_COMMIT = "661738cb1415fec8277c21eb5215dbc211aea92f"
+APPRC_COMMIT = "5b7340a0bf2cbec612b831f56a3e295821d05211"
 
 
 def _payload(root: Path, metadata: ProjectMetadata) -> PayloadTree:

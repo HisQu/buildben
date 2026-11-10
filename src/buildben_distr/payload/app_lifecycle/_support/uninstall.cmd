@@ -1,3 +1,3 @@
 @echo off
-__APPRC_BASE_PYTHON__ "%~dp0uninstall.py" --directory "%~dp0" %*
+__APPRC_BASE_PYTHON__ "%~dp0management.py" uninstall --directory "%~dp0" %*
 exit /b %ERRORLEVEL%
