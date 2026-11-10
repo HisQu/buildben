@@ -84,6 +84,8 @@ This project follows Semantic Versioning.
 
 - Preserved SDK-generated command bytes through Git with CRLF-aware whitespace
   checks, including the policy shipped with newly scaffolded projects.
+- Limited maintained and scaffolded CI to Linux with Python 3.12 and 3.13;
+  native Windows/macOS installation validation remains deferred.
 
 <br>
 

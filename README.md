@@ -249,12 +249,16 @@ and does not acquire an AppRC runtime dependency merely to provide installation.
 
 ### Windows installer verification procedure
 
-Use the existing `windows-latest` matrix in the
-[`installation` CI job](.github/workflows/ci.yml) for native Windows evidence.
-Extend the existing [release-install tests](tests/test_release_install.py),
-not copied installer functions or a separate harness. Exercise the real
-installer through the native `.cmd` entry and PowerShell helper, including file
-execution with `-File` and downloaded-text `ScriptBlock.Create` invocation.
+Native Windows and macOS installation validation is currently deferred. The
+maintained and scaffolded CI workflows run only on Linux with Python 3.12 and
+3.13. Re-enabling native jobs requires a separately authorized validation pass.
+
+For that Windows pass, restore a `windows-latest` case in the
+[`installation` CI job](.github/workflows/ci.yml). Extend the existing
+[release-install tests](tests/test_release_install.py), not copied installer
+functions or a separate harness. Exercise the real installer through the native
+`.cmd` entry and PowerShell helper, including file execution with `-File` and
+downloaded-text `ScriptBlock.Create` invocation.
 
 On the native Windows runner, run:
 
@@ -276,15 +280,14 @@ installation or behavior.
 > `-NoProfile`, and `-NonInteractive` do not establish console isolation, and
 > `CREATE_NO_WINDOW` is not a proven fix. Do not retry locally.
 
-A separately authorized, independent native Windows runner is an alternative;
-this WSL terminal is not. Observe CI runs with Linux `gh` and record the actual
-run and results; configured CI is not evidence that a run completed. If permissions,
-billing, or secrets block CI, record the concrete blocker and leave Windows proof
-and release readiness pending. Main-branch integration normally waits for that
-proof, but an explicit user decision may authorize merge/push with the native
-gap clearly recorded. That override does not make Linux results Windows evidence
-or authorize a release. Do not change billing, policy, or security settings or
-publish artifacts to bypass the blocker. Pushes still require explicit authorization.
+Native Windows verification requires a separately authorized independent runner;
+this WSL terminal is not one. Observe authorized CI runs with Linux `gh` and
+record actual results; configured CI is not evidence that a run completed. If
+permissions, billing, or secrets block validation, record the concrete blocker
+and leave native proof pending. Explicitly authorized Linux-only integration may
+proceed with that gap recorded; it does not establish Windows release readiness
+or authorize publishing. Do not change billing, policy, or security settings or
+publish artifacts to bypass a blocker. Pushes still require explicit authorization.
 
 ### Unix installer staging verification
 
