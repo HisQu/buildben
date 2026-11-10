@@ -1,0 +1,2 @@
+# -- Preserve SDK-generated Windows command scripts and honor Git whitespace checks.
+*.cmd -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
