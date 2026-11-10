@@ -56,6 +56,21 @@ This project follows Semantic Versioning.
 
 ### 💥 Breaking changes
 
+- Breaking: Removed receipt adoption/replacement and the `--migrate-legacy`,
+  `--reinstall-legacy`, `--legacy-source`, and `--legacy-quiescent` installer
+  options from Buildben and new project templates. Current support requires
+  AppRC installation schema `2`; current resource migration remains resumable.
+  Affected: old receipt/schema-1 installations and scripts using those options.
+  Migration: finish old operations, preserve resources, retire the old program
+  and authority with its own generation, then install fresh. See the
+  [upgrade guidance](README.md#uninstall).
+- Breaking: Generated projects declare matching immutable AppRC core/terminal
+  requirements directly, including for ordinary pip installs, instead of relying
+  on uv-only source overrides. Installer authors must regenerate the complete
+  canonical management support set through their `_distr.make_artifacts` module.
+  Existing projects are not rewritten automatically; public root wrappers and
+  Buildben's zero-runtime-dependency contract are unchanged.
+
 <br>
 
 ### ➕ Added
@@ -66,6 +81,11 @@ This project follows Semantic Versioning.
 <br>
 
 ### 💔 Changed
+
+- Preserved SDK-generated command bytes through Git with CRLF-aware whitespace
+  checks, including the policy shipped with newly scaffolded projects.
+- Limited maintained and scaffolded CI to Linux with Python 3.12 and 3.13;
+  native Windows/macOS installation validation remains deferred.
 
 <br>
 

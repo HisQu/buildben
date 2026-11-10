@@ -48,6 +48,10 @@ All notable changes to `{my_project}` will be documented in this file.
 ### 💥 Breaking Change Summary
 
 <br>
+- Breaking: Buildben no longer adopts or replaces legacy installer receipts.
+  Affected: Users with installations managed by the legacy Buildben installer.
+  Migration: Install from an explicitly selected source and manage resources
+  through current AppRC installation authority.
 
 ### ➕ Added
 
@@ -62,6 +66,7 @@ All notable changes to `{my_project}` will be documented in this file.
 <br>
 
 ### 🗑️ Removed
+- Removed legacy receipt migration and replacement options from installer wrappers.
 
 <br>
 

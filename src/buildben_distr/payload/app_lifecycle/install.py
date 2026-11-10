@@ -7,48 +7,30 @@ import dataclasses
 import hashlib
 import json
 import os
-import re
-import shlex
 import shutil
-import subprocess
 import sys
 import tempfile
 from pathlib import Path, PurePosixPath
 from typing import Any, cast
-from uuid import uuid4
 
 from apprc.definition.installation import (
     InstallationIdentity,
     InstallationInspection,
     InstallationPlacement,
-    InstallationSource,
-    MigrationInventory,
-    OwnedOutput,
 )
 from apprc.definition.paths import Layout, Paths, ResourceKind
 from apprc.distribution.models import AppCapabilities, DistributionSpec, ProjectMetadata
 from apprc.distribution.runtime import (
-    bind_install_support,
-    execute_legacy_replacement,
-    execute_migration,
-    inspect_legacy_receipt,
-    install_prepared_application,
-    is_pending_legacy_replacement,
-    parse_source_arguments,
-    plan_legacy_replacement,
     SourceSelection,
-    plan_migration,
+    install_prepared_application,
+    parse_source_arguments,
     plan_repair,
-    prepare_source,
-    resume_legacy_replacement,
     resume_migration,
-    stage_legacy_support,
 )
-from apprc.distribution.runtime.probe import probe_installed_tool
 from apprc.distribution.runtime.backend import select_uv_target
 from apprc.user_files.installation.discovery import (
-    installation_directory,
     inspect_installation,
+    installation_directory,
     native_user_directories,
 )
 from apprc.user_files.installation.operations import plan_install
@@ -244,42 +226,23 @@ def _support_files(app_id: str) -> dict[PurePosixPath, bytes]:
     return files
 
 
-def _legacy_directory(bundle: dict[str, Any], environment: dict[str, str]) -> Path:
-    """Locate only the documented legacy Buildben state address."""
-    if os.name == "nt":
-        base = Path(environment["LOCALAPPDATA"])
-    else:
-        base_value = environment.get("XDG_STATE_HOME")
-        base = (
-            Path(base_value)
-            if base_value
-            else Path(environment.get("HOME", str(Path.home()))) / ".local" / "state"
-        )
-    distribution = re.sub(r"[-_.]+", "-", bundle["distribution"]).lower()
-    if not base.is_absolute() or not distribution:
-        raise ValueError("Legacy receipt location is not a valid native address.")
-    return base / distribution / "installation"
-
-
 def _resume_pending_migration(
     inspection: InstallationInspection,
 ) -> InstallationInspection:
-    """Resume only the exact migration already recorded at this address."""
+    """Resume only a staged migration with matching current authority."""
     record = inspection.record
-    if record is None or record.migration is None or record.migration.cleanup_complete:
+    if record is None or record.migration is None:
         return inspection
+    if record.migration.phase == "activated":
+        return inspection
+    operation = record.operation
+    if operation is None or operation.kind != "migrate":
+        raise RuntimeError("Staged migration has no matching pending operation.")
     if inspection.revision is None:
         raise RuntimeError("Pending migration has no authority revision.")
-    operation_id = (
-        record.operation.operation_id
-        if record.operation is not None
-        else record.migration.operation_id
-    )
-    if operation_id is None:
-        raise RuntimeError("Pending migration has no recorded operation identity.")
     return resume_migration(
         inspection.directory,
-        operation_id=operation_id,
+        operation_id=operation.operation_id,
         expected_revision=inspection.revision,
     )
 
@@ -317,9 +280,12 @@ def _validate_recovery_target(
     if (
         entry.name in {"main-installer.py", "main-installer.pyz"}
         and arguments.repair
-        and not is_pending_legacy_replacement(inspection)
         and not (
-            inspection.record is not None and inspection.record.migration is not None
+            inspection.record is not None
+            and inspection.record.migration is not None
+            and inspection.record.migration.phase == "staged"
+            and inspection.record.operation is not None
+            and inspection.record.operation.kind == "migrate"
         )
         and not (
             selection.source.matches_observation(target.source)
@@ -327,180 +293,6 @@ def _validate_recovery_target(
         )
     ):
         raise RuntimeError("External repair source differs from captured authority.")
-
-
-def _quiescence_recovery_command(directory: Path) -> str:
-    """Render the exact saved or external repair command for fresh consent."""
-    command = [
-        sys.executable,
-        str(Path(sys.argv[0]).absolute()),
-        "--repair",
-        "--directory",
-        str(directory),
-        "--legacy-quiescent",
-    ]
-    return subprocess.list2cmdline(command) if os.name == "nt" else shlex.join(command)
-
-
-def _resume_pending_legacy_replacement(
-    spec: DistributionSpec,
-    inspection: InstallationInspection,
-    *,
-    quiescent: bool,
-    environment: dict[str, str],
-) -> InstallationInspection:
-    """Resume the recorded replacement using the SDK's retained inputs."""
-    record = inspection.record
-    if (
-        record is None
-        or record.operation is None
-        or record.operation.intended is None
-        or inspection.revision is None
-    ):
-        raise RuntimeError("Pending legacy replacement has no recorded target.")
-    if not quiescent:
-        raise RuntimeError(
-            "Stop every legacy installer, launcher, and uninstaller, then run: "
-            + _quiescence_recovery_command(inspection.directory)
-        )
-    return resume_legacy_replacement(
-        inspection.directory,
-        operation_id=record.operation.operation_id,
-        expected_revision=inspection.revision,
-        quiescent=quiescent,
-        environment=environment,
-        probe_path=Path(sys.path[0]) / "apprc/distribution/runtime/installed_probe.py",
-        python_requirement=spec.metadata.python_requirement,
-    )
-
-
-def _migrate_legacy_receipt(
-    bundle: dict[str, Any],
-    spec: DistributionSpec,
-    directory: Path,
-    legacy_root: Path,
-    placement: InstallationPlacement,
-    source_file: Path,
-    environment: dict[str, str],
-    *,
-    reinstall: bool = False,
-) -> InstallationInspection:
-    """Cut over validated legacy support through AppRC's public primitives."""
-    legacy = inspect_legacy_receipt(
-        legacy_root / "receipt.json",
-        distribution=spec.metadata.identity.distribution,
-        command=(
-            "buildben"
-            if spec.metadata.identity.distribution == "buildben"
-            else spec.metadata.identity.commands[0]
-        ),
-    )
-    if not legacy.compatible or legacy.receipt is None or legacy.backend is None:
-        details = "; ".join(item.message for item in legacy.diagnostics)
-        raise RuntimeError(
-            details or "Legacy receipt is incomplete and cannot be migrated."
-        )
-    if legacy.version is None:
-        raise RuntimeError("Legacy receipt does not identify an installed version.")
-    evidence = json.loads(source_file.read_text(encoding="utf-8"))
-    if not isinstance(evidence, dict) or set(evidence) != {
-        "source",
-        "distribution_record_digest",
-    }:
-        raise ValueError(
-            "Legacy evidence requires source and distribution_record_digest."
-        )
-    values = evidence["source"]
-    if not isinstance(values, dict) or set(values) != {
-        "kind",
-        "requirement",
-        "version",
-        "digest",
-        "runtime_requirements",
-        "runtime_overrides",
-    }:
-        raise ValueError("Legacy evidence requires complete InstallationSource fields.")
-    source = InstallationSource(
-        kind=values["kind"],
-        requirement=values["requirement"],
-        version=values["version"],
-        digest=values["digest"],
-        runtime_requirements=tuple(values["runtime_requirements"]),
-        runtime_overrides=tuple(values["runtime_overrides"]),
-    )
-    probe_path = Path(sys.path[0]) / "apprc/distribution/runtime/installed_probe.py"
-    if reinstall:
-        inspection = inspect_installation(directory, app_id=bundle["app_id"])
-        replacement = plan_legacy_replacement(
-            inspection,
-            spec.metadata.identity,
-            source,
-            placement,
-            legacy=legacy,
-            inventory=MigrationInventory(
-                source_root=directory, destination_root=directory
-            ),
-            expected_record_digest=evidence["distribution_record_digest"],
-            quiescent=True,
-        )
-        with tempfile.TemporaryDirectory(prefix="apprc-source-") as staging:
-            prepared = prepare_source(source, Path(staging).resolve())
-            return execute_legacy_replacement(
-                replacement,
-                prepared,
-                environment=environment,
-                probe_path=probe_path,
-                support_files=_support_files(bundle["app_id"]),
-                python_requirement=spec.metadata.python_requirement,
-            )
-    observed = probe_installed_tool(
-        legacy.backend,
-        spec.metadata.identity,
-        source,
-        placement,
-        probe_path=probe_path,
-        environment=environment,
-        expected_record_digest=evidence["distribution_record_digest"],
-    )
-    if observed.version != legacy.version:
-        raise RuntimeError("Observed legacy package version differs from its receipt.")
-    known = {"receipt.json", *(item.path.name for item in legacy.runnables)}
-    inventory = MigrationInventory(
-        source_root=legacy_root,
-        destination_root=directory,
-        unknown=tuple(path for path in legacy_root.iterdir() if path.name not in known),
-    )
-    if inventory.unknown:
-        unknown = ", ".join(str(path) for path in inventory.unknown)
-        raise RuntimeError(f"Legacy state contains unrecognized files: {unknown}")
-    support_files = bind_install_support(
-        _support_files(bundle["app_id"]), observed, directory
-    )
-    generation_id = uuid4()
-    owned_outputs = tuple(
-        OwnedOutput("support", str(relative), hashlib.sha256(content).hexdigest())
-        for relative, content in sorted(support_files.items())
-    )
-    observed = dataclasses.replace(observed, owned_outputs=owned_outputs)
-    staged = stage_legacy_support(
-        directory,
-        generation_id=generation_id,
-        support_files={
-            str(relative): content for relative, content in support_files.items()
-        },
-    )
-    inspection = inspect_installation(directory, app_id=bundle["app_id"])
-    plan = plan_migration(
-        inspection,
-        placement,
-        inventory=inventory,
-        quiescent=True,
-        observed=observed,
-        legacy=legacy.migration_evidence(),
-        staged_support=staged,
-        generation_id=generation_id,
-    )
-    return execute_migration(plan)
 
 
 def main() -> int:
@@ -516,38 +308,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--layout", choices=("native", "single-root"))
     parser.add_argument("--root", type=Path)
-    parser.add_argument(
-        "--migrate-legacy",
-        action="store_true",
-        help="Migrate the known legacy Buildben receipt after stopping old helpers.",
-    )
-    parser.add_argument(
-        "--reinstall-legacy",
-        action="store_true",
-        help="Explicitly replace the legacy program from an immutable --legacy-source.",
-    )
-    parser.add_argument(
-        "--legacy-quiescent",
-        action="store_true",
-        help="Confirm no legacy installer, launcher, or uninstaller is running.",
-    )
-    parser.add_argument(
-        "--legacy-source",
-        type=Path,
-        help="JSON source plus independently observed old RECORD SHA-256; "
-        "with --reinstall-legacy, source selects the immutable NEW package.",
-    )
     parser.add_argument("--repair", action="store_true")
     parser.add_argument("--directory", type=Path)
     arguments = parser.parse_args(list(remaining))
-    if arguments.reinstall_legacy and not arguments.migrate_legacy:
-        parser.error("--reinstall-legacy requires --migrate-legacy.")
-    if arguments.migrate_legacy and not arguments.legacy_quiescent:
-        parser.error(
-            "Legacy cutover requires --legacy-quiescent after stopping old helpers."
-        )
-    if arguments.migrate_legacy and arguments.layout is None:
-        parser.error("Legacy cutover requires an explicit --layout choice.")
     saved_entry = Path(sys.argv[0]).absolute()
     if saved_entry.name == "repair-installer.py":
         arguments.repair = True
@@ -561,10 +324,6 @@ def main() -> int:
         parser.error(
             "--repair uses saved placement; --layout and --root are not allowed."
         )
-    if arguments.legacy_quiescent and not (
-        arguments.migrate_legacy or arguments.repair
-    ):
-        parser.error("--legacy-quiescent requires --migrate-legacy or --repair.")
     environment = dict(os.environ)
     if arguments.repair:
         expected_directory = arguments.directory
@@ -587,79 +346,15 @@ def main() -> int:
     else:
         directory = installation_directory(bundle["app_id"], environment=environment)
     inspection = inspect_installation(directory, app_id=bundle["app_id"])
-    replacing_legacy = is_pending_legacy_replacement(inspection)
     recovering_migration = (
         inspection.record is not None
         and inspection.record.migration is not None
-        and not inspection.record.migration.cleanup_complete
+        and inspection.record.migration.phase == "staged"
     )
-    if arguments.repair or replacing_legacy or recovering_migration:
+    if arguments.repair or recovering_migration:
         _validate_recovery_target(spec, inspection, arguments, selection)
-    if replacing_legacy:
-        _resume_pending_legacy_replacement(
-            spec,
-            inspection,
-            quiescent=arguments.legacy_quiescent,
-            environment=environment,
-        )
-        return 0
-    if (
-        recovering_migration
-        and inspection.record is not None
-        and inspection.record.migration is not None
-        and inspection.record.migration.legacy is not None
-        and not arguments.legacy_quiescent
-    ):
-        raise RuntimeError(
-            "Stop every legacy installer, launcher, and uninstaller, then run: "
-            + _quiescence_recovery_command(inspection.directory)
-        )
     inspection = _resume_pending_migration(inspection)
     saved = inspection.record
-    if recovering_migration and arguments.migrate_legacy:
-        return 0
-    legacy_root = _legacy_directory(bundle, environment)
-    legacy_receipt = legacy_root / "receipt.json"
-    has_legacy_receipt = legacy_receipt.exists() or legacy_receipt.is_symlink()
-    if has_legacy_receipt and saved is None:
-        if inspection.status != "missing":
-            raise RuntimeError(
-                "Legacy receipt conflicts with invalid installation authority."
-            )
-        if not arguments.migrate_legacy:
-            raise RuntimeError(
-                "A legacy receipt requires explicit cutover with "
-                "--migrate-legacy --legacy-quiescent --layout."
-            )
-        if not arguments.legacy_quiescent:
-            parser.error(
-                "Legacy cutover requires --legacy-quiescent after stopping old helpers."
-            )
-        if arguments.layout is None:
-            parser.error("Legacy cutover requires an explicit --layout choice.")
-        if arguments.legacy_source is None:
-            parser.error(
-                "Legacy cutover requires --legacy-source with source and old RECORD evidence."
-            )
-        placement = _placement(bundle, environment, arguments, inspection)
-        inspection = _migrate_legacy_receipt(
-            bundle,
-            spec,
-            directory,
-            legacy_root,
-            placement,
-            arguments.legacy_source,
-            environment,
-            reinstall=arguments.reinstall_legacy,
-        )
-        return 0
-    elif has_legacy_receipt:
-        raise RuntimeError(
-            "Legacy receipt remains beside managed authority; inspect migration "
-            "state before continuing."
-        )
-    elif arguments.migrate_legacy and not recovering_migration:
-        raise RuntimeError("No legacy receipt exists at the known native address.")
     prior = saved.current or saved.last_successful if saved is not None else None
     if arguments.repair:
         if saved is None:

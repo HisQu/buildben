@@ -57,24 +57,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: windows-latest
-            python-version: "3.12"
-            target: windows-x86_64
-          - runner: windows-latest
-            python-version: "3.13"
-            target: windows-x86_64
           - runner: ubuntu-latest
             python-version: "3.12"
             target: linux-x86_64
           - runner: ubuntu-latest
             python-version: "3.13"
             target: linux-x86_64
-          - runner: macos-14
-            python-version: "3.12"
-            target: macos-arm64
-          - runner: macos-14
-            python-version: "3.13"
-            target: macos-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v5

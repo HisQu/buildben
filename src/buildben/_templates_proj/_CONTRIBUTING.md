@@ -113,12 +113,12 @@ installer staging or saved-uninstaller behavior.
 - App configuration belongs in `{my_project}.config.sections`. Keep fields in
   focused `rc.Config` classes with `rc.field(...)` declarations, assemble them
   in `config.bundle`, and declare the shared `APP_RC` in `config.app`. Import
-  declarations and classes directly from their modules. Mount configuration
-  commands with `rc.cli.mount_config_cli`; runtime values come from `state.resolved`.
-  Mount managed-data commands separately with `rc.cli.mount_appdata_cli`.
-  Keep `appdata paths` and `appdata clean` runtime-independent using
-  `RuntimeIndependentCommand(action_prefixes={("paths",), ("clean",)}, skip_empty=True)`;
-  they must work with trailing options even when ordinary runtime config is broken.
+  declarations and classes directly from their modules. Mount the shared
+  `config` group and capability groups declared by `APP_RC` together through
+  `rc.cli.mount_app_cli`; use `state.resolved` for runtime values. Keep
+  `RuntimeIndependentCommand` for commands that must work without resolved
+  runtime state, such as `appdata paths` and `appdata clean`:
+  `runtime_independent_commands={"appdata": rc.cli.RuntimeIndependentCommand(action_prefixes={("paths",), ("clean",)}, skip_empty=True)}`.
 - CLI behavior belongs in `{my_project}.cli.app`; keep `{my_project}.main` as a
   thin public entry point wrapper. Add minimal `__main__` demo code only when it
   improves discoverability or manual testing.

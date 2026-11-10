@@ -103,6 +103,7 @@ def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path
     :return: Template transfer mapping consumed by ``utils.copy_templates``.
     """
     return {
+        "_gitattributes": project_root / ".gitattributes",
         "_gitignore": project_root / ".gitignore",
         "_pyproject.toml": project_root / "pyproject.toml",
         "_.envrc": project_root / ".envrc",
