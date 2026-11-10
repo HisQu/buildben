@@ -128,6 +128,10 @@ def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path
         / "workflows_inactive"
         / "codecov.yml",
         "_github-ci.yml": project_root / ".github" / "workflows" / "ci.yml",
+        "_github-diagnostics.yml": project_root
+        / ".github"
+        / "workflows"
+        / "diagnostics.yml",
         "_github-release.yml": project_root / ".github" / "workflows" / "release.yml",
         "_src-main.py.tmpl": project_root / "src" / name / "main.py",
         "_src-__main__.py.tmpl": project_root / "src" / name / "__main__.py",

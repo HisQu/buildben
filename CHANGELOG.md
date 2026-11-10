@@ -60,6 +60,9 @@ This project follows Semantic Versioning.
 
 ### ➕ Added
 
+- Added an isolated Actions artifact round-trip diagnostic to generated projects,
+  with dedicated-branch bootstrap, manual dispatch, and artifact cleanup guidance.
+
 <br>
 
 ### 💔 Changed

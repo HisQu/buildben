@@ -14,6 +14,7 @@ and checks, and submission guidance. This page explains the deeper procedures.
   - [Static figure rules](#static-figure-rules)
 - [Verify and release](#verify-and-release)
   - [Verification](#verification)
+  - [Actions artifact diagnostic](#actions-artifact-diagnostic)
   - [Authored installation artifacts](#authored-installation-artifacts)
   - [Windows installer verification procedure](#windows-installer-verification-procedure)
   - [Unix installer staging verification](#unix-installer-staging-verification)
@@ -166,6 +167,39 @@ entry is useful. Read introductions without assuming prior project knowledge.
 Report the commands and observed results, including failures, missing
 prerequisites, and omitted checks. Keep the corresponding behavior unverified
 until the relevant scenario has actually run.
+
+## Actions artifact diagnostic
+
+The [Diagnostics workflow](../.github/workflows/diagnostics.yml) checks Actions
+artifact storage independently of normal CI and application/native checks.
+It creates a tiny text file, uploads it, downloads that exact artifact by ID,
+and compares the bytes. It needs no checkout, Python installation, configured
+secrets, or repository-write permission.
+
+For the initial proof before the workflow exists on default `main`, push
+`.github/workflows/diagnostics.yml` on the exact branch
+`diagnostics/artifact-upload`. Only a push to that branch changing that workflow
+path triggers the diagnostic. After the workflow exists on default `main`, use
+an authenticated GitHub CLI from the project repository for normal manual runs:
+
+```shell
+gh workflow run diagnostics.yml --ref <branch>
+```
+
+Replace `<branch>` with a branch containing the workflow. Each attempt retains
+one artifact named `diagnostic-<run_id>-<run_attempt>` with a one-day retention
+fallback; the workflow does not delete it immediately. After inspecting the
+run, obtain its artifact ID from the upload step and delete only that artifact
+using credentials with Actions artifact deletion permission:
+
+```shell
+gh api --method DELETE repos/OWNER/REPO/actions/artifacts/ARTIFACT_ID
+```
+
+Replace `OWNER`, `REPO`, and `ARTIFACT_ID` with the repository and that run's
+artifact ID. A successful run proves only that this Actions artifact round-trip
+worked at that time. It does not prove GitHub Release uploads, PyPI publication,
+application correctness, all quota types, or future quota availability.
 
 ## Authored installation artifacts
 
