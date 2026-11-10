@@ -291,21 +291,21 @@ lorem ipsum
 
 # Documentation
 
-- **Using the project**
-  - [Documentation](docs/README.md) — Start here and find the right guide.
-  - [How-to user guides](docs/How-To-User-Guides.md) — Complete specific tasks.
-  - [Examples](docs/EXAMPLES.md) — Follow complete, working examples.
-  - [Explanations](docs/Explanations.md) — Understand the components and their connections.
-  - [References](docs/References.md) — Look up commands, settings, and APIs.
+### Using the Project
+- [Documentation](docs/README.md) — Start here and find the right guide.
+- [How-to user guides](docs/How-To-User-Guides.md) — Complete specific tasks.
+- [Examples](docs/EXAMPLES.md) — Follow complete, working examples.
+- [Explanations](docs/Explanations.md) — Understand the components and their connections.
+- [References](docs/References.md) — Look up commands, settings, and APIs.
 
-- **Contributing and maintaining**
-  - [Contributing](CONTRIBUTING.md) — Propose changes and prepare a contribution.
-  - [Development](docs/Development.md) — Work on the code and maintain the project.
-    - [Development environment](docs/Development.md#maintainer-environment)
-    - [Repository layout](docs/Development.md#repository-routing)
-    - [Documentation authoring](docs/Development.md#documentation-authoring)
-    - [Verification](docs/Development.md#verification)
-    - [Windows installer verification](docs/Development.md#windows-installer-verification-procedure)
-    - [Unix installer staging verification](docs/Development.md#unix-installer-staging-verification)
-    - [Releases](docs/Development.md#releases)
+### Contributing and Maintaining
+- [Contributing](CONTRIBUTING.md) — Propose changes and prepare a contribution.
+- [Development](docs/Development.md) — Work on the code and maintain the project.
+  - [Development environment](docs/Development.md#maintainer-environment)
+  - [Repository layout](docs/Development.md#repository-routing)
+  - [Documentation authoring](docs/Development.md#documentation-authoring)
+  - [Verification](docs/Development.md#verification)
+  - [Windows installer verification](docs/Development.md#windows-installer-verification-procedure)
+  - [Unix installer staging verification](docs/Development.md#unix-installer-staging-verification)
+  - [Releases](docs/Development.md#releases)
 
