@@ -484,6 +484,14 @@ development setup and checks; `AGENTS.md` directs coding agents to those rules.
 The generated README provides grouped navigation for users and contributors
 instead of duplicating development commands.
 
+Generated projects also include `.github/workflows/diagnostics.yml`, an isolated
+Actions artifact upload/download check requiring no checkout or Python setup.
+The generated [developer guide](src/buildben/_templates_proj/_docs-Development.md#actions-artifact-diagnostic)
+explains the initial `diagnostics/artifact-upload` branch push, later manual
+invocation, and deletion of the tiny test artifact (one-day fallback retention).
+It checks Actions artifact storage, not GitHub Release uploads, PyPI publication,
+or application correctness.
+
 The starter has a Typer CLI, `python -m <my_project>` support, and AppRC
 configuration. It enables named storage without a user dotenv. One `APP_RC`
 declaration registers typed sections; a config bundle passes those sections to
