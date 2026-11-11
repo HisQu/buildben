@@ -64,6 +64,11 @@ This project follows Semantic Versioning.
 
 ### 💔 Changed
 
+- Align authoring, scaffold and generated lifecycle inputs with AppRC's
+  unreleased maintenance revision while keeping Buildben's runtime dependency
+  list empty. Document immutable SDK source requirements rather than obsolete
+  released-version ranges.
+
 <br>
 
 ### ⚠️ Deprecated

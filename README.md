@@ -114,10 +114,10 @@ python -m pip install -e "."    # venv recommended
 ### Native installer entries
 
 > [!IMPORTANT]
-> This checkout prepares Buildben 0.12 and integrates AppRC 0.32 from immutable
-> source pins; changing source versions does not publish either package. Until a
-> matching Buildben release exists, use the checkout entries below rather than
-> expecting new assets in an older release.
+> This checkout uses the immutable AppRC source pins declared in `pyproject.toml`.
+> Those sources can include unreleased SDK fixes; changing source pins and locks
+> publishes neither Buildben nor AppRC. Use the checkout entries below to test
+> changes that are not in the latest release.
 
 From a complete checkout, run the local project entry:
 
@@ -482,10 +482,10 @@ respective resource categories and ownership markers. `config setup` is
 available when user dotenv is enabled.
 
 > [!IMPORTANT]
-> Generated projects use AppRC 0.32 source-pinned SDK packages (`apprc`,
-> `apprc-core`, and optional `apprc-gui`). Buildben itself has no AppRC runtime
-> dependency, and the source pins do not claim that a matching SDK release has
-> been published.
+> Generated projects pin matching SDK sources for `apprc-core`, `apprc`, and
+> optional `apprc-gui` to one immutable Git commit. A source pin can include fixes
+> absent from the published SDK version. Buildben itself has no AppRC runtime
+> dependency.
 
 The maintained `tests/test_init_proj.py` and `tests/test_lifecycle.py` suites
 scaffold real generated projects and exercise their SDK-generated artifacts and

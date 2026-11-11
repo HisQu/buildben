@@ -136,10 +136,11 @@ commands import the declaration and bundle directly from their modules. The
 [project paths](References.md#project-paths) table identifies each source file,
 and [Development](Development.md#repository-routing) explains where to add code.
 
-`apprc>=0.31.0,<0.32` provides the generated application's configuration and
-terminal runtime. The local `dev` dependency group adds
-`apprc-core[distribution]>=0.31.0,<0.32` for artifact generation. Until AppRC
-publishes the matching release, the scaffold pins core, terminal, and optional
-GUI sources to one immutable integration commit and passes corresponding runtime
-overrides to uv. Buildben itself keeps `dependencies=[]` and does not depend on
-AppRC at runtime.
+`[project].dependencies` declares `apprc-core` and terminal `apprc` from the same
+immutable Git commit, so ordinary pip installations use matching SDK sources.
+The local `dev` dependency group adds `apprc-core[distribution]` from that commit
+for artifact generation; the optional GUI group uses its matching `apprc-gui`
+source. Runtime overrides preserve those source identities in uv-managed
+installations. Source pins can include unreleased fixes and do not imply that
+the published SDK version has the same code. Buildben itself keeps
+`dependencies=[]` and does not depend on AppRC at runtime.
