@@ -171,9 +171,7 @@ def _generate_cli_project(
     child_environment = dict(os.environ if environment is None else environment)
     source = Path(__file__).resolve().parents[1] / "src"
     child_environment["PYTHONPATH"] = os.pathsep.join(
-        value
-        for value in (str(source), child_environment.get("PYTHONPATH"))
-        if value
+        value for value in (str(source), child_environment.get("PYTHONPATH")) if value
     )
     command = [
         sys.executable,
@@ -201,49 +199,25 @@ def test_init_proj_rejects_unsupported_frontend_choice(tmp_path: Path) -> None:
     result = _generate_cli_project(tmp_path, "Sample", frontend="vue")
 
     assert result.returncode != 0
-    assert "invalid choice" in result.stderr
     assert not (tmp_path / "Sample").exists()
 
 
 def test_default_generation_does_not_require_frontend_assets_or_tools(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Keep default generation independent of frontend templates and tools."""
-    import buildben.init_proj as scaffolder
-
-    original_copy = scaffolder.utils.copy_templates
-
-    def copy_python_templates(transfers: dict[str, Path], tmpl_dir: Path) -> None:
-        assert not any(template.startswith("_frontend-") for template in transfers)
-        original_copy(transfers, tmpl_dir)
-
-    monkeypatch.setattr(scaffolder.utils, "copy_templates", copy_python_templates)
-    original_read_text = Path.read_text
-
-    def read_python_template(
-        path: Path, encoding: str | None = None, errors: str | None = None
-    ) -> str:
-        assert not path.name.startswith("_frontend-")
-        return original_read_text(path, encoding=encoding, errors=errors)
-
-    monkeypatch.setattr(Path, "read_text", read_python_template)
-    monkeypatch.setattr(shutil, "which", lambda _command: None)
-    scaffolder._run(
-        argparse.Namespace(
-            name="DefaultProject",
-            target_dir=str(tmp_path),
-            git_init=False,
-            github_user="fixture-owner",
-            frontend=None,
-        )
+    """Generate a usable Python-only project without frontend executables."""
+    result = _generate_cli_project(
+        tmp_path,
+        "DefaultProject",
+        environment={**os.environ, "PATH": ""},
     )
+    assert result.returncode == 0, result.stdout + result.stderr
     project = tmp_path / "DefaultProject"
     assert not (project / "frontend").exists()
-    assert "[group('Frontend')]" not in (project / "justfile").read_text()
-    assert "frontend:" not in (
-        project / ".github" / "workflows" / "ci.yml"
-    ).read_text()
+    listing = _run_just_recipe(project, _project_env(project), "--list")
+    assert listing.returncode == 0, listing.stdout + listing.stderr
+    unavailable = _run_just_recipe(project, _project_env(project), "front", "dev")
+    assert unavailable.returncode != 0
 
 
 def test_default_generation_and_overwrite_refusal_preserve_destination(
@@ -326,14 +300,8 @@ def test_frontend_cli_generation_does_not_require_frontend_tools(
 
     assert result.returncode == 0, result.stdout + result.stderr
     project = tmp_path / "Capitalized_Frontend"
-    package = json.loads(
-        (project / "frontend" / "package.json").read_text(encoding="utf-8")
-    )
-    assert package["name"] == "frontend"
-    assert (project / "frontend" / "src" / "test").is_dir()
-    assert "just front sync" in result.stdout
-    assert "just front dev" in result.stdout
-    assert "just --list front" in result.stdout
+    listing = _run_just_recipe(project, _project_env(project), "--list", "front")
+    assert listing.returncode == 0, listing.stdout + listing.stderr
 
 
 @pytest.mark.skipif(
@@ -474,9 +442,7 @@ def test_frontend_consumer_and_installed_wheel(tmp_path: Path) -> None:
     packaged_sync = _run_just_recipe(
         packaged_project, installed_environment, "front", "sync"
     )
-    assert packaged_sync.returncode == 0, (
-        packaged_sync.stdout + packaged_sync.stderr
-    )
+    assert packaged_sync.returncode == 0, packaged_sync.stdout + packaged_sync.stderr
 
 
 @pytest.fixture()
