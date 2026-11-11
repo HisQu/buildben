@@ -79,3 +79,5 @@ jobs:
         run: uv sync --locked --all-extras --all-groups
       - name: Install and inspect the generated sdist with uv
         run: just release-install-smoke
+
+<frontend_ci_job>

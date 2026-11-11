@@ -14,6 +14,7 @@
   - [Add a setting](#add-a-setting)
   - [Use settings in application code](#use-settings-in-application-code)
   - [Troubleshoot configuration and installation](#troubleshoot-configuration-and-installation)
+- [Develop the optional React frontend](#develop-the-optional-react-frontend)
 
 Each guide states its starting point. Commands use the generated application
 name. Replace demonstration paths with your chosen directories for actual use.
@@ -189,3 +190,45 @@ authority; it does not require successful business configuration.
 
 The [command reference](References.md#command-reference) lists supported
 commands and links to their intended tasks.
+
+<br>
+
+# Develop the optional React frontend
+
+This section applies only when the project was generated with Buildben's
+`--frontend react` option. Python-only scaffolds have no frontend module.
+Use Node 24.22.2+ within the Node 24 line, Bun >=1.4.4, and just with module
+support; CI uses Bun 1.4.4 and just 1.56.0.
+
+From the project root, run:
+
+```shell
+just --list front
+just front sync
+just front dev
+```
+
+The module runs from `frontend/`, so no directory wrapper is needed. Its
+`package.json` owns React, Vite, TypeScript, ESLint, and Vitest; `bun.lock`
+records their resolved dependencies. Sync uses `bun install --frozen-lockfile`
+and must not rewrite either file. To add Vite manually to an existing
+frontend, run `bun add -d vite` inside its directory, then commit the manifest
+and lockfile; do not put this command in global provisioning.
+
+Before committing frontend changes:
+
+```shell
+just front check
+just front test
+just front build
+```
+
+Checks include `tsc --noEmit` and ESLint. Vitest runs the real component tests
+through `bun run test`; `bun test` selects a different runner. Build checks
+types before producing `frontend/dist/`. Generated CI runs these same
+commands after frozen sync.
+
+Root `just sync` remains Python-only. JavaScript dependencies do not belong
+in `pyproject.toml` or `uv.lock`, and the Python build does not build, serve,
+or package the frontend automatically. Do not put secrets in browser-visible
+Vite environment variables.

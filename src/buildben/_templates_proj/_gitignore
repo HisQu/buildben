@@ -197,3 +197,5 @@ Temporary Items
 # === Windows ===================================================
 ~$*
 *Zone.Identifier
+
+<frontend_gitignore>

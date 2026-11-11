@@ -41,6 +41,12 @@ def _add_my_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     p.add_argument("-g", "--git-init", action="store_true", help="Initialise git repo")
     p.add_argument("-u", "--github-user", default="github-user", help="Github Username")
+    p.add_argument(
+        "--frontend",
+        choices=("react",),
+        default=None,
+        help="Include an optional React frontend",
+    )
     # > Entrypoint, retrieved as args.func in cli.py
     p.set_defaults(func=_run)  # !! call _run(args) when chosen
 
@@ -65,14 +71,17 @@ def _project_root(target_dir: str, name: str) -> Path:
     return Path(target_dir).expanduser().resolve() / name
 
 
-def _project_directories(project_root: Path, name: str) -> list[Path]:
+def _project_directories(
+    project_root: Path, name: str, *, frontend: bool
+) -> list[Path]:
     """Return directories required by the project scaffold.
 
     :param project_root: Root directory of the generated project.
     :param name: Import package name.
+    :param frontend: Whether to include the React application directories.
     :return: Directories to create before copying templates.
     """
-    return [
+    directories = [
         project_root / "tests",
         project_root / "tests" / "support_source_transport",
         project_root / "assets",
@@ -93,16 +102,28 @@ def _project_directories(project_root: Path, name: str) -> list[Path]:
         project_root / "src" / name / "data",
         project_root / "src" / name / "images",
     ]
+    if frontend:
+        directories.extend(
+            (
+                project_root / "frontend",
+                project_root / "frontend" / "src",
+                project_root / "frontend" / "src" / "test",
+            )
+        )
+    return directories
 
 
-def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path]:
+def _project_template_transfers(
+    project_root: Path, name: str, *, frontend: bool
+) -> dict[str, Path]:
     """Map project template filenames to generated output paths.
 
     :param project_root: Root directory of the generated project.
     :param name: Import package name.
+    :param frontend: Whether to copy the React application templates.
     :return: Template transfer mapping consumed by ``utils.copy_templates``.
     """
-    return {
+    transfers = {
         "_gitattributes": project_root / ".gitattributes",
         "_gitignore": project_root / ".gitignore",
         "_pyproject.toml": project_root / "pyproject.toml",
@@ -254,6 +275,27 @@ def _project_template_transfers(project_root: Path, name: str) -> dict[str, Path
         / "assets"
         / "classdiagram.IGNORE.mmd",
     }
+    if frontend:
+        frontend_root = project_root / "frontend"
+        transfers.update(
+            {
+                "_frontend-justfile": frontend_root / "justfile",
+                "_frontend-package.json": frontend_root / "package.json",
+                "_frontend-bun.lock": frontend_root / "bun.lock",
+                "_frontend-index.html": frontend_root / "index.html",
+                "_frontend-tsconfig.json": frontend_root / "tsconfig.json",
+                "_frontend-eslint.config.js": frontend_root / "eslint.config.js",
+                "_frontend-vite.config.ts": frontend_root / "vite.config.ts",
+                "_frontend-src-App.tsx": frontend_root / "src" / "App.tsx",
+                "_frontend-src-main.tsx": frontend_root / "src" / "main.tsx",
+                "_frontend-src-App.test.tsx": frontend_root / "src" / "App.test.tsx",
+                "_frontend-src-test-setup.ts": frontend_root
+                / "src"
+                / "test"
+                / "setup.ts",
+            }
+        )
+    return transfers
 
 
 def _pascal_project_name(name: str) -> str:
@@ -265,16 +307,26 @@ def _pascal_project_name(name: str) -> str:
     return "".join(part[:1].upper() + part[1:] for part in name.split("_") if part)
 
 
-def _project_placeholders(name: str, github_user: str) -> dict[str, str]:
+def _project_placeholders(
+    name: str, github_user: str, *, frontend: bool
+) -> dict[str, str]:
     """Return placeholder replacements for project templates.
 
     :param name: Import package name.
     :param github_user: GitHub username shown in generated metadata.
+    :param frontend: Whether to enable frontend recipes, CI, and ignores.
     :return: Placeholder replacement mapping.
     """
     scaffold_date = dt.date.today().isoformat()
     pascal_name = _pascal_project_name(name)
     distribution = re.sub(r"[-_.]+", "-", name).lower()
+    frontend_ci_job = ""
+    if frontend:
+        frontend_ci_job = (
+            Path(__file__).resolve().parent
+            / "_templates_proj"
+            / "_frontend-ci.yml.tmpl"
+        ).read_text(encoding="utf-8")
     return {
         "<my_project>": name,
         "{my_project}": name,
@@ -299,17 +351,32 @@ def _project_placeholders(name: str, github_user: str) -> dict[str, str]:
         "<initial_version>": "0.1.0",
         "{initial_version}": "0.1.0",
         "<distribution_name>": distribution,
+        "<frontend_just_module>": (
+            "[group('Frontend')]\nmod front 'frontend/justfile'" if frontend else ""
+        ),
+        "<frontend_ci_job>": frontend_ci_job,
+        "<frontend_gitignore>": (
+            "frontend/node_modules/\n"
+            "frontend/dist/\n"
+            "frontend/coverage/\n"
+            "frontend/.vitest/"
+            if frontend
+            else ""
+        ),
     }
 
 
-def _create_project_directories(project_root: Path, name: str) -> None:
+def _create_project_directories(
+    project_root: Path, name: str, *, frontend: bool
+) -> None:
     """Create the directory tree for a generated project.
 
     :param project_root: Root directory of the generated project.
     :param name: Import package name.
+    :param frontend: Whether to create the React application directories.
     :return: None.
     """
-    for directory in _project_directories(project_root, name):
+    for directory in _project_directories(project_root, name, frontend=frontend):
         directory.mkdir(parents=True, exist_ok=True)
 
 
@@ -337,11 +404,12 @@ def _create_init_files(project_root: Path, name: str) -> None:
     )
 
 
-def _print_success(project_root: Path, name: str) -> None:
+def _print_success(project_root: Path, name: str, *, frontend: bool) -> None:
     """Print the final scaffold success message.
 
     :param project_root: Root directory of the generated project.
     :param name: Import package name.
+    :param frontend: Whether to show frontend next steps.
     :return: None.
     """
     print(
@@ -358,6 +426,13 @@ def _print_success(project_root: Path, name: str) -> None:
             """
         )
     )
+    if frontend:
+        print(
+            "Frontend next steps:\n"
+            "    just front sync\n"
+            "    just front dev\n"
+            "    just --list front"
+        )
 
 
 # ================================================================== #
@@ -365,20 +440,27 @@ def _print_success(project_root: Path, name: str) -> None:
 # ================================================================== #
 def _run(args: argparse.Namespace) -> None:
     _validate_project_name(args.name)
+    frontend = args.frontend == "react"
     project_root = _project_root(args.target_dir, args.name)
     utils.warn_dir_overwrite(project_root)
-    _create_project_directories(project_root, args.name)
+    _create_project_directories(project_root, args.name, frontend=frontend)
 
-    transfers = _project_template_transfers(project_root, args.name)
+    transfers = _project_template_transfers(project_root, args.name, frontend=frontend)
     tmpl_dir = Path(__file__).resolve().parent / "_templates_proj"
     utils.copy_templates(transfers=transfers, tmpl_dir=tmpl_dir)
     _create_init_files(project_root, args.name)
     utils.substitute_placeholders(
-        filepaths=list(transfers.values()),
-        placeholders=_project_placeholders(args.name, args.github_user),
+        filepaths=[
+            destination
+            for template, destination in transfers.items()
+            if template not in {"_frontend-package.json", "_frontend-bun.lock"}
+        ],
+        placeholders=_project_placeholders(
+            args.name, args.github_user, frontend=frontend
+        ),
     )
 
     if args.git_init:
         utils.git_init(project_root)
 
-    _print_success(project_root, args.name)
+    _print_success(project_root, args.name, frontend=frontend)

@@ -21,6 +21,8 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 RELEASE_PYPI := "false"
 export RELEASE_REPOSITORY := "{github_user}/{my_project}"
 
+<frontend_just_module>
+
 # Run `just` with no recipe to list tasks
 default:
     @just --list
