@@ -22,7 +22,7 @@ This project follows Semantic Versioning.
 
 1. [Buildben Changelog](#buildben-changelog)
 2. [\[Unreleased\]](#unreleased)
-3. [\[0.12.0\] - 2026-10-29](#0120---2026-10-29)
+3. [\[0.13.0\] - 2026-11-11](#0130---2026-11-11)
 3. [\[0.11.3\] - 2026-10-22](#0113---2026-10-22)
 3. [\[0.11.2\] - 2026-10-22](#0112---2026-10-22)
 3. [\[0.11.1\] - 2026-10-21](#0111---2026-10-21)
@@ -56,36 +56,13 @@ This project follows Semantic Versioning.
 
 ### 💥 Breaking changes
 
-- Breaking: Removed receipt adoption/replacement and the `--migrate-legacy`,
-  `--reinstall-legacy`, `--legacy-source`, and `--legacy-quiescent` installer
-  options from Buildben and new project templates. Current support requires
-  AppRC installation schema `2`; current resource migration remains resumable.
-  Affected: old receipt/schema-1 installations and scripts using those options.
-  Migration: finish old operations, preserve resources, retire the old program
-  and authority with its own generation, then install fresh. See the
-  [upgrade guidance](README.md#uninstall).
-- Breaking: Generated projects declare matching immutable AppRC core/terminal
-  requirements directly, including for ordinary pip installs, instead of relying
-  on uv-only source overrides. Installer authors must regenerate the complete
-  canonical management support set through their `_distr.make_artifacts` module.
-  Existing projects are not rewritten automatically; public root wrappers and
-  Buildben's zero-runtime-dependency contract are unchanged.
-
 <br>
 
 ### ➕ Added
 
-- Added an isolated Actions artifact round-trip diagnostic to generated projects,
-  with dedicated-branch bootstrap, manual dispatch, and artifact cleanup guidance.
-
 <br>
 
 ### 💔 Changed
-
-- Preserved SDK-generated command bytes through Git with CRLF-aware whitespace
-  checks, including the policy shipped with newly scaffolded projects.
-- Limited maintained and scaffolded CI to Linux with Python 3.12 and 3.13;
-  native Windows/macOS installation validation remains deferred.
 
 <br>
 
@@ -111,126 +88,108 @@ This project follows Semantic Versioning.
 
 <!-- ======================================================== -->
 
-# [0.12.0] - 2026-10-29
+# [0.13.0] - 2026-11-11
+
+<a id="0120---2026-10-29"></a>
+
+Includes the changes previously prepared under unpublished 0.12.0 and Unreleased.
+The previous published release was 0.11.3.
 
 <br>
 
 ### 💥 Breaking changes
 
-- Breaking: Generated applications now use AppRC 0.31's independent resource,
-  persistent installation and grouped maintenance contracts. Affected: existing
-  template consumers using the old AppRC storage/appdata commands or old receipt.
-  Migration: update declarations/mounting and use the explicit AppRC migration
-  guide; legacy procedures must be quiescent and retired before activating
-  `installation.json`. Do not infer an old layout or rerun `init-proj` over an
-  existing project.
+- Breaking: Generated applications use AppRC's independent resource, durable
+  installation and grouped maintenance contracts. Affected: consumers of the old
+  storage/appdata commands, receipt installers, or schema-1 authority. Migration:
+  update declarations and mounting, finish old operations with their original
+  generation, preserve resources, retire old authority, and install fresh.
+  Do not infer an old layout or rerun `init-proj` over an existing project.
+  See the [upgrade guidance](README.md#uninstall).
+- Breaking: Removed receipt adoption/replacement and the `--migrate-legacy`,
+  `--reinstall-legacy`, `--legacy-source`, and `--legacy-quiescent` options.
+  Scripts using those options must use a fresh schema-2 installation instead;
+  current resource/layout migration remains resumable.
 - Breaking: Replaced `_dev/distribution` and platform-specific root installer
-  copies with authored `<app>_distr` composition and the six `app-install`,
-  `app-launch` and `app-uninstall` `.sh`/`.cmd` wrappers. Affected: repository
-  automation and applications maintaining copied lifecycle code. Migration:
-  preserve project actions in the new ordinary-Python payload, regenerate with
-  `just make-artifacts`, and use `just check-artifacts` in CI. Application wheels
-  exclude the author-only `_distr` package; sdists include required inputs/output.
-- Breaking: GitHub releases now require an exact package/native-helper asset set
-  and `release-manifest.json`, not just a wheel and sdist. Affected: release
-  automation and consumers assuming a two-file GitHub release. Migration: stage
-  final release entries, validate the manifest's app/distribution/version/commit,
-  sizes and SHA-256 hashes, and upload its exact assets. PyPI input remains only
-  the validated wheel and sdist.
-
-- Breaking: New scaffolds use root `BACKLOG.md` instead of `TODO.md` for deferred
-  work. Consumers linking to the old path must rename their existing durable
-  backlog and update those links, preserving all entries. Do not rerun
-  `init-proj` to migrate an existing project: template copying may overwrite
-  project files. Reserve `TODO.md` for an active pass's checklist beside
-  `PLAN.md`; the scaffold generates neither active artifact.
+  copies with authored `<app>_distr` composition and six `app-install`,
+  `app-launch` and `app-uninstall` `.sh`/`.cmd` wrappers. Affected: automation
+  maintaining copied lifecycle code. Migration: preserve project actions in the
+  ordinary-Python payload, regenerate through its `_distr.make_artifacts` module,
+  and validate with `just check-artifacts`. Application wheels exclude the
+  author-only `_distr` package; source archives include its required inputs.
+- Breaking: GitHub releases require package/native-helper assets and an
+  integrity-bound `release-manifest.json`, not just a wheel and sdist.
+  Affected: release automation and consumers assuming a two-file release.
+  Migration: stage and validate the exact repository/tag/commit asset set before
+  uploading. PyPI publication remains disabled by the committed policy.
+- Breaking: Generated projects declare matching immutable AppRC core/terminal
+  requirements directly, including ordinary pip installs, rather than relying
+  on uv-only overrides. Installer authors must regenerate canonical
+  `management.py`/`management.json` support and remove old private filename
+  assumptions. Existing projects are not rewritten automatically; public root
+  launch/uninstall wrappers and Buildben's zero-runtime-dependency contract remain.
+- Breaking: Scaffolds use root `BACKLOG.md` rather than `TODO.md` for deferred
+  work. Update existing links and rename the durable backlog while preserving its
+  entries. Reserve `TODO.md` for active-pass checklists beside `PLAN.md`; the
+  scaffold generates neither active artifact. Do not rerun `init-proj` to migrate.
 
 <br>
 
 ### ➕ Added
 
-- Added `--main` to the terminal installers and generated-project installers.
-  It installs one captured GitHub main commit with matching source/runtime inputs;
-  published stable releases remain the default.
-- New projects include a root `CONTRIBUTING.md` for shared contributor/agent
-  conventions and quick-start commands, with README-style headings and spacing.
-- Generated documentation tests validate local navigation across README,
-  CONTRIBUTING, AGENTS, and the detailed documentation pages.
-- Added repository-owned install/uninstall composition using AppRC's shared
-  generation and standalone runtime. Bootstraps acquire uv/Python as needed
-  without requiring AppRC or the application first. Checkout installs use the
-  actual editable project, including dirty source changes.
-  Private OS-temporary aliases are normalized for acquisition without relaxing
-  managed-resource path validation.
-- Added first-install OS-native/single-root selection, explicit persistent
-  switching and durable native installation metadata separate from disposable
-  state. Layout selection affects declared application resources, not uv's
-  program environment or dependencies; capabilities remain independently optional.
+- Added `--main` to repository and generated-project installers. It captures one
+  immutable GitHub main commit with matching source/runtime inputs; stable
+  releases remain the default.
+- Added authored AppRC lifecycle generation and standalone bootstraps that acquire
+  uv/Python without requiring AppRC or the application first. Checkout installation
+  uses the actual editable project, including dirty source changes. Private
+  temporary-directory aliases are normalized without relaxing managed-resource
+  containment or lifecycle link checks.
+- Added first-install native/single-root choice, explicit persistent switching,
+  and durable installation metadata separate from disposable state. Layout affects
+  declared resources, not uv's program environment or dependencies; resource
+  components remain independently optional.
 - Added saved inspection/removal support outside the removable environment,
-  independent actual-process exit handoff, resumable recovery and generation-safe
-  authority retirement. Program-only removal retains resource data/support;
-  complete removal requires exact ownership-aware preview and consent. Shared uv,
-  shared Python, editable checkouts and workspaces are never implicit targets.
-- Added explicit `--migrate-legacy --reinstall-legacy` for old noneditable programs
-  whose deleted temporary origin cannot be adopted. Independently observed old
-  RECORD evidence and a verified immutable replacement remain distinct; pending
-  recovery reuses recorded source/backend/placement and requires fresh quiescence.
-  Retained-only repair covers initial-authority interruption and disappearance
-  of the original archive, evidence file and checkout.
-- Added strict release manifests and offline staging/verification commands. Draft
-  retries preserve tag ownership and partial-upload semantics; finalization and
-  manual PyPI preflight verify the full package/helper contract without allowing
-  helper assets into PyPI publication.
+  actual-process exit handoff, current-format recovery and generation-safe
+  authority retirement. Program-only removal preserves resource data/support;
+  complete removal requires ownership-aware preview and consent. Shared uv/Python,
+  editable checkouts and workspaces are not implicit targets.
+- Added integrity-bound release staging and verification. Draft retries preserve
+  tag ownership and partial-upload semantics; finalization validates the exact
+  package/helper asset contract before publication.
+- Added root `CONTRIBUTING.md`, audience-grouped documentation navigation, and
+  generated-document link checks across README, contributor/agent guidance and
+  detailed documentation.
+- Added an isolated Actions artifact round-trip diagnostic to generated projects,
+  with dedicated-branch bootstrap, manual dispatch and cleanup guidance.
 
 <br>
 
 ### 💔 Changed
 
-- New scaffolds treat the existing README as the project's chosen document
-  design: agents must adapt it in place and obtain approval before substantially
-  restructuring it. The reformatted README uses top-level topic headings, and
-  the scaffold's documentation rules preserve that layout. Project badges use
-  generated repository/package names, and the MIT badge links to package metadata.
-  The title's table-of-contents link uses a stable anchor that survives project
-  name substitution.
-- The generated README now uses audience-grouped documentation navigation.
-  CONTRIBUTING owns shared rules and everyday setup/checks; Development retains
-  deeper guides. Agent instructions link to these canonical rules rather than
-  maintaining duplicate copies.
-- New generated applications require `apprc>=0.31.0,<0.32`, with
-  `apprc-core[distribution]` authoring dependencies. Buildben retains an empty
-  runtime dependency list. Until that AppRC release is published, development,
-  CI and tool-install composition use explicit immutable source pins rather
-  than assuming a matching package already exists on PyPI.
-- Archive checks in `just release-check` and `just build-release-inputs` validate
-  standard normalized wheel and sdist filenames, including generated project
-  names containing underscores.
-- Artifact authoring and staging recipes select the locked project interpreter
-  without requiring an activated virtual environment or direnv.
-- Documented the native Windows CI verification procedure in root agent guidance
-  and the README; WSL agents must not launch Windows verification executables.
-- Native-proof policy permits an explicit user-authorized main merge/push with a
-  recorded Windows/macOS gap. It still forbids Windows executables from WSL,
-  treats configured CI as unrun until observed, and requires separate release
-  authorization and native release evidence.
+- New scaffolds preserve the existing README as the project's chosen design;
+  agents need approval before substantial restructuring. Generated badges and
+  table-of-contents links remain valid after project-name substitution.
+- CONTRIBUTING owns shared rules and everyday checks; Development retains deeper
+  guides, and agent instructions link to those rules rather than duplicate them.
+- Archive checks validate normalized wheel/source filenames, including project
+  names with underscores. Authoring/staging recipes use the locked interpreter
+  without requiring an activated environment or direnv.
+- Git preserves canonical generated command bytes with CRLF-aware whitespace
+  checking, including the policy in new scaffolds.
+- Maintained and scaffolded CI run on Linux/Python 3.12 and 3.13. Native
+  Windows/macOS validation remains deferred; WSL agents must not launch native
+  Windows verification executables. Explicitly authorized Linux-only integration
+  does not establish Windows/macOS release readiness.
 
 <br>
-
 
 ### 🔨 Fixed
 
-- Fixed the Unix BuildBen installer attempting to run a configuration command
-  that BuildBen does not provide. Generated applications retain their setup wizard.
-- Fixed Windows installer state being lost when downloaded text runs as a
-  PowerShell script block, both for BuildBen and generated projects. Windows
-  checks exercise the canonical and actually rendered installers through file
-  execution and downloaded text, including public and gh downloads.
-- Fixed Unix source staging under temporary-directory aliases such as macOS
-  `/var`, for BuildBen and generated installers, without relaxing lifecycle
-  link checks.
+- Fixed the Unix Buildben installer calling a configuration command that Buildben
+  does not provide. Generated applications retain their setup wizard.
 
 <br>
-
 
 ---
 
