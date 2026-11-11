@@ -60,6 +60,12 @@ This project follows Semantic Versioning.
 
 ### ➕ Added
 
+- Add opt-in `init-proj NAME --frontend react` scaffolding with project-local
+  React, TypeScript, Vite, Bun lockfile, ESLint, and Vitest component testing.
+  Generated roots expose grouped `just front sync|dev|check|test|build` recipes
+  and an independent frontend CI job without changing Python-only generation
+  or Python dependency and distribution ownership.
+
 <br>
 
 ### 💔 Changed

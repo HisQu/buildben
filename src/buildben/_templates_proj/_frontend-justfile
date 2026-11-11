@@ -1,0 +1,16 @@
+set default-list := true
+
+sync:
+    bun install --frozen-lockfile
+
+dev:
+    bun run dev
+
+check:
+    bun run check
+
+test:
+    bun run test
+
+build:
+    bun run build

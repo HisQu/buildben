@@ -146,6 +146,7 @@ def generated_remote_consumer(tmp_path_factory: pytest.TempPathFactory) -> Path:
             target_dir=str(destination),
             git_init=False,
             github_user="fixture-owner",
+            frontend=None,
         )
     )
     root = destination / name
@@ -514,6 +515,7 @@ def test_windows_installer_entries(
             target_dir=str(destination),
             git_init=False,
             github_user="fixture-owner",
+            frontend=None,
         )
     )
     root = destination / name

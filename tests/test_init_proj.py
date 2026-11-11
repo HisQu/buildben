@@ -143,22 +143,306 @@ def _run_just_recipe(
     project_root: Path,
     env: dict[str, str],
     *args: str,
+    cwd: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run a generated just recipe and retain its output for assertions.
 
-    :param project_root: Generated project root.
-    :param env: Child-process environment.
-    :param args: Recipe name followed by its arguments.
+    :param cwd: Directory from which to invoke just; defaults to the project root.
     :return: Captured just process result.
     """
     return subprocess.run(
         ["just", "--no-dotenv", "--justfile", str(project_root / "justfile"), *args],
-        cwd=project_root,
+        cwd=cwd or project_root,
         env=env,
         check=False,
         text=True,
         capture_output=True,
     )
+
+
+def _generate_cli_project(
+    target_dir: Path,
+    name: str,
+    *,
+    frontend: str | None = None,
+    environment: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Invoke init-proj through its public argparse command."""
+    child_environment = dict(os.environ if environment is None else environment)
+    source = Path(__file__).resolve().parents[1] / "src"
+    child_environment["PYTHONPATH"] = os.pathsep.join(
+        value for value in (str(source), child_environment.get("PYTHONPATH")) if value
+    )
+    command = [
+        sys.executable,
+        "-m",
+        "buildben.cli",
+        "init-proj",
+        name,
+        "--target-dir",
+        str(target_dir),
+    ]
+    if frontend is not None:
+        command.extend(("--frontend", frontend))
+    return subprocess.run(
+        command,
+        cwd=target_dir,
+        env=child_environment,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+
+
+def test_init_proj_rejects_unsupported_frontend_choice(tmp_path: Path) -> None:
+    """Reject unsupported frontend choices through argparse."""
+    result = _generate_cli_project(tmp_path, "Sample", frontend="vue")
+
+    assert result.returncode != 0
+    assert not (tmp_path / "Sample").exists()
+
+
+def test_default_generation_does_not_require_frontend_assets_or_tools(
+    tmp_path: Path,
+) -> None:
+    """Generate a usable Python-only project without frontend executables."""
+    result = _generate_cli_project(
+        tmp_path,
+        "DefaultProject",
+        environment={**os.environ, "PATH": ""},
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    project = tmp_path / "DefaultProject"
+    assert not (project / "frontend").exists()
+    listing = _run_just_recipe(project, _project_env(project), "--list")
+    assert listing.returncode == 0, listing.stdout + listing.stderr
+    unavailable = _run_just_recipe(project, _project_env(project), "front", "dev")
+    assert unavailable.returncode != 0
+
+
+def test_default_generation_and_overwrite_refusal_preserve_destination(
+    tmp_path: Path,
+) -> None:
+    """Preserve files on refusal and unmapped files on accepted overwrite."""
+    result = _generate_cli_project(tmp_path, "Capitalized_Project")
+    assert result.returncode == 0, result.stdout + result.stderr
+    project = tmp_path / "Capitalized_Project"
+    readme = project / "README.md"
+    original = readme.read_bytes()
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = os.pathsep.join(
+        value
+        for value in (
+            str(Path(__file__).resolve().parents[1] / "src"),
+            environment.get("PYTHONPATH"),
+        )
+        if value
+    )
+    retry = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "buildben.cli",
+            "init-proj",
+            "Capitalized_Project",
+            "--target-dir",
+            str(tmp_path),
+        ],
+        cwd=tmp_path,
+        env=environment,
+        input="n\n",
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+
+    assert retry.returncode != 0
+    assert readme.read_bytes() == original
+
+    unmapped = project / "frontend" / "user-data.txt"
+    unmapped.parent.mkdir(parents=True, exist_ok=True)
+    unmapped.write_text("keep me", encoding="utf-8")
+    readme.write_text("replace me", encoding="utf-8")
+    accepted = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "buildben.cli",
+            "init-proj",
+            "Capitalized_Project",
+            "--target-dir",
+            str(tmp_path),
+            "--frontend",
+            "react",
+        ],
+        cwd=tmp_path,
+        env=environment,
+        input="yes\n",
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+    assert readme.read_bytes() == original
+    assert unmapped.read_text(encoding="utf-8") == "keep me"
+
+
+def test_frontend_cli_generation_does_not_require_frontend_tools(
+    tmp_path: Path,
+) -> None:
+    """Generate the frontend tree through the CLI with an empty tool PATH."""
+    result = _generate_cli_project(
+        tmp_path,
+        "Capitalized_Frontend",
+        frontend="react",
+        environment={**os.environ, "PATH": ""},
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    project = tmp_path / "Capitalized_Frontend"
+    listing = _run_just_recipe(project, _project_env(project), "--list", "front")
+    assert listing.returncode == 0, listing.stdout + listing.stderr
+
+
+@pytest.mark.skipif(
+    os.environ.get("BUILDBEN_FRONTEND_SMOKE") != "1",
+    reason="real frontend consumer requires explicit opt-in",
+)
+def test_frontend_consumer_and_installed_wheel(tmp_path: Path) -> None:
+    """Exercise real frontend recipes and installed wheel template assets."""
+    for command in ("node", "bun", "just", "uv"):
+        assert shutil.which(command), f"{command} is required for frontend smoke"
+
+    result = _generate_cli_project(tmp_path, "Frontend_Consumer", frontend="react")
+    assert result.returncode == 0, result.stdout + result.stderr
+    project = tmp_path / "Frontend_Consumer"
+    frontend = project / "frontend"
+    manifest = frontend / "package.json"
+    lockfile = frontend / "bun.lock"
+    manifest_bytes = manifest.read_bytes()
+    lock_bytes = lockfile.read_bytes()
+    environment = _project_env(project)
+
+    listing = _run_just_recipe(project, environment, "--list")
+    assert listing.returncode == 0, listing.stdout + listing.stderr
+    assert "[Frontend]" in listing.stdout
+    assert "front" in listing.stdout
+    frontend_listing = _run_just_recipe(project, environment, "--list", "front")
+    assert frontend_listing.returncode == 0, (
+        frontend_listing.stdout + frontend_listing.stderr
+    )
+    for recipe in ("sync", "dev", "check", "test", "build"):
+        assert recipe in frontend_listing.stdout
+
+    for _ in range(2):
+        sync = _run_just_recipe(project, environment, "front", "sync")
+        assert sync.returncode == 0, sync.stdout + sync.stderr
+        assert manifest.read_bytes() == manifest_bytes
+        assert lockfile.read_bytes() == lock_bytes
+
+    manifest_data = json.loads(manifest_bytes)
+    manifest_data["dependencies"]["react"] = "19.3.0"
+    try:
+        manifest.write_text(json.dumps(manifest_data), encoding="utf-8")
+        mismatch = _run_just_recipe(project, environment, "front", "sync")
+        assert mismatch.returncode != 0
+        assert lockfile.read_bytes() == lock_bytes
+    finally:
+        manifest.write_bytes(manifest_bytes)
+
+    for recipe in ("check", "test", "build"):
+        outcome = _run_just_recipe(project, environment, "front", recipe)
+        assert outcome.returncode == 0, outcome.stdout + outcome.stderr
+    assert (frontend / "dist" / "index.html").is_file()
+    assert tuple((frontend / "dist" / "assets").glob("*"))
+    nested = _run_just_recipe(
+        project, environment, "front", "check", cwd=frontend / "src"
+    )
+    assert nested.returncode == 0, nested.stdout + nested.stderr
+
+    app = frontend / "src" / "App.tsx"
+    app_bytes = app.read_bytes()
+    try:
+        app.write_text(
+            app.read_text(encoding="utf-8")
+            + "\nconst invalid: number = 'type error';\n",
+            encoding="utf-8",
+        )
+        for recipe in ("check", "build"):
+            outcome = _run_just_recipe(project, environment, "front", recipe)
+            assert outcome.returncode != 0
+    finally:
+        app.write_bytes(app_bytes)
+
+    repository = Path(__file__).resolve().parents[1]
+    wheel_dir = tmp_path / "wheels"
+    wheel_dir.mkdir()
+    clean_environment = os.environ.copy()
+    clean_environment.pop("PYTHONPATH", None)
+    _run(
+        [
+            "uv",
+            "build",
+            "--wheel",
+            "--no-sources",
+            "--out-dir",
+            str(wheel_dir),
+        ],
+        cwd=repository,
+        env=clean_environment,
+    )
+    wheels = tuple(wheel_dir.glob("*.whl"))
+    assert len(wheels) == 1
+    environment_root = tmp_path / "installed-venv"
+    _run(
+        ["uv", "venv", "--python", sys.executable, str(environment_root)],
+        cwd=tmp_path,
+        env=clean_environment,
+    )
+    installed_python = environment_root / "bin" / "python"
+    _run(
+        [
+            "uv",
+            "pip",
+            "install",
+            "--offline",
+            "--no-deps",
+            "--python",
+            str(installed_python),
+            str(wheels[0]),
+        ],
+        cwd=tmp_path,
+        env=clean_environment,
+    )
+    packaged_root = tmp_path / "packaged-consumer"
+    packaged_root.mkdir()
+    installed_environment = os.environ.copy()
+    installed_environment.pop("PYTHONPATH", None)
+    installed = subprocess.run(
+        [
+            str(installed_python),
+            "-I",
+            "-m",
+            "buildben.cli",
+            "init-proj",
+            "PackagedFrontend",
+            "--target-dir",
+            str(packaged_root),
+            "--frontend",
+            "react",
+        ],
+        cwd=tmp_path,
+        env=installed_environment,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+    packaged_project = packaged_root / "PackagedFrontend"
+    packaged_sync = _run_just_recipe(
+        packaged_project, installed_environment, "front", "sync"
+    )
+    assert packaged_sync.returncode == 0, packaged_sync.stdout + packaged_sync.stderr
 
 
 @pytest.fixture()
@@ -180,6 +464,7 @@ def bube_test_project(
         target_dir=str(tmp_path),
         git_init=False,
         github_user="github-user",
+        frontend=None,
     )
     scaffolder._run(args)
     proot = tmp_path / "bube_test_tmp"
@@ -682,7 +967,9 @@ def test_scaffold_copy_preserves_active_pass_artifacts(tmp_path: Path) -> None:
     todo.write_bytes(todo_bytes)
     plan.write_bytes(plan_bytes)
 
-    transfers = scaffolder._project_template_transfers(project_root, "sample_project")
+    transfers = scaffolder._project_template_transfers(
+        project_root, "sample_project", frontend=False
+    )
     for destination in transfers.values():
         destination.parent.mkdir(parents=True, exist_ok=True)
     scaffolder.utils.copy_templates(

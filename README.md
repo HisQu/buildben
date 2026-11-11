@@ -442,13 +442,41 @@ bube        # Prints help when no args are given
 
 
 ```bash
-# Initialize project scaffold:
-bube init-proj \   # Long Alias for `bube proj`
-  -n my_project \  # Project name = Name of new project folder
-  -t . \           # Parent directory to place new project folder into
-  -u your_github_username
-  -g               # Initializes git repo and commits scaffold
+# > Create a Python-only project; name is positional.
+bube init-proj my_project -t . -u your_github_username -g
+
+# > Include the optional React/TypeScript/Vite frontend.
+bube init-proj my_project -t . -u your_github_username --frontend react
 ```
+
+The optional frontend is an independent Bun project in `frontend/`. Generation
+copies bundled files and a maintained `bun.lock`; it does not install runtimes,
+download dependencies, or change Python dependency metadata. Use Node 24.22.2+
+(within Node 24), Bun >=1.4.4, and just with module support (CI uses 1.56.0).
+
+From the generated root:
+
+```bash
+just --list
+just --list front
+just front sync
+just front dev
+just front check
+just front test
+just front build
+```
+
+Root listing groups the module under `Frontend`; `--list front` expands its
+recipes. Frozen sync preserves the committed lockfile. Checks include TypeScript
+and ESLint; tests use Vitest through `bun run test`, not Bun's separate runner.
+The build checks types before Vite emits `frontend/dist/`.
+
+React, Vite, TypeScript, linting and component-test packages live only in
+`frontend/package.json` and `frontend/bun.lock`. Root `just sync` remains
+Python-only; frontend assets are not automatically shipped inside Python
+distributions or served by the Python application. To add Vite manually to an
+existing frontend, run `bun add -d vite` inside that project, not in dotfiles
+or during routine sync.
 
 The generated project includes six documentation pages. They use fixed page
 labels and introduce components before instructions that depend on them:

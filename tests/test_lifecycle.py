@@ -39,6 +39,7 @@ def _create_consumer(
             target_dir=str(destination),
             git_init=False,
             github_user="fixture-owner",
+            frontend=None,
         )
     )
     root = destination / name
