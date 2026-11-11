@@ -204,15 +204,16 @@ shows how `APP_RC.resolve()` and `ResolvedConfig.build()` construct them. The
 
 | Declaration in `pyproject.toml` | Use |
 | --- | --- |
-| `[project].dependencies` | Published runtime dependencies, including `apprc>=0.31.0,<0.32` and `typer`. |
+| `[project].dependencies` | Published runtime requirements, including matching immutable Git sources for `apprc-core` and terminal `apprc`, plus `typer`. |
 | `[project.optional-dependencies]` | Published extras for optional application features. |
-| `[dependency-groups].dev` | Local authoring dependencies, including `apprc-core[distribution]>=0.31.0,<0.32`. |
+| `[dependency-groups].dev` | Local authoring requirements, including `apprc-core[distribution]` from the matching SDK source commit. |
 
-The scaffold pins AppRC core, terminal, and optional GUI development sources to
-one immutable integration commit until the matching AppRC release is published.
-Runtime overrides pass the corresponding immutable source requirements to the
-uv-managed application installation. Buildben itself keeps `dependencies=[]`
-and has no AppRC runtime reference or application-data capabilities.
+The scaffold pins AppRC core, terminal, and optional GUI sources to one immutable
+Git commit. Ordinary pip reads the runtime source requirements directly;
+runtime overrides preserve the same source identities in the uv-managed
+application installation. These pins can include unreleased fixes. Buildben
+itself keeps `dependencies=[]` and has no AppRC runtime reference or
+application-data capabilities.
 
 See the [package explanation](Explanations.md#package-layout-and-dependencies)
 for wheel/sdist boundaries and [Development](Development.md#maintainer-environment)
