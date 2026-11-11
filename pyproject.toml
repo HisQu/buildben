@@ -10,7 +10,7 @@ build-backend = "setuptools.build_meta"
 # =====================================================================
 [project]
 name        = "buildben"          # < will be replaced by scaffold script
-version     = "0.12.0"
+version     = "0.13.0"
 description = "Developer CLI helpers (init-project, etc.)"
 authors     = [{ name = "markur4", email = "you@example.com" }]
 readme      = "README.md"
@@ -58,8 +58,8 @@ dependencies = []
 #   uv sync --locked --all-extras --all-groups
 [dependency-groups]
 dev = [
-    "apprc-core[distribution] @ git+https://github.com/HisQu/apprc.git@5b7340a0bf2cbec612b831f56a3e295821d05211",
-    "apprc @ git+https://github.com/HisQu/apprc.git@5b7340a0bf2cbec612b831f56a3e295821d05211#subdirectory=src/apprc_dev/packaging/terminal",
+    "apprc-core[distribution] @ git+https://github.com/HisQu/apprc.git@17b2be26cb24176ebd4d49326be407f63e36437d",
+    "apprc @ git+https://github.com/HisQu/apprc.git@17b2be26cb24176ebd4d49326be407f63e36437d#subdirectory=src/apprc_dev/packaging/terminal",
     "pytest>=9.0.2",
     "pytest-xdist",     # < Multi-core testing
     "typer",            # < Scaffold CLI smoke tests
@@ -75,7 +75,7 @@ dev = [
     "graphviz",
     "pillow",
 ]
-gui = ["apprc-gui @ git+https://github.com/HisQu/apprc.git@5b7340a0bf2cbec612b831f56a3e295821d05211#subdirectory=src/apprc_dev/packaging/gui"]
+gui = ["apprc-gui @ git+https://github.com/HisQu/apprc.git@17b2be26cb24176ebd4d49326be407f63e36437d#subdirectory=src/apprc_dev/packaging/gui"]
 
 
 # =====================================================================
