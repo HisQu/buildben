@@ -1,0 +1,27 @@
+  frontend:
+    name: Frontend scaffold consumer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24.22.2"
+          package-manager-cache: false
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+      - name: Install just
+        uses: extractions/setup-just@v4
+        with:
+          just-version: "1.56.0"
+      - name: Install frontend dependencies
+        run: just front sync
+      - name: Check frontend
+        run: just front check
+      - name: Test frontend
+        run: just front test
+      - name: Build frontend
+        run: just front build
