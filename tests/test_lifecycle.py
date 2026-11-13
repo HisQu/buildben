@@ -66,7 +66,7 @@ def _create_consumer(
     uv = shutil.which("uv")
     if uv is None:
         pytest.skip("The real lifecycle smoke requires the existing uv executable.")
-    environment["APPRC_UV_PATH"] = str(Path(uv).resolve())
+    environment["UV"] = str(Path(uv).resolve())
     parent_environment = tmp_path / f"{name}-active-parent-venv"
     venv.EnvBuilder(with_pip=False).create(parent_environment)
     environment["VIRTUAL_ENV"] = str(parent_environment)
@@ -245,11 +245,9 @@ def _installer(root: Path, name: str) -> Path:
 
 
 def _install_command(root: Path, *arguments: str) -> list[str]:
-    """Invoke the actual AppRC-generated project-root installation wrapper."""
-    entry = root / ("app-install.cmd" if os.name == "nt" else "app-install.sh")
-    if os.name == "nt":
-        return ["cmd.exe", "/d", "/c", str(entry), *arguments]
-    return [str(entry), *arguments]
+    """Invoke the generated Python developer entry from any working directory."""
+    entry = root / "app-install.py"
+    return [sys.executable, str(entry), *arguments]
 
 
 def _uninstall_command(state: Path, *arguments: str) -> list[str]:
@@ -320,12 +318,8 @@ def test_generated_consumer_install_uses_installer_location_and_launches(
         )
         assert status == 0
     authority.write_bytes(valid_authority)
-    launcher = root / ("app-launch.cmd" if os.name == "nt" else "app-launch.sh")
-    launch_command = (
-        ["cmd.exe", "/d", "/c", str(launcher), "version"]
-        if os.name == "nt"
-        else [str(launcher), "version"]
-    )
+    launcher = root / "app-launch.py"
+    launch_command = [sys.executable, str(launcher), "version"]
     launched = _run(launch_command, cwd=unrelated, env=environment)
     assert launched.returncode == 0, launched.stdout + launched.stderr
     assert launched.stdout.strip() == "0.1.0"
@@ -361,30 +355,6 @@ def test_generated_consumer_install_uses_installer_location_and_launches(
     assert executable.is_file()
     launched = _run([str(executable), "--help"], cwd=unrelated, env=environment)
     assert launched.returncode == 0, launched.stdout + launched.stderr
-
-
-def test_generated_consumer_root_wrappers_are_exactly_sdk_owned(
-    consumer: tuple[Path, dict[str, str], Path],
-) -> None:
-    root, _, _ = consumer
-    expected = {
-        "app-install.sh",
-        "app-install.cmd",
-        "app-launch.sh",
-        "app-launch.cmd",
-        "app-uninstall.sh",
-        "app-uninstall.cmd",
-    }
-    wrappers = {
-        path.name
-        for path in root.iterdir()
-        if path.name.startswith(("app-install", "app-launch", "app-uninstall"))
-    }
-    assert wrappers == expected
-    assert not any(
-        (root / name).exists()
-        for name in ("install.sh", "install.cmd", "uninstall.sh", "uninstall.cmd")
-    )
 
 
 def test_external_repair_rejects_another_app_identity(

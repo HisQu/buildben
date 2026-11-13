@@ -54,9 +54,15 @@ def write_release_fixture(
     :return: Exact package/native/manifest filenames.
     """
     names = write_package_pair(directory, distribution=distribution, version=version)
-    for name in release_manifest.SCRIPT_SUPPORT:
-        (directory / name).write_bytes(f"Owned native release asset: {name}\n".encode())
+    native = tuple(
+        f"{app_id}-{action}-{platform}"
+        for action in ("install", "launch")
+        for platform in ("linux-x86_64", "windows-x86_64.exe")
+    )
+    names.extend(native)
     names.extend(release_manifest.SCRIPT_SUPPORT)
+    for name in names[2:]:
+        (directory / name).write_bytes(f"Owned native release asset: {name}\n".encode())
     payload = {name: (directory / name).read_bytes() for name in names}
     content = release_manifest.manifest_bytes(
         payload,

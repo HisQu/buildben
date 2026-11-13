@@ -56,6 +56,12 @@ This project follows Semantic Versioning.
 
 ### 💥 Breaking changes
 
+- Breaking: Regenerated projects replace shell/CMD bootstrap entries with Python
+  checkout entries and a strict native release asset contract. Affected:
+  generated-project users and release automation. Migration: update commands and
+  automation to the Python entries and exact native asset names, then regenerate
+  project artifacts; no compatibility shim is provided.
+
 <br>
 
 ### ➕ Added
@@ -65,6 +71,8 @@ This project follows Semantic Versioning.
   Generated roots expose grouped `just front sync|dev|check|test|build` recipes
   and an independent frontend CI job without changing Python-only generation
   or Python dependency and distribution ownership.
+- Added native producer and locked repository-bundle templates with the
+  appropriate GUI runtime extra. Ordinary Python generation remains Rust-free.
 
 <br>
 

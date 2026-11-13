@@ -5,102 +5,39 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import hashlib
-import json
 import os
 import shutil
 import sys
 import tempfile
+from collections.abc import Collection
 from pathlib import Path, PurePosixPath
-from typing import Any, cast
 
 from apprc.definition.installation import (
-    InstallationIdentity,
     InstallationInspection,
     InstallationPlacement,
 )
-from apprc.definition.paths import Layout, Paths, ResourceKind
-from apprc.distribution.models import AppCapabilities, DistributionSpec, ProjectMetadata
+from apprc.definition.paths import Layout, ResourceKind
+from apprc.distribution.models import DistributionSpec
 from apprc.distribution.runtime import (
     SourceSelection,
     install_prepared_application,
+    load_installer_spec,
     parse_source_arguments,
     plan_repair,
+    prepare_installation_source,
     resume_migration,
 )
 from apprc.distribution.runtime.backend import select_uv_target
 from apprc.user_files.installation.discovery import (
-    inspect_installation,
     installation_directory,
+    inspect_installation,
     native_user_directories,
 )
 from apprc.user_files.installation.operations import plan_install
 
 
-def _bundle() -> dict[str, Any]:
-    """Read the author inputs serialized by AppRC's standalone loader."""
-    path = Path(sys.path[0]) / "apprc/distribution/runtime/bundle.json"
-    value = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(value, dict) or not isinstance(value.get("app_id"), str):
-        raise RuntimeError("Embedded application bundle has an unsupported schema.")
-    return value
-
-
-def _project_root(script: Path, distribution_path: PurePosixPath) -> Path:
-    """Locate checkout from the generated entry path, never the caller CWD."""
-    resolved = script.resolve()
-    for candidate in resolved.parents:
-        expected = candidate.joinpath(
-            *distribution_path.parts, "artifacts", "installer", resolved.name
-        )
-        if (
-            resolved.name in {"main-installer.py", "main-installer.pyz"}
-            and expected.resolve() == resolved
-        ):
-            return candidate
-    return resolved.parent
-
-
-def _spec(bundle: dict[str, Any], script: Path) -> DistributionSpec:
-    """Rebuild the standalone source contract without importing the app."""
-    distribution_path = PurePosixPath(bundle["distribution_path"])
-    identity = InstallationIdentity(
-        app_id=bundle["app_id"],
-        distribution=bundle["distribution"],
-        import_package=bundle["import_package"],
-        apprc_reference=bundle["apprc_reference"],
-        commands=tuple(bundle["commands"]),
-    )
-    metadata = ProjectMetadata(
-        project_root=_project_root(script, distribution_path),
-        identity=identity,
-        version=bundle["version"],
-        project_path=PurePosixPath(bundle["project_path"]),
-        distribution_path=distribution_path,
-        launcher_command=bundle["launcher_command"],
-        python_requirement=bundle["python_requirement"],
-    )
-    capabilities = AppCapabilities(
-        paths=Paths(**bundle["paths"]),
-        user_dotenv=bundle["user_dotenv"],
-        workspaces=bundle["workspaces"],
-        workspace_registry=bundle["workspace_registry"],
-    )
-    return DistributionSpec(
-        metadata=metadata,
-        capabilities=capabilities,
-        source_mode=bundle["source_mode"],
-        repository_url=bundle["repository_url"],
-        release_version=bundle["release_version"],
-        release_commit=bundle["release_commit"],
-        release_asset=bundle["release_asset"],
-        release_digest=bundle["release_digest"],
-        runtime_requirements=tuple(bundle["runtime_requirements"]),
-        runtime_overrides=tuple(bundle["runtime_overrides"]),
-    )
-
-
 def _placement(
-    bundle: dict[str, Any],
+    spec: DistributionSpec,
     environment: dict[str, str],
     arguments: argparse.Namespace,
     inspection: InstallationInspection,
@@ -112,7 +49,13 @@ def _placement(
         and arguments.root is None
     ):
         return inspection.record.placement
-    enabled = cast(dict[ResourceKind, bool], bundle["paths"])
+    declared_paths = spec.capabilities.paths
+    enabled: dict[ResourceKind, bool] = {
+        "config": declared_paths.config,
+        "appdata": declared_paths.appdata,
+        "cache": declared_paths.cache,
+        "state": declared_paths.state,
+    }
     resource_kinds: tuple[ResourceKind, ...] = (
         "config",
         "appdata",
@@ -125,11 +68,13 @@ def _placement(
                 raise ValueError(
                     "Choose --layout native or --layout single-root --root PATH."
                 )
-            native = native_user_directories(bundle["app_id"], environment=environment)
+            native = native_user_directories(
+                spec.metadata.identity.app_id, environment=environment
+            )
             print("Native resource locations:")
             for name, path in zip(resource_kinds, native[:4], strict=True):
-                actual = path / "appdata" if name == "appdata" else path
                 if enabled[name]:
+                    actual = path / "appdata" if name == "appdata" else path
                     print(f"  {name}: {actual}")
             choice = input("Placement: [n]ative or [s]ingle-root? ").strip().casefold()
             if choice not in {"n", "s"}:
@@ -154,7 +99,9 @@ def _placement(
         if arguments.root is not None:
             raise ValueError("--root is allowed only with --layout single-root")
         layout = Layout.native()
-        native = native_user_directories(bundle["app_id"], environment=environment)
+        native = native_user_directories(
+            spec.metadata.identity.app_id, environment=environment
+        )
         roots = dict(zip(resource_kinds, native[:4], strict=True))
         roots["appdata"] = roots["appdata"] / "appdata"
         logs_dir = native[4]
@@ -172,8 +119,10 @@ def _placement(
     )
 
 
-def _support_files(app_id: str) -> dict[PurePosixPath, bytes]:
-    """Reuse verified owned support when a saved repair script is the entrypoint."""
+def _support_files(
+    app_id: str, *, exclude: Collection[PurePosixPath] = ()
+) -> dict[PurePosixPath, bytes]:
+    """Verify owned support except exact keys supplied by source preparation."""
     root = Path(sys.path[0]) / "app_lifecycle/_support"
     script = Path(sys.argv[0]).absolute()
     inspection = inspect_installation(script.parent, app_id=app_id)
@@ -187,6 +136,8 @@ def _support_files(app_id: str) -> dict[PurePosixPath, bytes]:
             if output.kind != "support":
                 continue
             relative = PurePosixPath(output.path)
+            if relative in exclude:
+                continue
             if (
                 relative.is_absolute()
                 or ".." in relative.parts
@@ -220,7 +171,9 @@ def _support_files(app_id: str) -> dict[PurePosixPath, bytes]:
             raise RuntimeError(
                 f"Generated lifecycle support is not a regular file: {path}."
             )
-        files[PurePosixPath(*path.relative_to(root).parts)] = path.read_bytes()
+        relative = PurePosixPath(*path.relative_to(root).parts)
+        if relative not in exclude:
+            files[relative] = path.read_bytes()
     if not files:
         raise RuntimeError("Generated lifecycle support is empty.")
     return files
@@ -252,6 +205,8 @@ def _validate_recovery_target(
     inspection: InstallationInspection,
     arguments: argparse.Namespace,
     selection: SourceSelection,
+    *,
+    check_source: bool = True,
 ) -> None:
     """Reject mismatched authority before any saved or external recovery."""
     # > Recovery may inspect pending authority that normal startup must reject.
@@ -279,6 +234,7 @@ def _validate_recovery_target(
     entry = Path(sys.argv[0]).absolute()
     if (
         entry.name in {"main-installer.py", "main-installer.pyz"}
+        and check_source
         and arguments.repair
         and not (
             inspection.record is not None
@@ -297,14 +253,15 @@ def _validate_recovery_target(
 
 def main() -> int:
     """Acquire the selected immutable source and perform a managed install."""
-    bundle = _bundle()
-    spec = _spec(bundle, Path(sys.argv[0]).absolute())
+    spec = load_installer_spec()
+    app_id = spec.metadata.identity.app_id
     selection, remaining = parse_source_arguments(spec, sys.argv[1:])
     # > Resolve transport aliases; keep managed layout paths unchanged.
     if selection.package_path is not None:
         selection = dataclasses.replace(
             selection, package_path=selection.package_path.resolve(strict=True)
         )
+    requested_selection = selection
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--layout", choices=("native", "single-root"))
     parser.add_argument("--root", type=Path)
@@ -327,16 +284,20 @@ def main() -> int:
     environment = dict(os.environ)
     if arguments.repair:
         expected_directory = arguments.directory
-        script = Path(sys.argv[0]).absolute()
         if (
             expected_directory is None
             or not expected_directory.is_absolute()
             or (
-                script.name == "repair-installer.py"
-                and script.parent.resolve() != expected_directory.resolve()
+                Path(sys.argv[0]).absolute().name == "repair-installer.py"
+                and Path(sys.argv[0]).absolute().parent.resolve()
+                != expected_directory.resolve()
             )
-            or script.name
-            not in {"repair-installer.py", "main-installer.py", "main-installer.pyz"}
+            or Path(sys.argv[0]).absolute().name
+            not in {
+                "repair-installer.py",
+                "main-installer.py",
+                "main-installer.pyz",
+            }
         ):
             raise RuntimeError(
                 "Repair requires an absolute installation directory; saved repair "
@@ -344,22 +305,24 @@ def main() -> int:
             )
         directory = expected_directory
     else:
-        directory = installation_directory(bundle["app_id"], environment=environment)
-    inspection = inspect_installation(directory, app_id=bundle["app_id"])
+        directory = installation_directory(app_id, environment=environment)
+    inspection = inspect_installation(directory, app_id=app_id)
     recovering_migration = (
         inspection.record is not None
         and inspection.record.migration is not None
         and inspection.record.migration.phase == "staged"
     )
     if arguments.repair or recovering_migration:
-        _validate_recovery_target(spec, inspection, arguments, selection)
+        _validate_recovery_target(
+            spec, inspection, arguments, selection, check_source=False
+        )
     inspection = _resume_pending_migration(inspection)
     saved = inspection.record
     prior = saved.current or saved.last_successful if saved is not None else None
     if arguments.repair:
         if saved is None:
             raise RuntimeError("Saved repair requires installation authority.")
-        if saved.app_id != bundle["app_id"]:
+        if saved.app_id != app_id:
             raise RuntimeError("Saved repair identity differs from this installer.")
         if saved.operation is not None:
             prior = saved.operation.intended
@@ -368,55 +331,64 @@ def main() -> int:
         selection = dataclasses.replace(selection, source=prior.source)
         placement = prior.placement
         backend = prior.backend
-        plan = plan_repair(
-            spec.metadata.identity,
-            prior.source,
-            placement,
-            backend,
-            inspection=inspection,
-        )
     else:
-        placement = _placement(bundle, environment, arguments, inspection)
+        placement = _placement(spec, environment, arguments, inspection)
         if prior is not None:
             backend = prior.backend
         else:
-            selected_uv = environment.get("APPRC_UV_PATH") or environment.get("UV")
-            if selected_uv:
-                uv = Path(selected_uv)
-                if not uv.is_absolute() or not uv.is_file():
-                    raise RuntimeError(
-                        "The bootstrap-selected absolute uv executable is unavailable."
-                    )
-                backend = select_uv_target(
-                    uv, environment=environment, invocation_cwd=Path.cwd()
+            selected_uv = environment.get("UV")
+            if selected_uv is None:
+                selected_uv = shutil.which("uv")
+            if selected_uv is None:
+                raise RuntimeError("uv is required for managed installation.")
+            uv = Path(selected_uv)
+            if not uv.is_absolute() or not uv.is_file():
+                raise RuntimeError(
+                    "The official UV handoff must name an available absolute executable."
                 )
-            else:
-                executable = shutil.which("uv")
-                if executable is None:
-                    raise RuntimeError("uv is required for managed installation")
-                backend = select_uv_target(
-                    Path(executable),
-                    environment=environment,
-                    invocation_cwd=Path.cwd(),
-                )
-        plan = plan_install(
-            spec.metadata.identity,
-            selection.source,
-            placement,
-            backend,
-            inspection=inspection,
-        )
+            backend = select_uv_target(
+                uv, environment=environment, invocation_cwd=Path.cwd()
+            )
     probe_path = Path(sys.path[0]) / "apprc/distribution/runtime/installed_probe.py"
-    assert plan is not None
     with tempfile.TemporaryDirectory(prefix="apprc-source-") as staging:
-        prepared = selection.prepare(Path(staging).resolve())
+        prepared = prepare_installation_source(
+            spec,
+            selection,
+            Path(staging).resolve(),
+            repair_from=directory if arguments.repair else None,
+        )
+        if arguments.repair or recovering_migration:
+            verified_selection = (
+                dataclasses.replace(selection, source=prepared.source)
+                if prepared.bundle is not None
+                else requested_selection
+            )
+            _validate_recovery_target(spec, inspection, arguments, verified_selection)
+        if arguments.repair:
+            plan = plan_repair(
+                spec.metadata.identity,
+                prepared.source,
+                placement,
+                backend,
+                inspection=inspection,
+            )
+        else:
+            plan = plan_install(
+                spec.metadata.identity,
+                prepared.source,
+                placement,
+                backend,
+                inspection=inspection,
+            )
         install_prepared_application(
             plan,
             prepared,
             environment=environment,
             probe_path=probe_path,
-            support_files=_support_files(bundle["app_id"]),
-            python_requirement=spec.metadata.python_requirement,
+            support_files=_support_files(
+                app_id, exclude=(prepared.support_files or {}).keys()
+            ),
+            python_requirement=spec.metadata.runtime_python_requirement,
         )
     return 0
 

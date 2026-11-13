@@ -10,18 +10,17 @@ from pathlib import Path
 from typing import Literal, cast
 
 MANIFEST_NAME = "release-manifest.json"
-SCRIPT_SUPPORT = (
-    "app-install.sh",
-    "app-install.cmd",
-    "bootstrap.ps1",
-    "main-installer.py",
+NATIVE_FRONTENDS = (
+    "{app_id}-install-linux-x86_64",
+    "{app_id}-install-windows-x86_64.exe",
+    "{app_id}-launch-linux-x86_64",
+    "{app_id}-launch-windows-x86_64.exe",
 )
+SCRIPT_SUPPORT = ("main-installer.py", "installer-payload.zip")
 ZIPAPP_SUPPORT = (
-    "app-install.sh",
-    "app-install.cmd",
-    "bootstrap.ps1",
     "main-installer.pyz",
     "main-installer-requirements.txt",
+    "installer-payload.zip",
 )
 
 
@@ -45,11 +44,13 @@ def asset_basename(value: str, label: str = "Release asset") -> str:
 def expected_asset_names(
     names: Sequence[str],
     *,
+    app_id: str,
     payload_format: Literal["script", "zipapp"] = "script",
 ) -> tuple[str, ...]:
-    """Require exactly one package pair and the selected native support set.
+    """Require one package pair, four native frontends and the selected payload.
 
     :param names: Explicit asset list, including the integrity manifest.
+    :param app_id: Stable application identity used in native filenames.
     :param payload_format: Script or explicitly selected zipapp contract.
     :return: Deterministically ordered exact asset names.
     """
@@ -64,10 +65,16 @@ def expected_asset_names(
     if payload_format not in {"script", "zipapp"}:
         raise ValueError("Unsupported release payload format.")
     support = SCRIPT_SUPPORT if payload_format == "script" else ZIPAPP_SUPPORT
-    expected = {wheels[0], sdists[0], MANIFEST_NAME, *support}
+    expected = {
+        wheels[0],
+        sdists[0],
+        MANIFEST_NAME,
+        *support,
+        *(name.format(app_id=app_id) for name in NATIVE_FRONTENDS),
+    }
     if set(names) != expected:
         raise ValueError(
-            "Release contains missing or unexpected installer/manifest assets."
+            "Release contains missing or unexpected native/manifest assets."
         )
     return tuple(sorted(expected))
 
@@ -112,7 +119,9 @@ def manifest_bytes(
     _identity(app_id, distribution, version, commit)
     if MANIFEST_NAME in payload:
         raise ValueError("Manifest must not include its own digest.")
-    expected_asset_names((*payload, MANIFEST_NAME), payload_format=payload_format)
+    expected_asset_names(
+        (*payload, MANIFEST_NAME), app_id=app_id, payload_format=payload_format
+    )
     value = {
         "schema_version": 1,
         "app_id": app_id,
@@ -189,7 +198,9 @@ def validate_manifest(
     }:
         raise ValueError("Release manifest has an unsupported payload format.")
     names = expected_asset_names(
-        tuple(payload), payload_format=cast(Literal["script", "zipapp"], payload_format)
+        tuple(payload),
+        app_id=app_id,
+        payload_format=cast(Literal["script", "zipapp"], payload_format),
     )
     assets = value["assets"]
     if not isinstance(assets, list):

@@ -12,7 +12,6 @@ import tempfile
 import tomllib
 import venv
 from pathlib import Path, PurePosixPath
-from urllib.request import urlopen
 
 import pytest
 
@@ -23,9 +22,6 @@ from apprc.distribution import (
     read_project_metadata,
 )
 from apprc.user_files.installation.discovery import installation_directory
-from {my_project}_dev.packaging.release_stage import (
-    _locked_runtime_requirements,
-)
 from {my_project}_distr.make_artifacts import distribution_spec
 from support_source_transport.server import SourceFixture
 
@@ -91,14 +87,6 @@ def _main_installer(metadata, spec, commit: str, destination: Path) -> Path:
         spec,
         source_mode="main",
         release_commit=commit,
-        runtime_requirements=tuple(
-            dict.fromkeys(
-                (
-                    *spec.runtime_requirements,
-                    *_locked_runtime_requirements(ROOT),
-                )
-            )
-        ),
     )
     payload_root = ROOT / metadata.distribution_path / "payload"
     modules = tuple(
@@ -158,6 +146,7 @@ def _smoke_commit() -> str:
 def _source_fixture(tmp_path: Path, commit: str) -> SourceFixture:
     metadata, spec, repository, tag, _version = _project_identity()
     assets = ROOT / "release" / "assets"
+    assets.mkdir(parents=True, exist_ok=True)
     archive_name = os.environ.get("INSTALLER_SMOKE_MAIN_SOURCE")
     if not archive_name:
         pytest.fail(
@@ -166,22 +155,6 @@ def _source_fixture(tmp_path: Path, commit: str) -> SourceFixture:
     archive = Path(archive_name)
     if not archive.is_file():
         pytest.fail(f"Source archive does not exist: {archive}")
-    if not assets.is_dir():
-        pytest.fail(
-            "Run the release staging recipe before source-install smoke."
-        )
-    requested_source = os.environ.get("INSTALLER_SMOKE_SOURCE")
-    if requested_source:
-        source = Path(requested_source)
-        staged = assets / source.name
-        if (
-            not source.is_file()
-            or not staged.is_file()
-            or source.read_bytes() != staged.read_bytes()
-        ):
-            pytest.fail(
-                "Staged release bytes differ from INSTALLER_SMOKE_SOURCE."
-            )
     main_installer = _main_installer(
         metadata, spec, commit, tmp_path / "main-installer.py"
     )
@@ -258,9 +231,7 @@ def _smoke_environment(
         if item
     )
     uv = shutil.which("uv")
-    if uv is None:
-        pytest.fail("Source smoke requires an existing real uv executable.")
-    environment["APPRC_UV_PATH"] = str(Path(uv).resolve())
+    environment["UV"] = str(Path(uv).resolve())
     if restricted:
         persistent = Path(environment["HOME"]) / ".local" / "bin"
         persistent.mkdir(parents=True)
@@ -323,24 +294,15 @@ def _install_and_assert(
     environment: dict[str, str],
     *,
     mode: str,
-    entrypoint: Path | list[str],
-    windows_cmd: bool,
+    entrypoint: list[str],
     expected_uv: Path | None = None,
 ) -> None:
-    if isinstance(entrypoint, Path):
-        arguments = [str(entrypoint)]
-        if mode == "main":
-            arguments.append("--main")
-        if os.environ.get("INSTALLER_SMOKE_CLIENT", "curl") == "gh":
-            arguments.extend(("--github-client", "gh"))
-        arguments.extend(("--layout", "native"))
-        if windows_cmd:
-            arguments = ["cmd.exe", "/d", "/c", *arguments]
-    else:
-        arguments = list(entrypoint)
-        if os.environ.get("INSTALLER_SMOKE_CLIENT", "curl") == "gh":
-            arguments.extend(("--github-client", "gh"))
-        arguments.extend(("--layout", "native"))
+    arguments = list(entrypoint)
+    if mode == "main":
+        arguments.append("--main")
+    if os.environ.get("INSTALLER_SMOKE_CLIENT", "curl") == "gh":
+        arguments.extend(("--github-client", "gh"))
+    arguments.extend(("--layout", "native"))
     result = _run(arguments, environment)
     assert result.returncode == 0, result.stdout + result.stderr
     fixture.close()
@@ -393,7 +355,7 @@ def _install_and_assert(
     ).exists()
 
 
-@pytest.mark.parametrize("mode", ["release", "main"])
+@pytest.mark.parametrize("mode", ["main"])
 @pytest.mark.parametrize("restricted_path", [False, True])
 @pytest.mark.parametrize("symlink_tmp", [False, True])
 def test_source_install_smoke(
@@ -402,7 +364,7 @@ def test_source_install_smoke(
     restricted_path: bool,
     symlink_tmp: bool,
 ) -> None:
-    """Install through public release/main entries from outside the checkout."""
+    """Install immutable main source through the generated Python entry."""
     if os.name == "nt" and restricted_path:
         pytest.skip(
             "The minimal POSIX PATH fixture is not available on Windows."
@@ -421,202 +383,12 @@ def test_source_install_smoke(
             restricted=restricted_path,
             symlink_tmp=symlink_tmp,
         )
-        assets = ROOT / "release" / "assets"
-        entrypoint = (
-            assets
-            / ("app-install.cmd" if os.name == "nt" else "app-install.sh")
-            if mode == "release"
-            else ROOT
-            / ("app-install.cmd" if os.name == "nt" else "app-install.sh")
-        )
+        entrypoint = [sys.executable, str(ROOT / "app-install.py")]
         _install_and_assert(
             fixture,
             environment,
             mode=mode,
             entrypoint=entrypoint,
-            windows_cmd=os.name == "nt",
         )
-    finally:
-        fixture.close()
-
-
-@pytest.mark.skipif(
-    os.name != "nt", reason="Native PowerShell coverage runs on Windows."
-)
-@pytest.mark.parametrize("entry", ["file", "downloaded-text"])
-def test_windows_installer_entries(
-    tmp_path: Path, entry: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Run the PowerShell bootstrap as a file and as downloaded text."""
-    monkeypatch.setenv("INSTALLER_SMOKE_CLIENT", "gh")
-    commit = _smoke_commit()
-    fixture = _source_fixture(tmp_path, commit)
-    try:
-        environment = _smoke_environment(
-            tmp_path, fixture, restricted=False, symlink_tmp=False
-        )
-        bootstrap = ROOT / "release" / "assets" / "bootstrap.ps1"
-        if entry == "file":
-            command = [
-                "powershell.exe",
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-                str(bootstrap),
-                "--main",
-            ]
-        else:
-            with urlopen(
-                f"{fixture.base_url}/assets/bootstrap.ps1", timeout=30
-            ) as response:
-                downloaded = response.read().decode("utf-8")
-            downloaded_file = tmp_path / "downloaded-bootstrap.ps1"
-            downloaded_file.write_text(downloaded, encoding="utf-8")
-            literal = str(downloaded_file).replace("'", "''")
-            command = [
-                "powershell.exe",
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                f"$script = [ScriptBlock]::Create("
-                f"[IO.File]::ReadAllText('{literal}')); & $script --main",
-            ]
-        _install_and_assert(
-            fixture,
-            environment,
-            mode="main",
-            entrypoint=command,
-            windows_cmd=False,
-        )
-    finally:
-        fixture.close()
-
-
-def _official_uv_environment(
-    tmp_path: Path, fixture: SourceFixture
-) -> tuple[dict[str, str], Path]:
-    environment = _smoke_environment(
-        tmp_path, fixture, restricted=False, symlink_tmp=False
-    )
-    environment.pop("UV", None)
-    environment.pop("APPRC_UV_PATH", None)
-    persistent_name = "uv.exe" if os.name == "nt" else "uv"
-    persistent_uv = (
-        Path(environment["HOME"]) / ".local" / "bin" / persistent_name
-    )
-    if persistent_uv.exists():
-        persistent_uv.unlink()
-    if os.name == "nt":
-        original_path = environment["PATH"].split(os.pathsep)
-        filtered = []
-        for entry in original_path:
-            directory = Path(entry)
-            available = (
-                "uv.exe",
-                "python.exe",
-                "python3.exe",
-                "uv",
-                "python",
-                "python3",
-            )
-            if any((directory / name).is_file() for name in available):
-                continue
-            filtered.append(entry)
-        powershell = (
-            Path(os.environ["SystemRoot"])
-            / "System32"
-            / "WindowsPowerShell"
-            / "v1.0"
-        )
-        filtered.append(str(powershell))
-        environment["PATH"] = os.pathsep.join(filtered)
-        assert shutil.which("uv", path=environment["PATH"]) is None
-        assert shutil.which("python", path=environment["PATH"]) is None
-    else:
-        tools = {
-            "sh",
-            "curl",
-            "git",
-            "cat",
-            "mktemp",
-            "rm",
-            "dirname",
-            "pwd",
-            "uname",
-            "mkdir",
-            "chmod",
-            "mv",
-            "tar",
-            "rmdir",
-            "grep",
-            "cut",
-            "tr",
-            "head",
-            "sed",
-            "sleep",
-            "cp",
-            "ln",
-            "realpath",
-            "awk",
-            "sort",
-            "wc",
-            "basename",
-            "sha256sum",
-            "ldd",
-        }
-        path = tmp_path / "official-bootstrap-path"
-        path.mkdir()
-        for name in tools:
-            executable = shutil.which(name)
-            if executable is None:
-                pytest.fail(f"Official uv bootstrap smoke requires {name}.")
-            (path / name).symlink_to(executable)
-        for name in (
-            "sysctl",
-            "sw_vers",
-            "tail",
-            "gzip",
-            "install",
-            "which",
-            "getconf",
-        ):
-            executable = shutil.which(name)
-            if executable is not None:
-                (path / name).symlink_to(executable)
-        if os.environ.get("INSTALLER_SMOKE_CLIENT", "curl") == "gh":
-            support = tmp_path / "transport-client"
-            shutil.copy2(support / "gh", path / "gh")
-            shutil.copy2(support / "gh.py", path / "gh.py")
-            (path / "gh").chmod(0o700)
-        environment["PATH"] = str(path)
-        assert shutil.which("uv", path=environment["PATH"]) is None
-        assert shutil.which("python", path=environment["PATH"]) is None
-        assert shutil.which("python3", path=environment["PATH"]) is None
-    return environment, persistent_uv
-
-
-def test_official_uv_bootstrap_installs_without_initial_python_or_uv(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Bootstrap the official uv binary, then complete a real main-source install."""
-    monkeypatch.setenv("INSTALLER_SMOKE_CLIENT", "curl")
-    commit = _smoke_commit()
-    fixture = _source_fixture(tmp_path, commit)
-    try:
-        environment, selected_uv = _official_uv_environment(tmp_path, fixture)
-        entrypoint = ROOT / (
-            "app-install.cmd" if os.name == "nt" else "app-install.sh"
-        )
-        _install_and_assert(
-            fixture,
-            environment,
-            mode="main",
-            entrypoint=entrypoint,
-            windows_cmd=os.name == "nt",
-            expected_uv=selected_uv,
-        )
-        assert selected_uv.is_file()
     finally:
         fixture.close()

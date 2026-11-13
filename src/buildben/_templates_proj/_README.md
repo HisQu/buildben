@@ -136,43 +136,42 @@ The installer uses Python 3.12 or newer through `uv`. If `uv` is not available,
 it installs the official user-scoped `uv` executable and lets `uv` provision a
 compatible Python; no system Python or administrator access is required.
 
+The managed application environment uses Python 3.13, selected by
+`tool.apprc.distribution.runtime-python` in `pyproject.toml`. This is separate
+from `project.requires-python`, which describes package-install compatibility
+(the scaffold defaults to `>=3.12`). PyApp's bootstrap uses Python 3.14; it does
+not determine the Python version used by the installed application.
+
 <br>
 
 ## Install a release
 
-The generated release-mode native entry can run by itself. It acquires and
-verifies the matching source and release manifest; adjacent manifest and
-`main-installer.py` files are not required. Downloading the complete release
-asset set is an optional workflow when you want to inspect or retain those
-assets locally.
+The release contains native installers and launchers for Linux and Windows.
+Download the exact release inventory, including its manifest, before running
+the platform installer:
 
 ```shell
 gh release download vX.Y.Z --repo <github_username>/<my_project>
-./app-install.sh
+./<my_project>-install-linux-x86_64
 ```
 
-On Windows, run the downloaded `app-install.cmd` instead:
+On Windows, run `<my_project>-install-windows-x86_64.exe`. Windows native
+runtime validation remains deferred; do not treat cross-compilation as runtime
+proof.
 
-```powershell
-gh release download vX.Y.Z --repo <github_username>/<my_project>
-.\app-install.cmd
-```
-
-The default source selection installs the pinned source archive. `--version
-X.Y.Z` selects a specific published release, and `--main` resolves the
+With no selector, a downloaded native entry installs the exact authenticated
+runtime embedded in that release; it does not move to the latest release.
+`--version X.Y.Z` selects a published release, and `--main` resolves the
 repository's current `main` to one immutable commit for that invocation. These
 choices cannot be combined. `--github-client gh` selects authenticated GitHub
-CLI downloads; public downloads do not inherit GitHub CLI credentials. Private
-VCS dependencies separately require Git credentials. Windows installation
-does not require administrator privileges.
+CLI downloads; public downloads do not inherit GitHub CLI credentials.
 
-For a source checkout, first generate its local AppRC artifacts with
-`just make-artifacts`, then use `./app-install.sh` or `.\app-install.cmd`.
-`just check-artifacts` verifies tracked output without rewriting it. A missing
-checkout payload reports the generation command; it never fetches a replacement
-from a remote repository.
-These authoring recipes use uv's locked project environment; an activated virtual
-environment or direnv is not required.
+From a source checkout, generate its ordinary Python artifacts with
+`just make-artifacts`, then run `python app-install.py` and `python
+app-launch.py`. These commands use the checkout root recorded by the SDK,
+independent of the caller's working directory. `just check-artifacts` verifies
+tracked outputs without invoking Rust or rewriting files. Native compilation
+is a separate release-authoring operation.
 
 The installer offers native or single-root resource placement when the
 application declares resource capabilities. Use `--layout native` for native
@@ -196,18 +195,11 @@ uv sync --locked --all-extras --all-groups
 just make-artifacts
 ```
 
-On Linux and macOS, run:
+Run the generated developer entries from the checkout:
 
 ```shell
-./app-install.sh --layout native
-{my_project} launcher
-```
-
-On Windows, run:
-
-```powershell
-.\app-install.cmd --layout native
-{my_project} launcher
+python app-install.py --layout native
+python app-launch.py
 ```
 
 The checkout install is editable and uses the actual project files, including

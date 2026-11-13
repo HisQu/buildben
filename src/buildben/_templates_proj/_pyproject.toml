@@ -54,14 +54,11 @@ Repository = "https://github.com/<github_username>/<my_project>.git"
 #   python -m pip install -e ".[rag]"
 #   uv sync --locked --all-extras --no-default-groups
 #
-# [project.optional-dependencies]
-# rag = [
-#     # "huggingface-hub",  # < Hugging Face model/data downloads
-#     # "openai",           # < OpenAI API client
-#     # "tiktoken",         # < Token counting for OpenAI-compatible models
-#     # "scikit-learn",     # < Vectorizers, metrics, and classical ML helpers
-#     # "torch",            # < Heavy tensor/ML runtime
-# ]
+[project.optional-dependencies]
+gui = [
+    "apprc-gui @ git+https://github.com/HisQu/apprc.git@785e0407136230a8a26eae273e6aed20d148e4cc#subdirectory=src/apprc_dev/packaging/gui",
+]
+
 
 
 # =====================================================================
@@ -101,7 +98,6 @@ dev = [
     # --- IO -----------------------------
     # "sacred",        # < Experiment management
 ]
-gui = ["apprc-gui @ git+https://github.com/HisQu/apprc.git@785e0407136230a8a26eae273e6aed20d148e4cc#subdirectory=src/apprc_dev/packaging/gui"]
 
 # =====================================================================
 # === Packaging
@@ -132,6 +128,8 @@ apprc-reference = "<my_project>.config.app:APP_RC"
 project-path = "."
 distribution-path = "src/<my_project>_distr"
 launcher-command = "<my_project>"
+bundle-repositories = ["https://github.com/HisQu/apprc"]
+runtime-python = "3.13"
 # === Include data *outside* the package (e.g. top-level docs/) ====
 # > Installs into <sys.prefix>/share/<my_project>
 # !! Requires a MANIFEST.in! 
@@ -166,6 +164,8 @@ exclude = [
     "tests", # < Tests may be dirty.
     "**/*_distr/artifacts",
     "**/*_distr/payload/app_lifecycle/_support",
+    "app-install.py",
+    "app-launch.py",
     "**/example_data",
     "**/old",
     "**/__pycache__",
@@ -182,6 +182,8 @@ line-length = 80
 extend-exclude = [
     "**/*_distr/artifacts",
     "**/*_distr/payload/app_lifecycle/_support",
+    "app-install.py",
+    "app-launch.py",
 ]
 # unsafe-fixes = true
 

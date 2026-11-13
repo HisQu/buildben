@@ -25,40 +25,38 @@ name. Replace demonstration paths with your chosen directories for actual use.
 
 ## Install a release
 
-Download one release's exact assets, then run its native entry point:
+Download the exact release assets, including the manifest, then run the native
+installer for your platform:
 
 ```shell
 gh release download vX.Y.Z --repo <github_username>/<my_project>
-./app-install.sh
+./<my_project>-install-linux-x86_64
 ```
 
-On Windows, run `.\app-install.cmd`. The release-mode native installer can
-locate and verify its matching release assets without requiring an adjacent
-`release-manifest.json` or `main-installer.py` beside the wrapper.
+On Windows, run `<my_project>-install-windows-x86_64.exe`. Cross-compilation is
+not Windows runtime validation; use the independent native Windows release
+canary before relying on that entry.
 
-The default release selection installs the pinned source archive.
-`--version X.Y.Z` selects one published version; `--main` resolves remote
-`main` to a full immutable commit for that invocation. These options cannot be
-combined. `--github-client gh` requests authenticated GitHub transport without
-anonymous fallback. Private VCS dependencies separately need Git credentials.
+The bundled runtime is the default source. `--version X.Y.Z` selects one
+published version; `--main` resolves remote `main` to a full immutable commit
+for that invocation. These options cannot be combined. `--github-client gh`
+requests authenticated GitHub transport without anonymous fallback.
 
 ## Install from a checkout
 
-The checkout installer uses the actual local project files, including dirty
-changes. First prepare the locked development environment and generated SDK
-payload:
+The Python developer installer uses the actual local project files, including
+uncommitted changes. Prepare the locked development environment and ordinary
+generated AppRC payload:
 
 ```shell
 uv sync --locked --all-extras --all-groups
 just make-artifacts
 ```
 
-Then run `./app-install.sh --layout native` on Linux or macOS, or
-`.\app-install.cmd --layout native` on Windows. Use
-`--layout single-root --root ABSOLUTE_PATH` to select a single-root resource
-layout. Reinstallation keeps its recorded absolute placement unless explicitly
-overridden. `just check-artifacts` checks tracked generated files without
-rewriting them.
+Run `python app-install.py --layout native`, then `python app-launch.py`.
+`just check-artifacts` checks the generated Python entries and support files
+without invoking Rust or rewriting them. Native compilation is performed only
+by the explicit release-staging recipe.
 
 ## Run the first command
 

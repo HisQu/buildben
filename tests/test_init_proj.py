@@ -484,10 +484,8 @@ def bube_test_project(
                 *(
                     proot / name
                     for name in (
-                        "app-install.sh",
-                        "app-install.cmd",
-                        "app-launch.sh",
-                        "app-launch.cmd",
+                        "app-install.py",
+                        "app-launch.py",
                         "app-uninstall.sh",
                         "app-uninstall.cmd",
                     )
@@ -1404,10 +1402,8 @@ def test_scaffolded_project_builds_without_missing_readme_warning(
     assert all(
         any(name.endswith(f"/{wrapper}") for name in names)
         for wrapper in (
-            "app-install.sh",
-            "app-install.cmd",
-            "app-launch.sh",
-            "app-launch.cmd",
+            "app-install.py",
+            "app-launch.py",
             "app-uninstall.sh",
             "app-uninstall.cmd",
         )

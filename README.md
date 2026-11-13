@@ -119,14 +119,14 @@ python -m pip install -e "."    # venv recommended
 > publishes neither Buildben nor AppRC. Use the checkout entries below to test
 > changes that are not in the latest release.
 
-From a complete checkout, run the local project entry:
+From a complete checkout, run the Python developer entry:
 
 ```sh
-./app-install.sh
+python app-install.py
 ```
 
 ```powershell
-.\app-install.cmd
+python app-install.py
 ```
 
 This installs the actual editable application project, including dirty local
@@ -136,30 +136,25 @@ with downloaded code. If tracked artifacts are missing/stale, the author runs
 Ordinary `python -m pip install -e .` remains supported and unmanaged by this
 uv-tool lifecycle.
 
-Once matching release assets have been published, the explicitly release-mode
-native entry is usable by itself. Download it into a separate working directory:
+Published releases contain a strict integrity manifest, the wheel and original
+source archive, four SDK-built native frontends (`buildben-install-*` and
+`buildben-launch-*` for Linux x86-64 and Windows x86-64), and the standalone
+Python installer payload. Download the native frontend for the host platform;
+it carries the exact authored installer and verifies the matching source
+archive before installation. The manifest binds every asset to its size,
+digest, version, and immutable source commit. Do not combine assets from
+different releases.
 
-```sh
-curl -fL --output app-install.sh \
-  https://github.com/HisQu/buildben/releases/latest/download/app-install.sh
-chmod u+x app-install.sh
-./app-install.sh
-```
-
-```powershell
-Invoke-WebRequest -Uri 'https://github.com/HisQu/buildben/releases/latest/download/app-install.cmd' -OutFile app-install.cmd
-.\app-install.cmd
-```
-
-Release mode selects one matching installer/package identity and validates its
-manifest and exact source digest. It must not independently combine a newer
-installer with an older package. A raw checkout wrapper is not a standalone
-release asset: downloading just that wrapper cannot supply its local payload.
+The root `app-install.sh` and `app-install.cmd` frontends are no longer
+generated. The saved Windows `launch.cmd` and `launch.ps1` support remain
+available for launching an installed application. Ordinary
+`python -m pip install -e .` also remains supported and unmanaged by this
+uv-tool lifecycle.
 
 | Selection | Installer behavior |
 | --- | --- |
 | Complete checkout, no source override | Install the actual local project editable. |
-| Release-native entry, no source override | Install the latest published stable source distribution. |
+| Downloaded release-native entry, no source override | Install the exact release embedded in that entry. |
 | `--version X.Y.Z` | Install the selected published stable release. |
 | `--main` | Resolve remote main once and install that captured commit's matching source/runtime inputs. |
 
@@ -173,6 +168,7 @@ and private VCS dependencies still need Git authentication.
 For an AppRC application, first installation offers OS-native versus single-root
 placement, displays exact enabled resource paths, and explains the distinction:
 
+
 - **Application resources:** config, persistent appdata, disposable cache and
   operational state, only when individually declared by the application.
 - **Program environment:** Python, the uv-managed virtual environment and its
@@ -183,12 +179,12 @@ placement, displays exact enabled resource paths, and explains the distinction:
 Reinstallation keeps saved placement unless explicitly switched:
 
 ```sh
-./app-install.sh --layout native
-./app-install.sh --layout single-root --root "/absolute/path/application-files"
+python app-install.py --layout native
+python app-install.py --layout single-root --root "/absolute/path/application-files"
 ```
 
 ```powershell
-.\app-install.cmd --layout single-root --root 'D:\ApplicationFiles'
+python app-install.py --layout single-root --root 'D:\ApplicationFiles'
 ```
 
 `--root` is valid only with single-root and must be absolute; native accepts no
@@ -208,10 +204,16 @@ Its durable `installation.json` and current-platform support use:
 
 The source generator lives in `src/buildben_distr/`; generated applications own
 the corresponding `<app>_distr` package. Its ordinary-Python payload controls
-project setup/cleanup while reusing AppRC's shared runtime. Run `app-launch.sh`
-or `app-launch.cmd` to invoke saved application launch support; launch never
+project setup/cleanup while reusing AppRC's shared runtime. The saved Windows
+`launch.cmd` and `launch.ps1` invoke application launch support; launch never
 installs/syncs an environment. Buildben launches its direct CLI, while generated
 AppRC applications expose their installed Textual `launcher` command.
+
+Managed application environments use Python 3.13, selected by
+`tool.apprc.distribution.runtime-python`. This runtime choice is independent of
+`project.requires-python` (`>=3.12` here), which describes which interpreters
+may install the package. The PyApp bootstrap itself uses Python 3.14; that
+bootstrap version does not change the managed application's runtime.
 
 ### Authoring lifecycle artifacts
 
@@ -234,10 +236,17 @@ an end user's launch should regenerate artifacts or fetch missing checkout code.
 
 The artifact authoring and staging recipes select the locked project environment
 through uv. They do not require an activated virtual environment or direnv.
+`just stage-release-assets TAG COMMIT` is the explicit release-only native
+producer: it consumes the already-built wheel and original source archive, then
+uses the pinned AppRC SDK to build Linux and Windows x86-64 installer/launcher
+frontends. Linux native authoring requires Rust, LLVM/Clang/LLD, and pinned
+`cargo-xwin`; the release workflow installs these tools. Ordinary
+`just make-artifacts` and `just check-artifacts` remain Rust-free.
 
-Before publication, the development sources and tool-install runtime overrides
-must point to the same immutable AppRC commit; a uv development source alone
-does not control the installed application's dependencies.
+Buildben keeps `[project].dependencies` empty so ordinary Python installation
+does not acquire application runtime dependencies. Release staging does not
+replace that policy with hand-authored `DistributionSpec.runtime_requirements`
+or `runtime_overrides`.
 
 Generated AppRC applications group management commands in the **Maintenance**
 help panel instead of mixing them with business commands. Use `<app> --help`,
@@ -255,10 +264,11 @@ maintained and scaffolded CI workflows run only on Linux with Python 3.12 and
 
 For that Windows pass, restore a `windows-latest` case in the
 [`installation` CI job](.github/workflows/ci.yml). Extend the existing
-[release-install tests](tests/test_release_install.py), not copied installer
-functions or a separate harness. Exercise the real installer through the native
-`.cmd` entry and PowerShell helper, including file execution with `-File` and
-downloaded-text `ScriptBlock.Create` invocation.
+`tests/test_release_install.py`, not copied installer functions or a separate
+harness. On the separately authorized native Windows runner, exercise the real
+native `.exe` installer frontend and retained saved `launch.cmd` and
+`launch.ps1` paths. Windows executable compilation and header inspection on Linux
+do not establish native Windows behavior.
 
 On the native Windows runner, run:
 
@@ -374,13 +384,13 @@ program is removed and its resources are preserved, install the current
 checkout as a fresh installation:
 
 ```sh
-./app-install.sh --layout native
+python app-install.py --layout native
 ```
 
-Use `app-install.cmd` on Windows. Current installation authority does not
-recognize schema-1 receipts or recover their operations. The unmanaged editable
-pip and uv tool removal guidance below applies only when no managed installation
-authority exists.
+Use `python app-install.py --layout native` on Windows as well. Current
+installation authority does not recognize schema-1 receipts or recover their
+operations. The unmanaged editable pip and uv tool removal guidance below
+applies only when no managed installation authority exists.
 
 For an unmanaged editable pip installation, use that environment's
 `python -m pip uninstall buildben`. For a manually installed uv tool without
@@ -524,6 +534,19 @@ verification:
 uv run --locked python -m pytest tests/test_init_proj.py tests/test_lifecycle.py
 ```
 
+
+The default test suite skips the opt-in native release canary and remains
+Rust-free. On Linux, run the canary serially with Rust, LLVM/Clang/LLD, and the
+locked `cargo-xwin` toolchain:
+
+```sh
+APPRC_TEST_PYAPP=1 uv run --locked python -m pytest -n 0 tests/test_release_install.py -k generated_native_release_install
+```
+
+For a local AppRC SDK checkout, optionally set `APPRC_TEST_SDK_SOURCE` to its
+path and `APPRC_TEST_SDK_REVISION` to its full commit before the command. The
+canary builds and exercises the staged Linux executable; it does not establish
+Windows runtime behavior.
 When working against a local AppRC source change, provide its matching local
 packages through the repository's existing test environment; do not replace the
 immutable generated-project source pins with a released-version range.

@@ -106,6 +106,14 @@ buildben = "buildben.cli:main"
 bube = "buildben.cli:main"
 
 
+
+# -- AppRC source and native-bundle authoring identity.
+[tool.apprc.distribution]
+app-id = "buildben"
+project-path = "."
+distribution-path = "src/buildben_distr"
+launcher-command = "bube"
+runtime-python = "3.13"
 # =====================================================================
 # === Tool configurations
 # =====================================================================
