@@ -34,8 +34,7 @@
 | [config/sections/app.py](../src/{my_project}/config/sections/app.py) | The `AppSettings` [config section](Explanations.md#config-sections). |
 | [config/bundle.py](../src/{my_project}/config/bundle.py) | The application's [config bundle](Explanations.md#config-bundle). |
 | [`{my_project}_distr`](../src/{my_project}_distr) | Authored lifecycle payload, generator, and SDK-produced management artifacts. |
-| `app-install.sh` / `app-install.cmd` | Root install wrappers for POSIX and Windows. |
-| `app-launch.sh` / `app-launch.cmd` | Root launch wrappers for POSIX and Windows. |
+| `app-install.py` / `app-launch.py` | Root Python developer entries for install and saved launch. |
 | `app-uninstall.sh` / `app-uninstall.cmd` | Root uninstall wrappers for POSIX and Windows. |
 | [tests](../tests) | Automated checks. |
 | [examples](../examples) | Small user-facing programs, described in [Examples](EXAMPLES.md). |
@@ -69,38 +68,37 @@ show, doctor, dry-run, or repair management.
 `src/{my_project}_distr/make_artifacts.py` composes the authored lifecycle
 payload with AppRC's deterministic generator. Run `just make-artifacts` after
 editing it, and `just check-artifacts` to check tracked files without rewriting
-them. The application wheel excludes `{my_project}_distr`; the source archive
-includes the generator, payload, generated artifacts, and six root wrappers.
+includes the generator, payload, and generated artifacts.
 
 | Path | Purpose |
 | --- | --- |
-| `app-install.sh`, `app-install.cmd` | Install a checkout or selected release source. |
-| `app-launch.sh`, `app-launch.cmd` | Launch the recorded installed command without environment recreation. |
+| `app-install.py` | Rust-free Python developer entry for checkout or remote source selection. |
+| `app-launch.py` | Python dispatch to AppRC's saved launch management program. |
 | `app-uninstall.sh`, `app-uninstall.cmd` | Invoke the saved authored uninstallation procedure. |
 | `src/{my_project}_distr/payload/app_lifecycle/install.py` | Repository-owned source acquisition and installation composition. |
 | `src/{my_project}_distr/payload/app_lifecycle/uninstall.py` | Repository-owned uninstall preview and handoff composition. |
-| `src/{my_project}_distr/artifacts/` | SDK-generated checkout payload; PowerShell remains under this tree. |
+| `src/{my_project}_distr/artifacts/` | SDK-generated support tree, including retained Windows wrappers. |
 
-The default source is the current checkout when a local wrapper is used and the
-published release source when a release wrapper is used. `--version X.Y.Z`
-selects one published release. `--main` resolves remote `main` once to a full
-commit identity. `--github-client gh` selects authenticated GitHub CLI transport;
-it does not change source selection. For declared resource capabilities,
-choose `--layout native` or `--layout single-root --root ABSOLUTE_PATH`. A
-reinstall reuses saved absolute resource paths unless layout is explicitly
-overridden.
+The Python developer entry uses the current checkout; native release installers
+use the authenticated bundled runtime by default. `--version X.Y.Z` selects a
+published release, while `--main` resolves remote `main` once to a full commit.
+`--github-client gh` selects authenticated GitHub CLI transport. For declared
+resource capabilities, choose `--layout native` or
+`--layout single-root --root ABSOLUTE_PATH`. A reinstall reuses saved absolute
+resource paths unless layout is explicitly overridden.
 
 An operating-system temporary directory may itself be a platform alias. The
-installer resolves its private staging directory and read-only bootstrap package
+installer resolves its private staging directory and authenticated payload
 transport paths before AppRC validation. Source identity and digest checks stay
 unchanged; this does not allow symlinks in installation metadata or managed
 application-resource paths.
 
 Release preparation uses `just check-artifacts`, builds one validated wheel
 and sdist, then runs `just stage-release-assets TAG FULL_COMMIT`. The helper
-stages only the exact package pair and SDK-generated script entries in
-`release/assets` and delegates manifest creation to the strict release asset
-contract. Package builds do not generate artifacts or access the network.
+stages the exact package pair, four SDK-generated native executables, and the
+original Python installer payload in `release/assets`, then delegates
+manifest creation to the strict release asset contract. Package builds do not
+generate artifacts or access the network.
 
 ## Uninstaller reference
 

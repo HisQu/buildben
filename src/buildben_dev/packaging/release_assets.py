@@ -409,6 +409,7 @@ def _check_asset_names(names: list[str]) -> tuple[str, ...]:
     try:
         return expected_asset_names(
             names,
+            app_id=_project_app_id(_project()[0]),
             payload_format="zipapp" if "main-installer.pyz" in names else "script",
         )
     except ValueError as error:
@@ -478,7 +479,11 @@ def stage(
         raise ReleaseError("Project version does not match the release tag.")
     complete = [*names, MANIFEST_NAME]
     try:
-        expected_asset_names(complete, payload_format=payload_format)
+        expected_asset_names(
+            complete,
+            app_id=_project_app_id(name),
+            payload_format=payload_format,
+        )
         if {entry.name for entry in directory.iterdir()} - set(complete):
             raise ReleaseError("Staging directory contains unexpected release files.")
         payload = {}

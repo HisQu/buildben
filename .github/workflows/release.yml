@@ -121,6 +121,15 @@ jobs:
         run: just build-release-inputs release/release-notes.md
       - name: Smoke the built wheel once on Python 3.12
         run: just release-wheel-smoke
+      - name: Install Linux native cross-compilation toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - name: Install LLVM cross-linker tools and pinned cargo-xwin
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang llvm lld
+          cargo install cargo-xwin --version 0.23.1 --locked
       - name: Stage release-native entries and integrity manifest
         run: just stage-release-assets "$GITHUB_REF_NAME" "$GITHUB_SHA"
       - name: Upload the exact verified release asset set

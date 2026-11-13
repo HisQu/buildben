@@ -14,14 +14,12 @@ from apprc.distribution import (
     DistributionSpec,
     PayloadTree,
     generate_artifacts,
-    inspect_capabilities,
     install_support_files,
+    inspect_capabilities,
     read_project_metadata,
     write_artifacts,
 )
 from apprc.distribution.models import ProjectMetadata
-
-APPRC_COMMIT = "785e0407136230a8a26eae273e6aed20d148e4cc"
 
 
 def _payload(root: Path, metadata: ProjectMetadata) -> PayloadTree:
@@ -35,35 +33,14 @@ def _payload(root: Path, metadata: ProjectMetadata) -> PayloadTree:
 
 
 def distribution_spec(root: Path, metadata: ProjectMetadata) -> DistributionSpec:
-    """Build the sole source of distribution identity and runtime inputs."""
+    """Build application identity and capabilities without runtime overrides."""
     settings = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
     project = cast(dict[str, object], settings["project"])
     capabilities = AppCapabilities()
-    runtime_overrides: tuple[str, ...] = ()
     if metadata.identity.apprc_reference is not None:
         module_name, object_name = metadata.identity.apprc_reference.split(":", 1)
         declaration = getattr(importlib.import_module(module_name), object_name)
         capabilities = inspect_capabilities(declaration)
-        runtime_overrides = (
-            f"apprc-core @ git+https://github.com/HisQu/apprc.git@{APPRC_COMMIT}",
-            "apprc @ git+https://github.com/HisQu/apprc.git"
-            f"@{APPRC_COMMIT}#subdirectory=src/apprc_dev/packaging/terminal",
-        )
-        declared_dependencies = project.get("dependencies", [])
-        if isinstance(declared_dependencies, list) and any(
-            isinstance(requirement, str) and "apprc-gui" in requirement
-            for requirement in declared_dependencies
-        ):
-            runtime_overrides = (
-                *runtime_overrides,
-                "apprc-gui @ git+https://github.com/HisQu/apprc.git"
-                f"@{APPRC_COMMIT}#subdirectory=src/apprc_dev/packaging/gui",
-            )
-    dependencies = project.get("dependencies", [])
-    if not isinstance(dependencies, list) or not all(
-        isinstance(requirement, str) for requirement in dependencies
-    ):
-        raise ValueError("Project dependencies must be a list of requirement strings.")
     urls = project.get("urls", {})
     repository = urls.get("Repository") if isinstance(urls, dict) else None
     if repository is None and metadata.identity.distribution == "buildben":
@@ -72,8 +49,6 @@ def distribution_spec(root: Path, metadata: ProjectMetadata) -> DistributionSpec
         metadata=metadata,
         capabilities=capabilities,
         repository_url=repository,
-        runtime_requirements=tuple(dependencies),
-        runtime_overrides=runtime_overrides,
     )
 
 

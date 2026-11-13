@@ -20,8 +20,6 @@ from apprc.distribution import (
 )
 from apprc.distribution.models import ProjectMetadata
 
-APPRC_COMMIT = "785e0407136230a8a26eae273e6aed20d148e4cc"
-
 
 def _payload(root: Path, metadata: ProjectMetadata) -> PayloadTree:
     return PayloadTree(
@@ -41,7 +39,7 @@ def _payload(root: Path, metadata: ProjectMetadata) -> PayloadTree:
 def distribution_spec(
     root: Path, metadata: ProjectMetadata
 ) -> DistributionSpec:
-    """Build the sole source of distribution identity and runtime inputs."""
+    """Build the AppRC source identity without native build configuration."""
     if metadata.identity.apprc_reference is None:
         raise ValueError("tool.apprc.distribution.apprc-reference is required")
     settings = tomllib.loads(
@@ -50,38 +48,12 @@ def distribution_spec(
     project = cast(dict[str, object], settings["project"])
     module_name, object_name = metadata.identity.apprc_reference.split(":", 1)
     declaration = getattr(importlib.import_module(module_name), object_name)
-    capabilities = inspect_capabilities(declaration)
-    declared_dependencies = project.get("dependencies", [])
-    gui_declared = isinstance(declared_dependencies, list) and any(
-        isinstance(requirement, str) and "apprc-gui" in requirement
-        for requirement in declared_dependencies
-    )
-    runtime_overrides = (
-        f"apprc-core @ git+https://github.com/HisQu/apprc.git@{APPRC_COMMIT}",
-        "apprc @ git+https://github.com/HisQu/apprc.git"
-        f"@{APPRC_COMMIT}#subdirectory=src/apprc_dev/packaging/terminal",
-    )
-    if gui_declared:
-        runtime_overrides = (
-            *runtime_overrides,
-            "apprc-gui @ git+https://github.com/HisQu/apprc.git"
-            f"@{APPRC_COMMIT}#subdirectory=src/apprc_dev/packaging/gui",
-        )
-    dependencies = project.get("dependencies", [])
-    if not isinstance(dependencies, list) or not all(
-        isinstance(requirement, str) for requirement in dependencies
-    ):
-        raise ValueError(
-            "Project dependencies must be a list of requirement strings."
-        )
     urls = project.get("urls", {})
     repository = urls.get("Repository") if isinstance(urls, dict) else None
     return DistributionSpec(
         metadata=metadata,
-        capabilities=capabilities,
+        capabilities=inspect_capabilities(declaration),
         repository_url=repository,
-        runtime_requirements=tuple(dependencies),
-        runtime_overrides=runtime_overrides,
     )
 
 

@@ -1,142 +1,520 @@
-"""Real AppRC-generated source-installer consumer tests."""
+"""Generated Python-entry and opt-in native release consumer coverage."""
 
 from __future__ import annotations
 
 import argparse
-import dataclasses
+import hashlib
 import json
 import os
+import re
 import shutil
+import struct
 import subprocess
 import sys
+import tarfile
+import time
 import tomllib
-import venv
-from pathlib import Path, PurePosixPath
+import zipfile
+from pathlib import Path
 
 import pytest
-from apprc.distribution import (
-    PayloadTree,
-    build_main_installer,
-    install_support_files,
-    read_project_metadata,
-    render_bootstraps,
+from support_native_release import (
+    disk_bytes,
+    pin_fixture_sdk,
+    sdk_authoring_environment,
 )
-from apprc.distribution.models import DistributionSpec, ProjectMetadata
-from apprc.distribution.standalone import MANAGEMENT_REQUIREMENTS
-from buildben_distr.make_artifacts import distribution_spec
-from buildben_dev.packaging import release_stage
-from buildben_dev.packaging.release_stage import _locked_runtime_requirements
-from support_source_transport.server import SourceFixture
 
 
-ROOT = Path(__file__).resolve().parents[1]
-REPOSITORY = "https://github.com/HisQu/buildben.git"
+def _assert_windows_console_pe(path: Path) -> None:
+    """Check a cross-compiled Windows executable's PE64 AMD64 console header."""
+    content = path.read_bytes()
+    assert content[:2] == b"MZ"
+    pe_offset = struct.unpack_from("<I", content, 0x3C)[0]
+    assert content[pe_offset : pe_offset + 4] == b"PE\0\0"
+    assert struct.unpack_from("<H", content, pe_offset + 4)[0] == 0x8664
+    optional_header = pe_offset + 24
+    assert struct.unpack_from("<H", content, optional_header)[0] == 0x20B
+    assert struct.unpack_from("<H", content, optional_header + 68)[0] == 3
 
 
-def test_zipapp_release_staging_uses_generated_payload_contract(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    generated_remote_consumer: Path,
-) -> None:
-    """Stage a real generated consumer using its authored zipapp specification."""
-
-    source_root = generated_remote_consumer
-    root = tmp_path / "zipapp-consumer"
-
-    def ignore_generated(_directory: str, names: list[str]) -> set[str]:
-        return {name for name in names if name in {".venv", "__pycache__", "release"}}
-
-    shutil.copytree(source_root, root, ignore=ignore_generated)
-    monkeypatch.syspath_prepend(str(root / "src"))
-    original_spec = distribution_spec
-
-    def zipapp_spec(project_root: Path, metadata: ProjectMetadata) -> DistributionSpec:
-        return dataclasses.replace(
-            original_spec(project_root, metadata),
-            payload_format="zipapp",
-        )
-
-    monkeypatch.setattr(release_stage, "distribution_spec", zipapp_spec)
-    monkeypatch.chdir(root)
-    version = read_project_metadata(root).version
-    commit = "b" * 40
-    release_stage.stage_release(f"v{version}", commit, root=root)
-
-    assets = root / "release" / "assets"
-    names = {path.name for path in assets.iterdir()}
-    assert "main-installer.pyz" in names
-    assert "main-installer-requirements.txt" in names
-    assert "main-installer.py" not in names
-    manifest = json.loads((assets / "release-manifest.json").read_text("utf-8"))
-    assert manifest["payload_format"] == "zipapp"
-    assert manifest["commit"] == commit
-    requirements = assets / "main-installer-requirements.txt"
-    assert requirements.read_text(encoding="utf-8") == "".join(
-        requirement + "\n" for requirement in MANAGEMENT_REQUIREMENTS
+def _run(
+    command: list[str], *, cwd: Path, environment: dict[str, str]
+) -> subprocess.CompletedProcess[str]:
+    """Run one generated-project command and retain its diagnostics."""
+    return subprocess.run(
+        command,
+        cwd=cwd,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
     )
-    installer = assets / "app-install.sh"
-    assert os.name == "nt" or installer.stat().st_mode & 0o111
 
 
-def _main_installer(directory: Path, commit: str, project_root: Path = ROOT) -> Path:
-    """Use AppRC's actual standalone generator for an immutable main identity."""
-    metadata = read_project_metadata(project_root)
-    spec = distribution_spec(project_root, metadata)
-    spec = dataclasses.replace(
-        spec,
-        source_mode="main",
-        release_commit=commit,
-        runtime_requirements=tuple(
-            dict.fromkeys(
+@pytest.fixture(scope="session")
+def native_generated_consumer(
+    tmp_path_factory: pytest.TempPathFactory,
+    request: pytest.FixtureRequest,
+) -> tuple[str, Path, Path]:
+    """Generate and genuinely release-build the current native consumer template."""
+    if os.environ.get("APPRC_TEST_PYAPP") != "1":
+        pytest.skip("Set APPRC_TEST_PYAPP=1 to build native generated consumers.")
+    if hasattr(request.config, "workerinput"):
+        pytest.fail("Run the opt-in native release canary serially with pytest -n 0.")
+    if not sys.platform.startswith("linux"):
+        pytest.skip("Native generated consumer execution is Linux-only.")
+    import buildben.init_proj as scaffolder
+
+    destination = tmp_path_factory.mktemp("generated-native-release")
+    name = "native_consumer"
+
+    scaffolder._run(
+        argparse.Namespace(
+            name=name,
+            target_dir=str(destination),
+            git_init=False,
+            github_user="fixture-owner",
+            frontend=None,
+        )
+    )
+    root = destination / name
+    environment, sdk_revision, sdk_version = sdk_authoring_environment(root)
+
+    pin_fixture_sdk(root, sdk_revision)
+    repository_source = Path(__file__).resolve().parents[1] / "src"
+    sdk_source = os.environ.get("APPRC_TEST_SDK_SOURCE")
+    environment["PYTHONPATH"] = os.pathsep.join(
+        item
+        for item in (
+            str(Path(sdk_source).resolve() / "src") if sdk_source else "",
+            str(root / "src"),
+            str(repository_source),
+        )
+        if item
+    )
+    uv = shutil.which("uv")
+    if uv is None:
+        pytest.skip(
+            "The native generated consumer requires the existing uv executable."
+        )
+    environment["UV"] = str(Path(uv).resolve())
+    for command in (
+        [sys.executable, "-m", f"{name}_distr.make_artifacts"],
+        [sys.executable, "-m", f"{name}_distr.make_artifacts", "--check"],
+        ["uv", "lock"],
+        ["uv", "build", "--wheel", "--sdist", "--out-dir", str(root / "dist")],
+        ["git", "init", "--initial-branch=main"],
+        ["git", "config", "user.name", "AppRC generated native test"],
+        ["git", "config", "user.email", "apprc-native-test@example.invalid"],
+        ["git", "config", "commit.gpgsign", "false"],
+        ["git", "add", "--all"],
+        ["git", "commit", "-m", "Generated native release fixture"],
+    ):
+        result = _run(command, cwd=root, environment=environment)
+        assert result.returncode == 0, result.stdout + result.stderr
+    commit_result = _run(
+        ["git", "rev-parse", "HEAD"], cwd=root, environment=environment
+    )
+    assert commit_result.returncode == 0, commit_result.stderr
+    commit = commit_result.stdout.strip()
+    assert re.fullmatch(r"[0-9a-f]{40}", commit)
+    metadata = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    version = metadata["project"]["version"]
+    staged = _run(
+        [
+            sys.executable,
+            "-m",
+            f"{name}_dev.packaging.release_stage",
+            f"v{version}",
+            commit,
+            "--repository",
+            f"fixture-owner/{name}",
+            "--extra",
+            "gui",
+        ],
+        cwd=root,
+        environment=environment,
+    )
+    assert staged.returncode == 0, staged.stdout + staged.stderr
+    assets = root / "release" / "assets"
+    native_names = (
+        f"{name}-install-linux-x86_64",
+        f"{name}-install-windows-x86_64.exe",
+        f"{name}-launch-linux-x86_64",
+        f"{name}-launch-windows-x86_64.exe",
+    )
+    for filename in (native_names[1], native_names[3]):
+        _assert_windows_console_pe(assets / filename)
+    manifest = json.loads(
+        (assets / "release-manifest.json").read_text(encoding="utf-8")
+    )
+    assert manifest["commit"] == commit
+    assert manifest["version"] == version
+    recorded = {item["filename"]: item for item in manifest["assets"]}
+    for filename in native_names:
+        content = (assets / filename).read_bytes()
+        assert recorded[filename]["sha256"] == hashlib.sha256(content).hexdigest()
+        assert recorded[filename]["size"] == len(content)
+    authored_assets = destination / "authored-assets"
+    shutil.copytree(assets, authored_assets)
+    package_evidence = {
+        item["filename"]: {
+            "path": str(authored_assets / item["filename"]),
+            "bytes": item["size"],
+            "sha256": item["sha256"],
+        }
+        for item in manifest["assets"]
+        if item["filename"].endswith((".whl", ".tar.gz"))
+    }
+    evidence = {
+        "consumer": name,
+        "version": version,
+        "commit": commit,
+        "sdk_revision": sdk_revision,
+        "sdk_version": sdk_version,
+        "built_packages": package_evidence,
+        "native_artifacts": {
+            filename: {
+                "path": str(authored_assets / filename),
+                "bytes": (authored_assets / filename).stat().st_size,
+                "sha256": hashlib.sha256(
+                    (authored_assets / filename).read_bytes()
+                ).hexdigest(),
+            }
+            for filename in native_names
+        },
+    }
+    evidence_path = destination / "native-release-evidence.json"
+    evidence_path.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+    return sdk_version, evidence_path, authored_assets
+
+
+@pytest.mark.parametrize("symlink_tmp", [False, True])
+def test_generated_native_release_install_and_retained_repair(
+    native_generated_consumer: tuple[str, Path, Path],
+    tmp_path: Path,
+    symlink_tmp: bool,
+) -> None:
+    """Exercise immutable native installation, repair authority, and full removal."""
+    if symlink_tmp and os.name == "nt":
+        pytest.skip("Temporary-directory symlink selection is POSIX-only.")
+    sdk_version, evidence_path, authored_assets = native_generated_consumer
+    name = "native_consumer"
+    downloads = tmp_path / "recipient-downloads"
+    shutil.copytree(authored_assets, downloads)
+    installer = downloads / f"{name}-install-linux-x86_64"
+    try:
+        environment = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith(
                 (
-                    *spec.runtime_requirements,
-                    *_locked_runtime_requirements(project_root),
+                    "UV_",
+                    "PYTHON",
+                    "PYAPP_",
+                    "PIP_",
+                    "CONDA",
+                    "VIRTUAL_ENV",
+                    "GIT_",
+                    "GH_",
+                    "GITHUB_",
+                    "APPRC_TEST_",
                 )
             )
-        ),
-    )
-    modules = tuple(
-        PurePosixPath("app_lifecycle") / filename
-        for filename in ("__init__.py", "install.py", "uninstall.py", "actions.py")
-    )
-    source_payload = project_root / metadata.distribution_path / "payload"
-    directory.mkdir(parents=True, exist_ok=True)
-    payload_root = directory / "payload"
-    shutil.copytree(source_payload, payload_root)
-    base_payload = PayloadTree(payload_root, modules)
-    for relative, content in install_support_files(spec, base_payload).items():
-        resource = PurePosixPath("app_lifecycle/_support") / relative
-        destination = payload_root.joinpath(*resource.parts)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(content)
-        if relative.name in {"launch.sh", "uninstall.sh"}:
-            destination.chmod(0o700)
-    support_root = payload_root / "app_lifecycle" / "_support"
-    resources = tuple(
-        PurePosixPath("app_lifecycle/_support", *path.relative_to(support_root).parts)
-        for path in sorted(support_root.rglob("*"))
-        if path.is_file()
-    )
-    artifact = build_main_installer(
-        spec, PayloadTree(payload_root, modules, resources=resources)
-    )
-    installer = directory / "main-installer.py"
-    installer.write_bytes(artifact.content)
-    bootstrap_root = directory / "main-bootstrap"
-    for bootstrap_artifact in render_bootstraps(spec):
-        destination = bootstrap_root.joinpath(*bootstrap_artifact.destination.parts)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(bootstrap_artifact.content)
-        if bootstrap_artifact.executable:
-            destination.chmod(0o700)
-    return installer
+            and not any(
+                marker in key.upper()
+                for marker in ("TOKEN", "AUTH", "PASSWORD", "CREDENTIAL")
+            )
+            and key != "HISQU_GH_PAT"
+        }
+        for variable, folder in {
+            "HOME": "home",
+            "XDG_DATA_HOME": "data",
+            "XDG_CONFIG_HOME": "config",
+            "XDG_CACHE_HOME": "cache",
+            "XDG_STATE_HOME": "state",
+            "UV_TOOL_DIR": "tools",
+            "UV_TOOL_BIN_DIR": "bin",
+            "UV_CACHE_DIR": "uv-cache",
+            "UV_PYTHON_INSTALL_DIR": "managed-python",
+            "TMPDIR": "temporary",
+        }.items():
+            path = tmp_path / folder
+            path.mkdir(exist_ok=True)
+            environment[variable] = str(path)
+        bootstrap_root = Path(environment["XDG_DATA_HOME"]) / "pyapp"
+        environment["TMP"] = environment["TEMP"] = environment["TMPDIR"]
+        if symlink_tmp:
+            alias = tmp_path / "temporary-alias"
+            alias.symlink_to(environment["TMPDIR"], target_is_directory=True)
+            environment["TMPDIR"] = str(alias)
+        path = tmp_path / "restricted-path"
+        path.mkdir()
+        for tool in (
+            "sh",
+            "basename",
+            "dirname",
+            "pwd",
+            "uname",
+            "cat",
+            "mktemp",
+            "rm",
+            "sed",
+        ):
+            executable = shutil.which(tool)
+            assert executable is not None
+            (path / tool).symlink_to(executable)
+        assert shutil.which("gh", path=str(path)) is None
+        assert shutil.which("git", path=str(path)) is None
+        assert shutil.which("python", path=str(path)) is None
+        assert shutil.which("python3", path=str(path)) is None
+        assert shutil.which("uv", path=str(path)) is None
+        environment["PATH"] = str(path)
+        caller = tmp_path / "unrelated-caller"
+        caller.mkdir()
+        from apprc.distribution.runtime.controllers import repair_saved
+        from apprc.user_files.installation.discovery import (
+            inspect_installation,
+            installation_directory,
+        )
+
+        installation = installation_directory(name, environment=environment)
+        result = _run(
+            [
+                str(installer),
+                "--layout",
+                "native",
+            ],
+            cwd=caller,
+            environment=environment,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        inspection = inspect_installation(installation, app_id=name)
+        assert inspection.record is not None and inspection.record.current is not None
+        snapshot = inspection.record.current
+        prefix = snapshot.prefix
+        assert snapshot.source.kind == "wheel"
+        assert snapshot.source.version == "0.1.0"
+        assert snapshot.backend.executable.is_file()
+        command = Path(environment["UV_TOOL_BIN_DIR"]) / name
+        assert command.is_file()
+        retained_archive = installation / "installer-payload.zip"
+        assert retained_archive.is_file()
+        launcher = installation / "launch"
+        assert launcher.is_file()
+        with zipfile.ZipFile(retained_archive) as bundle:
+            sources = json.loads(bundle.read("sources.json"))
+            inventory = json.loads(bundle.read("inventory.json"))
+            root_wheel = next(
+                item
+                for item in inventory
+                if item["name"].casefold().replace("_", "-") == name.replace("_", "-")
+            )
+            wheel_bytes = bundle.read(root_wheel["filename"])
+        assert sources["origin"]["kind"] == "release-sdist"
+        assert sources["origin"]["version"] == "0.1.0"
+        assert sources["source"]["kind"] == "wheel"
+        assert sources["source"]["digest"] == root_wheel["digest"]
+        assert snapshot.source.digest == root_wheel["digest"]
+        assert Path(snapshot.source.requirement).name == root_wheel["filename"]
+        assert hashlib.sha256(wheel_bytes).hexdigest() == root_wheel["digest"]
+        evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+        sdist_name = next(
+            filename
+            for filename in evidence["built_packages"]
+            if filename.endswith(".tar.gz")
+        )
+        assert (
+            sources["origin"]["digest"]
+            == evidence["built_packages"][sdist_name]["sha256"]
+        )
+        assert Path(sources["origin"]["requirement"]).name == sdist_name
+        case_key = "symlink" if symlink_tmp else "physical"
+        checkpoints = evidence.setdefault("installation_cases", {})
+        checkpoints[case_key] = {
+            "installed_prefix": str(prefix),
+            "installed_program_bytes": disk_bytes(prefix),
+            "retained_archive": {
+                "path": str(retained_archive),
+                "bytes": retained_archive.stat().st_size,
+                "sha256": hashlib.sha256(retained_archive.read_bytes()).hexdigest(),
+            },
+            "source_wheel": {
+                "filename": root_wheel["filename"],
+                "bytes": len(wheel_bytes),
+                "sha256": root_wheel["digest"],
+            },
+            "linux_launcher": {
+                "path": str(launcher),
+                "bytes": launcher.stat().st_size,
+                "sha256": hashlib.sha256(launcher.read_bytes()).hexdigest(),
+            },
+            "managed_python_bytes": disk_bytes(
+                Path(environment["UV_PYTHON_INSTALL_DIR"])
+            ),
+            "bootstrap_bytes": disk_bytes(bootstrap_root),
+            "distribution_record_digest": snapshot.distribution_record_digest,
+            "source": {
+                "kind": snapshot.source.kind,
+                "requirement": snapshot.source.requirement,
+                "digest": snapshot.source.digest,
+                "backend": str(snapshot.backend.executable),
+            },
+        }
+        launched = _run(
+            [str(launcher), "--help"],
+            cwd=caller,
+            environment=environment,
+        )
+        assert launched.returncode == 0, launched.stdout + launched.stderr
+        evidence_path.write_text(
+            json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
+        )
+        probe = _run(
+            [
+                str(snapshot.interpreter),
+                "-I",
+                str(Path(__file__).parent / "support_native_release.py"),
+                name,
+                sdk_version,
+            ],
+            cwd=caller,
+            environment=environment,
+        )
+        assert probe.returncode == 0, probe.stdout + probe.stderr
+        probe_data = json.loads(probe.stdout)
+        assert probe_data["sdk_version"] == sdk_version
+        managed_config = Path(probe_data["managed_config"])
+        managed_secrets = Path(probe_data["managed_secrets"])
+        assert managed_config.is_file()
+        assert managed_secrets.is_file()
+        launcher_bytes = launcher.read_bytes()
+        launcher.write_bytes(launcher_bytes + b"\nmodified generated launcher\n")
+        refusal = _run(
+            [str(installer), "--repair", "--directory", str(installation)],
+            cwd=caller,
+            environment=environment,
+        )
+        assert refusal.returncode != 0
+        assert (
+            launcher.read_bytes() == launcher_bytes + b"\nmodified generated launcher\n"
+        )
+        launcher.write_bytes(launcher_bytes)
+        original_archive = retained_archive.read_bytes()
+        retained_archive.write_bytes(original_archive + b"\ntampered\n")
+        refusal = _run(
+            [str(installer), "--repair", "--directory", str(installation)],
+            cwd=caller,
+            environment=environment,
+        )
+        assert refusal.returncode != 0
+        assert retained_archive.read_bytes() == original_archive + b"\ntampered\n"
+        retained_archive.write_bytes(original_archive)
+        failed_record = inspect_installation(installation, app_id=name).record
+        assert failed_record is not None and failed_record.operation is not None
+        assert failed_record.operation.kind == "repair"
+        assert failed_record.operation.phase == "failed"
+        assert failed_record.last_successful == snapshot
+        assert failed_record.owned_outputs == inspection.record.owned_outputs
+        assert failed_record.current is not None
+        assert failed_record.current.source == snapshot.source
+        assert failed_record.current.backend == snapshot.backend
+        appdata = snapshot.placement.appdata_dir
+        assert appdata is not None
+        appdata.mkdir(parents=True, exist_ok=True)
+        unmanaged_sentinel = appdata / "native-canary-unmanaged-sentinel.txt"
+        unmanaged_sentinel.write_text(
+            "leave this unregistered file alone\n", encoding="utf-8"
+        )
+        shutil.rmtree(downloads)
+        launcher.unlink()
+        repair = installation / "repair-installer.py"
+        base_python = Path(
+            json.loads((installation / "management.json").read_text())["base_python"]
+        )
+        assert repair.is_file()
+        assert base_python.is_absolute()
+        assert not base_python.is_relative_to(prefix)
+        assert not base_python.is_relative_to(installation)
+        assert not base_python.is_relative_to(bootstrap_root)
+        repaired = _run(
+            list(repair_saved(installation)),
+            cwd=caller,
+            environment=environment,
+        )
+        assert repaired.returncode == 0, repaired.stdout + repaired.stderr
+        assert launcher.is_file()
+        repaired_inspection = inspect_installation(installation, app_id=name)
+        assert repaired_inspection.record is not None
+        assert repaired_inspection.record.current is not None
+        assert repaired_inspection.record.current.backend == snapshot.backend
+        assert repaired_inspection.record.current.source == snapshot.source
+        assert managed_config.is_file()
+        assert managed_secrets.is_file()
+        complete = _run(
+            [
+                str(base_python),
+                "-I",
+                str(installation / "management.py"),
+                "uninstall",
+                "--directory",
+                str(installation),
+                "--complete",
+                "--category",
+                "config",
+                "--category",
+                "appdata",
+                "--forget-retained",
+                "--yes",
+            ],
+            cwd=caller,
+            environment=environment,
+        )
+        assert complete.returncode == 0, complete.stdout + complete.stderr
+        deadline = time.monotonic() + 30
+        while (
+            installation.exists()
+            or prefix.exists()
+            or command.exists()
+            or managed_config.exists()
+            or managed_secrets.exists()
+        ) and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert not installation.exists()
+        assert not prefix.exists()
+        assert not command.exists()
+        assert not managed_config.exists()
+        assert not managed_secrets.exists()
+        assert unmanaged_sentinel.read_text(encoding="utf-8") == (
+            "leave this unregistered file alone\n"
+        )
+        assert base_python.is_file()
+        checkpoints[case_key]["uninstalled_checkpoint"] = {
+            "installation_exists": installation.exists(),
+            "program_prefix_exists": prefix.exists(),
+            "managed_config_exists": managed_config.exists(),
+            "managed_secrets_exists": managed_secrets.exists(),
+            "unmanaged_sentinel_exists": unmanaged_sentinel.exists(),
+            "base_python_path": str(base_python),
+            "base_python_bytes": base_python.stat().st_size,
+            "base_python_sha256": hashlib.sha256(base_python.read_bytes()).hexdigest(),
+            "managed_python_bytes": disk_bytes(
+                Path(environment["UV_PYTHON_INSTALL_DIR"])
+            ),
+            "bootstrap_bytes": disk_bytes(bootstrap_root),
+        }
+        evidence_path.write_text(
+            json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
+        )
+    finally:
+        if downloads.exists():
+            shutil.rmtree(downloads)
 
 
 @pytest.fixture(scope="module")
 def generated_remote_consumer(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """Build an actual scaffolded AppRC application and stage its own packages."""
+    """Generate, lock, and package a consumer without invoking native authoring."""
     import buildben.init_proj as scaffolder
-    import tarfile
 
     destination = tmp_path_factory.mktemp("generated-remote-consumer")
     name = "remote_consumer"
@@ -163,19 +541,6 @@ def generated_remote_consumer(tmp_path_factory: pytest.TempPathFactory) -> Path:
         result = _run(command, cwd=root, environment=environment)
         assert result.returncode == 0, result.stdout + result.stderr
     commit = "a" * 40
-    metadata = read_project_metadata(root)
-    result = _run(
-        [
-            sys.executable,
-            "-m",
-            f"{name}_dev.packaging.release_stage",
-            f"v{metadata.version}",
-            commit,
-        ],
-        cwd=root,
-        environment=environment,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
     archive = destination / "consumer-main.tar.gz"
     with tarfile.open(archive, "w:gz") as output:
         for path in sorted(root.rglob("*")):
@@ -186,22 +551,23 @@ def generated_remote_consumer(tmp_path_factory: pytest.TempPathFactory) -> Path:
             ):
                 continue
             output.add(
-                path, arcname=str(Path(f"{name}-{commit}") / relative), recursive=False
+                path,
+                arcname=str(Path(f"{name}-{commit}") / relative),
+                recursive=False,
             )
     return root
 
 
-def test_generated_app_source_install_smoke(generated_remote_consumer: Path) -> None:
-    """Run the seeded generic native matrix for a real AppRC consumer."""
+def test_generated_app_source_install_smoke(
+    generated_remote_consumer: Path,
+) -> None:
+    """Exercise app-install.py from outside the generated editable checkout."""
     root = generated_remote_consumer
     environment = os.environ.copy()
     environment["INSTALLER_SMOKE_MAIN_SOURCE"] = str(
         root.parent / "consumer-main.tar.gz"
     )
     environment["INSTALLER_SMOKE_MAIN_COMMIT"] = "a" * 40
-    sdists = tuple((root / "dist").glob("*.tar.gz"))
-    assert len(sdists) == 1
-    environment["INSTALLER_SMOKE_SOURCE"] = str(sdists[0])
     environment["PYTHONPATH"] = os.pathsep.join(
         (str(root / "src"), environment.get("PYTHONPATH", ""))
     )
@@ -215,413 +581,9 @@ def test_generated_app_source_install_smoke(generated_remote_consumer: Path) -> 
             "-q",
             "tests/test_remote_consumer_package.py",
             "-k",
-            "source_install_smoke or windows_installer_entries or official_uv_bootstrap",
+            "source_install_smoke",
         ],
         cwd=root,
         environment=environment,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-
-
-def _native_installation(environment: dict[str, str]) -> Path:
-    app_id = "buildben"
-    if os.name == "nt":
-        root = Path(environment["LOCALAPPDATA"]) / app_id
-    elif sys.platform == "darwin":
-        root = Path(environment["HOME"]) / "Library" / "Application Support" / app_id
-    else:
-        root = Path(environment["XDG_DATA_HOME"]) / app_id
-    return root / "installation"
-
-
-def _install_environment(tmp_path: Path) -> dict[str, str]:
-    """Isolate HOME/XDG/uv roots and preserve an active parent venv."""
-    environment = os.environ.copy()
-    for key, name in {
-        "HOME": "home",
-        "USERPROFILE": "home",
-        "XDG_CONFIG_HOME": "config",
-        "XDG_DATA_HOME": "data",
-        "XDG_STATE_HOME": "state",
-        "XDG_CACHE_HOME": "cache",
-        "LOCALAPPDATA": "local-appdata",
-        "UV_CACHE_DIR": "uv-cache",
-        "UV_TOOL_DIR": "uv-tools",
-        "UV_TOOL_BIN_DIR": "uv-bin",
-    }.items():
-        path = tmp_path / name
-        path.mkdir(exist_ok=True)
-        environment[key] = str(path)
-    uv = shutil.which("uv")
-    if uv is None:
-        pytest.skip("Source installer smoke requires the existing uv executable.")
-    environment["APPRC_UV_PATH"] = str(Path(uv).resolve())
-    parent_environment = tmp_path / "active parent environment"
-    venv.EnvBuilder(with_pip=False).create(parent_environment)
-    environment["VIRTUAL_ENV"] = str(parent_environment)
-    scripts = parent_environment / ("Scripts" if os.name == "nt" else "bin")
-    helper = tmp_path / "transport-client"
-    helper.mkdir()
-    for name in ("gh", "gh.py", "gh.cmd", "sitecustomize.py"):
-        shutil.copy2(ROOT / "tests" / "support_source_transport" / name, helper / name)
-    if os.name != "nt":
-        (helper / "gh").chmod(0o700)
-    environment["PYTHON"] = sys.executable
-    environment["PYTHONPATH"] = os.pathsep.join(
-        (str(helper), environment.get("PYTHONPATH", ""))
-    )
-    environment["PATH"] = os.pathsep.join(
-        (str(helper), str(scripts), environment.get("PATH", ""))
-    )
-    temporary = tmp_path / "temporary"
-    temporary.mkdir()
-    environment["TMPDIR"] = str(temporary)
-    environment["TEMP"] = str(temporary)
-    environment["TMP"] = str(temporary)
-    return environment
-
-
-def _persistent_uv_without_initial_path(
-    environment: dict[str, str], tmp_path: Path
-) -> Path:
-    """Select a real persistent uv while hiding uv and Python from initial PATH."""
-    if os.name == "nt":
-        raise ValueError("The restricted PATH fixture is POSIX-only.")
-    uv_source = Path(environment.pop("APPRC_UV_PATH"))
-    selected_uv = Path(environment["HOME"]) / ".local" / "bin" / "uv"
-    selected_uv.parent.mkdir(parents=True)
-    shutil.copy2(uv_source, selected_uv)
-    environment["UV"] = str(selected_uv)
-    minimal_bin = tmp_path / "minimal-bootstrap-bin"
-    minimal_bin.mkdir()
-    for command in (
-        "basename",
-        "cat",
-        "dirname",
-        "git",
-        "mktemp",
-        "pwd",
-        "rm",
-        "sed",
-        "sh",
-        "uname",
-    ):
-        executable = shutil.which(command)
-        if executable is not None:
-            (minimal_bin / command).symlink_to(executable)
-    helper = tmp_path / "transport-client"
-    environment["PATH"] = os.pathsep.join((str(helper), str(minimal_bin)))
-    assert shutil.which("uv", path=environment["PATH"]) is None
-    assert shutil.which("python", path=environment["PATH"]) is None
-    assert shutil.which("python3", path=environment["PATH"]) is None
-    return selected_uv
-
-
-def _run(
-    command: list[str], *, cwd: Path, environment: dict[str, str]
-) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        command,
-        cwd=cwd,
-        env=environment,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-
-
-@pytest.mark.parametrize("source_mode", ["release", "main"])
-@pytest.mark.parametrize("symlink_parent", [False, True])
-@pytest.mark.parametrize("initial_path", ["normal", "restricted"])
-def test_source_install_smoke(
-    tmp_path: Path,
-    source_mode: str,
-    symlink_parent: bool,
-    initial_path: str,
-) -> None:
-    """Install real source through rendered entries and selected bootstrap paths."""
-    source_value = os.environ.get("INSTALLER_SMOKE_SOURCE")
-    main_value = os.environ.get("INSTALLER_SMOKE_MAIN_SOURCE")
-    commit = os.environ.get("INSTALLER_SMOKE_MAIN_COMMIT")
-    client = os.environ.get("INSTALLER_SMOKE_CLIENT", "curl")
-    if not source_value or not main_value or not commit:
-        pytest.skip("Run just release-install-smoke to supply immutable source inputs.")
-    if client not in {"curl", "gh"}:
-        pytest.fail("INSTALLER_SMOKE_CLIENT must be curl or gh.")
-    if symlink_parent and os.name == "nt":
-        pytest.skip("Windows symlink creation requires privileges outside this test.")
-    if initial_path == "restricted" and os.name == "nt":
-        pytest.skip("The restricted executable PATH scenario is POSIX-only.")
-    source = Path(source_value).resolve(strict=True)
-    main_source = Path(main_value).resolve(strict=True)
-    if len(commit) != 40 or any(
-        character not in "0123456789abcdef" for character in commit
-    ):
-        pytest.fail(
-            "INSTALLER_SMOKE_MAIN_COMMIT must be a full lowercase SHA-1 commit."
-        )
-    main_archive = main_source
-    release_assets = ROOT / "release" / "assets"
-    if not release_assets.is_dir():
-        pytest.fail("Run just release-install-smoke to stage authentic release assets.")
-    staged_sdist = release_assets / source.name
-    if not staged_sdist.is_file() or staged_sdist.read_bytes() != source.read_bytes():
-        pytest.fail("The loopback release must serve the requested staged sdist bytes.")
-    project_root = ROOT
-    main_installer = _main_installer(
-        tmp_path / "server-main", commit, project_root=project_root
-    )
-    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    tag = f"v{project['project']['version']}"
-    moving_commit = (
-        ("0" if commit != "0" * 40 else "1") * 40 if source_mode == "main" else None
-    )
-    fixture = SourceFixture(
-        assets_directory=release_assets,
-        main_installer=main_installer,
-        main_installer_path=(
-            read_project_metadata(project_root).distribution_path.as_posix()
-            + "/artifacts/installer/main-installer.py"
-        ),
-        main_archive=main_archive,
-        repository=REPOSITORY,
-        commit=commit,
-        tag=tag,
-        moving_commit=moving_commit,
-        moving_archive=b"the moved branch must not replace the captured source",
-    )
-    acquisition_root = tmp_path
-    if symlink_parent:
-        acquisition_root = tmp_path.parent / f"{tmp_path.name}-alias"
-        acquisition_root.symlink_to(tmp_path, target_is_directory=True)
-    environment = _install_environment(tmp_path)
-    # > Alias acquisition only; managed authority and backend homes stay physical.
-    temporary = str(acquisition_root / "temporary")
-    for name in ("TMPDIR", "TEMP", "TMP"):
-        environment[name] = temporary
-    selected_uv = (
-        _persistent_uv_without_initial_path(environment, tmp_path)
-        if initial_path == "restricted"
-        else None
-    )
-    mapping = acquisition_root / "source-url-map.json"
-    mapping.write_text(json.dumps(fixture.url_map), encoding="utf-8")
-    environment["INSTALLER_SMOKE_URL_MAP"] = str(mapping)
-    environment["INSTALLER_SMOKE_API_URL"] = fixture.api_url
-    caller = tmp_path / "unrelated caller directory"
-    caller.mkdir()
-    if source_mode == "release":
-        entrypoint_root = release_assets
-    else:
-        entrypoint_root = tmp_path / "server-main" / "main-bootstrap"
-    if os.name == "nt":
-        entrypoint = entrypoint_root / "app-install.cmd"
-        command = ["cmd.exe", "/d", "/c", str(entrypoint)]
-    else:
-        entrypoint = entrypoint_root / "app-install.sh"
-        command = [str(entrypoint)]
-    assert entrypoint.is_file(), entrypoint
-    if client == "gh":
-        command.extend(["--github-client", "gh"])
-    command.extend(["--layout", "native"])
-    try:
-        installed = _run(command, cwd=caller, environment=environment)
-        assert installed.returncode == 0, installed.stdout + installed.stderr
-    finally:
-        fixture.close()
-    if source_mode == "main":
-        assert fixture.main_resolution_count == 1
-        assert fixture.main_archive_requests == [commit]
-    assert not tuple(Path(environment["TMPDIR"]).glob("apprc-source-*"))
-    executable = Path(environment["UV_TOOL_BIN_DIR"]) / (
-        "buildben.exe" if os.name == "nt" else "buildben"
-    )
-    help_result = _run([str(executable), "--help"], cwd=caller, environment=environment)
-    assert help_result.returncode == 0, help_result.stdout + help_result.stderr
-    state = _native_installation(environment)
-    installed_record = json.loads(
-        (state / "installation.json").read_text(encoding="utf-8")
-    )
-    assert installed_record["status"] == "ready"
-    assert installed_record["current"] is not None
-    if selected_uv is not None:
-        assert str(selected_uv) in json.dumps(installed_record["current"])
-    if source_mode == "main":
-        assert commit in json.dumps(installed_record["current"]["source"])
-    retained = Path(environment["XDG_DATA_HOME"]) / "buildben" / "unowned.txt"
-    retained.parent.mkdir(parents=True, exist_ok=True)
-    retained.write_text("retain unknown data\n", encoding="utf-8")
-    if os.name == "nt":
-        remove = ["cmd.exe", "/d", "/c", str(state / "uninstall.cmd"), "--yes"]
-    else:
-        remove = [str(state / "uninstall.sh"), "--yes"]
-    removed = _run(remove, cwd=caller, environment=environment)
-    assert removed.returncode == 0, removed.stdout + removed.stderr
-    assert (state / "installation.json").is_file()
-    assert retained.read_text(encoding="utf-8") == "retain unknown data\n"
-    record = json.loads((state / "installation.json").read_text(encoding="utf-8"))
-    assert record["status"] == "removed-retained"
-    assert record["current"] is None
-    assert record["last_successful"] is not None
-    assert record["placement"]["capabilities"] == []
-    assert not (Path(environment["UV_TOOL_DIR"]) / "buildben").exists()
-    support_paths = tuple(
-        output["path"]
-        for output in record["owned_outputs"]
-        if output["kind"] == "support"
-    )
-    complete_command = (
-        [
-            "cmd.exe",
-            "/d",
-            "/c",
-            str(state / "uninstall.cmd"),
-            "--yes",
-            "--complete",
-        ]
-        if os.name == "nt"
-        else [str(state / "uninstall.sh"), "--yes", "--complete"]
-    )
-    completed = _run(complete_command, cwd=caller, environment=environment)
-    assert completed.returncode == 0, completed.stdout + completed.stderr
-    assert not (state / "installation.json").exists()
-    assert not (
-        state / ("uninstall.cmd" if os.name == "nt" else "uninstall.sh")
-    ).exists()
-    assert all(not (state / path).exists() for path in support_paths)
-    assert retained.read_text(encoding="utf-8") == "retain unknown data\n"
-    assert not executable.exists()
-
-
-@pytest.mark.skipif(
-    os.name != "nt", reason="This procedure runs only on native Windows."
-)
-@pytest.mark.parametrize("entrypoint", ["file", "downloaded_text"])
-def test_windows_installer_entries(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    entrypoint: str,
-) -> None:
-    """Run generated checkout PowerShell as a file and as downloaded text."""
-    import buildben.init_proj as scaffolder
-
-    name = "windows_consumer"
-    destination = tmp_path / "consumer"
-    destination.mkdir()
-    monkeypatch.setattr(scaffolder.utils, "warn_dir_overwrite", lambda _path: None)
-    scaffolder._run(
-        argparse.Namespace(
-            name=name,
-            target_dir=str(destination),
-            git_init=False,
-            github_user="fixture-owner",
-            frontend=None,
-        )
-    )
-    root = destination / name
-    environment = _install_environment(tmp_path)
-    environment["PYTHONPATH"] = os.pathsep.join(
-        (
-            str(ROOT / "src"),
-            str(root / "src"),
-            environment.get("PYTHONPATH", ""),
-        )
-    )
-    build = _run(
-        [sys.executable, "-m", f"{name}_distr.make_artifacts"],
-        cwd=root,
-        environment=environment,
-    )
-    assert build.returncode == 0, build.stdout + build.stderr
-    check = _run(
-        [sys.executable, "-m", f"{name}_distr.make_artifacts", "--check"],
-        cwd=root,
-        environment=environment,
-    )
-    assert check.returncode == 0, check.stdout + check.stderr
-    original_path = environment["PATH"]
-    persistent_uv = Path(environment["LOCALAPPDATA"]) / "persistent uv" / "uv.exe"
-    persistent_uv.parent.mkdir(parents=True)
-    shutil.copy2(Path(environment.pop("APPRC_UV_PATH")), persistent_uv)
-    environment["UV"] = str(persistent_uv)
-    environment["PATH"] = os.pathsep.join(
-        directory
-        for directory in original_path.split(os.pathsep)
-        if directory
-        and all(
-            shutil.which(command, path=directory) is None
-            for command in (
-                "uv",
-                "uv.exe",
-                "python",
-                "python.exe",
-                "python3",
-                "python3.exe",
-            )
-        )
-    )
-    assert shutil.which("uv", path=environment["PATH"]) is None
-    assert shutil.which("python", path=environment["PATH"]) is None
-    assert shutil.which("python3", path=environment["PATH"]) is None
-    powershell = shutil.which("powershell.exe", path=original_path)
-    if powershell is None:
-        pytest.skip("Native Windows PowerShell is unavailable.")
-    artifacts = root / "src" / f"{name}_distr" / "artifacts" / "installer"
-    bootstrap = artifacts / "bootstrap.ps1"
-    assert bootstrap.is_file()
-    caller = tmp_path / "unrelated caller directory"
-    caller.mkdir()
-    if entrypoint == "file":
-        command = [
-            powershell,
-            "-NoLogo",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            str(bootstrap),
-            "--layout",
-            "native",
-        ]
-    else:
-        driver = artifacts / "invoke-downloaded-bootstrap.ps1"
-        driver.write_text(
-            "$ErrorActionPreference = 'Stop'\n"
-            "$contents = [System.IO.File]::ReadAllText("
-            "(Join-Path $PSScriptRoot 'bootstrap.ps1'))\n"
-            "& ([ScriptBlock]::Create($contents)) '--layout' 'native'\n"
-            "exit $LASTEXITCODE\n",
-            encoding="utf-8",
-        )
-        command = [
-            powershell,
-            "-NoLogo",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            str(driver),
-        ]
-    installed = _run(command, cwd=caller, environment=environment)
-    assert installed.returncode == 0, installed.stdout + installed.stderr
-    executable = Path(environment["UV_TOOL_BIN_DIR"]) / f"{name}.exe"
-    metadata = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
-    app_id = metadata["tool"]["apprc"]["distribution"]["app-id"]
-    state = Path(environment["LOCALAPPDATA"]) / app_id / "installation"
-    installed_record = json.loads(
-        (state / "installation.json").read_text(encoding="utf-8")
-    )
-    assert installed_record["current"] is not None
-    assert str(persistent_uv) in json.dumps(installed_record["current"]["backend"])
-    help_result = _run([str(executable), "--help"], cwd=caller, environment=environment)
-    assert help_result.returncode == 0, help_result.stdout + help_result.stderr
-    environment["PATH"] = original_path
-    removed = _run(
-        ["cmd.exe", "/d", "/c", str(state / "uninstall.cmd"), "--yes"],
-        cwd=caller,
-        environment=environment,
-    )
-    assert removed.returncode == 0, removed.stdout + removed.stderr
-    record = json.loads((state / "installation.json").read_text(encoding="utf-8"))
-    assert record["status"] == "removed-retained"
-    assert record["current"] is None

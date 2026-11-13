@@ -56,6 +56,12 @@ This project follows Semantic Versioning.
 
 ### 💥 Breaking changes
 
+- Breaking: Regenerated projects replace shell/CMD bootstrap entries with Python
+  checkout entries and a strict native release asset contract. Affected:
+  generated-project users and release automation. Migration: update commands and
+  automation to the Python entries and exact native asset names, then regenerate
+  project artifacts; no compatibility shim is provided.
+
 <br>
 
 ### ➕ Added
@@ -65,15 +71,16 @@ This project follows Semantic Versioning.
   Generated roots expose grouped `just front sync|dev|check|test|build` recipes
   and an independent frontend CI job without changing Python-only generation
   or Python dependency and distribution ownership.
+- Added native producer and locked repository-bundle templates with the
+  appropriate GUI runtime extra. Ordinary Python generation remains Rust-free.
 
 <br>
 
 ### 💔 Changed
 
-- Align authoring, scaffold and generated lifecycle inputs with AppRC's
-  unreleased maintenance revision while keeping Buildben's runtime dependency
-  list empty. Document immutable SDK source requirements rather than obsolete
-  released-version ranges.
+- Pin authoring, scaffold and generated lifecycle inputs to published AppRC
+  0.34.0 using its immutable release commit, while keeping Buildben's runtime
+  dependency list empty.
 
 <br>
 

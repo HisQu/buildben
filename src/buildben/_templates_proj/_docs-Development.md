@@ -208,25 +208,23 @@ The repository-owned lifecycle composition lives under
 modules to add application setup or cleanup; installed helpers contain the
 authored payload and do not import the development-only `_distr` package.
 
-After editing the payload, regenerate the deterministic SDK outputs with
-`just make-artifacts`. CI and read-only review use `just check-artifacts`,
-which fails on missing or drifted outputs without rewriting files. Artifact
-generation uses the locked AppRC authoring dependency; package builds do not
-run generation or network access implicitly. The application wheel excludes
-`{my_project}_distr`, while the source archive includes the generator, authored
-payload, generated artifacts, and six `app-install`, `app-launch`, and
-`app-uninstall` wrappers for POSIX and Windows.
+After editing the payload, regenerate the deterministic Python SDK outputs with
+`just make-artifacts`. CI and read-only review use `just check-artifacts`, which
+checks tracked outputs without rewriting files. These ordinary commands remain
+Rust-free. The application wheel excludes `{my_project}_distr`; the source
+archive includes the generator, payload, generated Python entries, and saved
+support resources. Root developer entries are `app-install.py` and
+`app-launch.py`; root shell/CMD wrappers are retained only for uninstall.
 
-This scaffold pins AppRC development and installer-management sources to a
-verified immutable commit in `pyproject.toml` and generated
-`DistributionSpec.runtime_overrides`. Remove those source overrides only after
-the corresponding AppRC release is available from the configured package index.
-The `[distribution]` extra is authoring-only; tool-install overrides pin the
-plain core and terminal packages without adding Jinja to the application's
-runtime. A GUI override is included only when `apprc-gui` is an authored normal
-runtime dependency. Merely declaring an optional GUI extra does not install it;
-if the installer explicitly selects that feature, author its matching runtime
-override alongside that selection in `make_artifacts.py`.
+`pyproject.toml` publishes a `gui` runtime extra and declares the AppRC Git
+repository under `tool.apprc.distribution.bundle-repositories`. Native release
+authoring selects `--extra gui` from the locked runtime graph; it does not use
+development groups or manual `DistributionSpec.runtime_overrides`.
+
+Set `tool.apprc.distribution.runtime-python = "3.13"` to select the managed
+application environment's Python minor. Keep this separate from
+`project.requires-python`, which describes package-install compatibility. The
+PyApp bootstrap uses Python 3.14; it is not the application's runtime.
 
 ## Windows installer verification procedure
 
@@ -238,48 +236,29 @@ override alongside that selection in `make_artifacts.py`.
 > Use independent native Windows CI for Windows execution.
 
 
-Use the existing [CI workflow](../.github/workflows/ci.yml) for the exact
-commit under review. Its native `windows-latest` cells exercise the generated
-consumer installer through `.cmd` and PowerShell entrypoints; the source
-smoke also runs through the actual scaffolder output. Inspect job logs and
-report the commit, job, command, and observed result rather than treating a
-workflow's presence as proof.
+The generated CI workflow runs Linux checks only. Release staging cross-compiles
+the Windows x64 installer and launcher but never executes those PE files.
+Cross-compilation and Linux tests do not establish Windows runtime behavior;
+complete a separate native Windows canary before relying on that release entry.
 
-Keep file invocation and downloaded-text invocation as separate scenarios.
-Linux tests and static inspection are not Windows execution proof. CMD quoting,
-PowerShell preflight, HKCU behavior, and executable-in-use handling remain
-unverified until native coverage completes.
-
-From WSL, never launch native Windows verification executables directly or
-through helpers. This includes PowerShell, Windows Python/pytest, `cmd.exe`,
-and Windows `uv`. If native Windows CI cannot run, report the blocker and keep
-Windows proof pending; do not change runner policy, billing, permissions, or
-security settings to bypass it.
+Keep the boundary strict: from WSL, never launch native Windows executables,
+PowerShell, CMD, Windows Python/pytest, or Windows `uv`, directly or through a
+helper. If native Windows validation is unavailable, report it as pending rather
+than changing runner policy or using Wine.
 
 ## Unix installer staging verification
 
-The generated project's maintained
-`tests/test_{my_project}_package.py` is run by `just release-install-smoke`.
-It serves the staged release assets and immutable-main source archive through
-the existing loopback fixture, then invokes the generated installer entries
-and saved uninstaller as real subprocesses. The cases record the installed
-source/backend, verify the captured main commit, launch the installed command,
-and confirm program-only removal retains the receipt and unrelated data.
+The generated project's maintained `tests/test_{my_project}_package.py` covers
+checkout installation from outside the project root, source-selection
+transports, and saved uninstall behavior through real subprocesses. It uses
+isolated HOME, XDG, and uv paths and checks that program-only removal preserves
+the receipt and unrelated data.
 
-POSIX cases run outside the checkout with isolated HOME, XDG, and uv roots,
-including physical and symlinked temporary parents. They exercise the selected
-GitHub client and a restricted initial PATH; another maintained case removes
-uv and Python from that PATH so the actual official uv bootstrap must provision
-the persistent executable before installation. That case needs access to the
-official uv download service. Windows CI separately runs `.cmd`, PowerShell
-`-File`, and downloaded-text entries; macOS CI retains the native temporary
-directory alias case. These CI definitions do not prove execution: report
-Windows/macOS results as pending until their native jobs have run.
-
-The loopback transport supplies the committed consumer's release and source
-bytes; it does not mock the installer, package manager, source validation, or
-uninstall result. A direct-package smoke or Linux run cannot establish Windows
-quoting, PowerShell handoff, or macOS native filesystem behavior.
+These tests do not execute native release installers. The release canary must
+exercise the exact staged Linux executable. On a separately authorized native
+Windows runner, exercise the real native `.exe` installer and retained saved
+`launch.cmd` and `launch.ps1` paths. Cross-compilation and Linux tests do not
+establish Windows runtime behavior or macOS native filesystem aliases.
 
 ## Releases
 
@@ -320,19 +299,23 @@ just release patch
 > GitHub Actions.
 
 The tag workflow reuses one successful full `ci.yml` run for the exact tagged
-commit rather than repeating the full source matrix. It builds and validates
-one wheel and source archive, then publishes only those two assets with release
-notes in the GitHub release body. Normal CI exercises direct sdist installation
-on all six native OS/Python cells; the release job performs one Python 3.12 wheel
-installation smoke and does not build platform installers.
+commit rather than repeating the full source matrix. The release job builds and
+validates the wheel and original source archive, then uses AppRC's explicit
+native producer to compile four Linux/Windows x64 installer and launcher
+executables. It also stages the original Python installer and one retained
+runtime ZIP, then validates the exact package/native/payload inventory in the
+outer manifest before upload.
 
-The generated `just release-install-smoke` isolates HOME, XDG, and uv
-locations, installs through the actual generated AppRC entrypoints, and checks
-saved management and removal while preserving user data. It does not delete
-shared uv or Python. Follow the [Windows installer verification
-procedure](#windows-installer-verification-procedure) for native entrypoint
-coverage. Linux execution cannot establish CMD quoting, PowerShell behavior, or
-macOS filesystem aliases.
+Native authoring runs only during release staging, after CI installs the pinned
+`cargo-xwin` cross-compiler and LLVM linker tools on Linux. The consumer support
+keeps the saved Windows `launch.cmd` and `launch.ps1` dispatch; cross-compilation
+does not replace these with an unvalidated native Windows launcher. Windows
+runtime execution remains a separate native canary and must never be attempted
+through WSL, Wine, CMD, or PowerShell.
+
+`just make-artifacts` and `just check-artifacts` do not compile Rust. The
+generated `app-install.py` is the editable checkout entry; release assets use
+native installers. Linux behavior does not establish Windows runtime behavior.
 
 `just build-release-inputs` accepts an optional positional path to already
 validated release notes:

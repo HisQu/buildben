@@ -65,19 +65,21 @@ package descriptions. Contributors and coding agents must follow them.
 
 ### Installation instructions
 
-- Use `gh release download` to obtain the exact release asset set, then run
-  `app-install.sh` or `app-install.cmd`. The generated release entry verifies
-  the selected manifest/package identity; use `--version VERSION` or `--main`
-  only when selecting a different supported source.
-- Explain that `--main` captures one immutable commit. `--github-client gh`
-  selects authenticated transport without anonymous fallback.
-- Keep checkout installation rooted in the authored generator, lifecycle
-  payload, and exactly six root wrappers. PowerShell stays below generated
-  artifacts; do not restore old `_dev/distribution` or root alias files.
+- Describe release-native entrypoints as `{my_project}-install-linux-x86_64`
+  and `{my_project}-install-windows-x86_64.exe`; download the complete
+  manifest-validated asset set before running them.
+- Describe checkout development through `python app-install.py` and
+  `python app-launch.py`. Keep `app-uninstall.sh` and `app-uninstall.cmd`
+  as the root uninstall wrappers; Windows saved launch/handoff files remain
+  under the SDK-generated support tree.
 - Document `just make-artifacts`, no-write `just check-artifacts`, and the
-  separate `just stage-release-assets TAG FULL_COMMIT` release step.
-- Explain that the app wheel excludes `{my_project}_distr` and the source
-  archive includes authored source, required generated artifacts, and wrappers.
+  separate native `just stage-release-assets TAG FULL_COMMIT` release step.
+  Ordinary artifact generation must not invoke Rust.
+- The native release recipe selects the published `gui` runtime extra and
+  typed `bundle-repositories`; never use development groups or manual
+  runtime overrides for bundled native dependencies.
+- Explain that the app wheel excludes `{my_project}_distr`, while its source
+  archive includes authored source, Python entries, and required support files.
 
 ### Names and explanations
 

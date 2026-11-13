@@ -45,15 +45,20 @@ All notable changes to `{my_project}` will be documented in this file.
 
 <br>
 
-### 💥 Breaking Change Summary
+### 💥 Breaking changes
 
 <br>
-- Breaking: Buildben no longer adopts or replaces legacy installer receipts.
-  Affected: Users with installations managed by the legacy Buildben installer.
-  Migration: Install from an explicitly selected source and manage resources
-  through current AppRC installation authority.
+- Breaking: Generated root `app-install.sh`, `app-install.cmd`,
+  `app-launch.sh`, and `app-launch.cmd` entries are replaced by
+  `app-install.py` and `app-launch.py` for checkout development; release
+  installers are native platform executables.
+  Affected: Maintainers and users invoking those root install/launch wrappers.
+  Migration: Use the Python entries from a checkout and the matching
+  `{my_project}-install-*` native executable from a release.
 
 ### ➕ Added
+- Added SDK-authored Linux and Windows native release installers and launchers,
+  with a retained authenticated runtime payload and exact outer asset manifest.
 
 <br>
 
