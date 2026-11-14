@@ -1,53 +1,134 @@
-"""Real generated-consumer lifecycle smoke tests."""
+"""Real generated-consumer editable lifecycle and authority safety tests."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import os
-import re
-import select
 import shutil
-import struct
 import subprocess
 import sys
-import time
-import tomllib
-import venv
+import textwrap
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator
+from typing import Any
 
 import pytest
+from support_native_release import pin_fixture_sdk, sdk_authoring_environment
 
 
-def _create_consumer(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    *,
-    name: str,
-    custom_actions: bool = False,
-) -> tuple[Path, dict[str, str], Path]:
-    """Scaffold, author any consumer actions, and invoke real SDK generation."""
+@dataclass(frozen=True, slots=True)
+class Consumer:
+    """Keep a real scaffold and its isolated developer-owned environment together."""
+
+    root: Path
+    environment: dict[str, str]
+    directory: Path
+    uv: Path
+    name: str = "lifecycle_consumer"
+
+    @property
+    def command(self) -> Path:
+        """Return the checkout's installed console entry point."""
+        return (
+            self.root
+            / ".venv"
+            / ("Scripts" if os.name == "nt" else "bin")
+            / (self.name + (".exe" if os.name == "nt" else ""))
+        )
+
+    @property
+    def global_command(self) -> Path:
+        """Return the independently registered command."""
+        return Path(self.environment["UV_TOOL_BIN_DIR"]) / self.command.name
+
+    def run(
+        self, *arguments: str, cwd: Path | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        """Invoke the actual app entry point without shell dispatch."""
+        return subprocess.run(
+            [str(self.command), *arguments],
+            cwd=cwd or self.root,
+            env=self.environment,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+
+    def register(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+        """Exercise the documented uv-run editable registration path."""
+        return subprocess.run(
+            [
+                str(self.uv),
+                "run",
+                "--locked",
+                self.name,
+                "app",
+                "install",
+                "-e",
+                "--yes",
+                "--skip-setup",
+                *arguments,
+            ],
+            cwd=self.root,
+            env=self.environment,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+
+    def record(self) -> dict[str, Any]:
+        """Read the actual persisted installation authority."""
+        return json.loads(
+            (self.directory / "installation.json").read_text(encoding="utf-8")
+        )
+
+
+def _succeeded(result: subprocess.CompletedProcess[str]) -> None:
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.fixture
+def consumer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Consumer:
+    """Sync one real scaffold before AppRC registers its existing environment.
+
+    :param tmp_path: Isolated checkout, resource and command roots.
+    :param monkeypatch: Suppress only the scaffolder's overwrite prompt.
+    :return: Consumer whose environment is owned by uv, never by AppRC.
+    """
+    from apprc.user_files.installation.discovery import installation_directory
+
     import buildben.init_proj as scaffolder
 
+    uv = shutil.which("uv")
+    if uv is None:
+        pytest.skip("The maintained editable consumer smoke requires uv.")
     monkeypatch.setattr(scaffolder.utils, "warn_dir_overwrite", lambda _path: None)
     destination = tmp_path / "consumer space"
     destination.mkdir()
     scaffolder._run(
         argparse.Namespace(
-            name=name,
+            name="lifecycle_consumer",
             target_dir=str(destination),
             git_init=False,
             github_user="fixture-owner",
             frontend=None,
         )
     )
-    root = destination / name
-    environment = os.environ.copy()
-    repository_source = Path(__file__).resolve().parents[1] / "src"
-    environment["PYTHONPATH"] = os.pathsep.join(
-        (str(repository_source), str(root / "src"), environment.get("PYTHONPATH", ""))
-    )
+    root = destination / "lifecycle_consumer"
+    environment, revision, _ = sdk_authoring_environment(root)
+    pin_fixture_sdk(root, revision)
+    for key in (
+        "VIRTUAL_ENV",
+        "PYTHONPATH",
+        "PYTHONHOME",
+        "UV_ACTIVE",
+        "UV_PROJECT_ENVIRONMENT",
+        "UV_NO_SYNC",
+    ):
+        environment.pop(key, None)
     for key, folder in {
         "HOME": "home",
         "USERPROFILE": "home",
@@ -56,776 +137,444 @@ def _create_consumer(
         "XDG_CONFIG_HOME": "config",
         "XDG_CACHE_HOME": "cache",
         "LOCALAPPDATA": "local data",
-        "UV_TOOL_DIR": "tools",
-        "UV_TOOL_BIN_DIR": "tool binaries",
-        "UV_CACHE_DIR": "uv cache",
+        "UV_TOOL_BIN_DIR": "command directory",
     }.items():
-        path = tmp_path / f"{name}-{folder}"
+        path = tmp_path / folder
         path.mkdir(exist_ok=True)
         environment[key] = str(path)
-    uv = shutil.which("uv")
-    if uv is None:
-        pytest.skip("The real lifecycle smoke requires the existing uv executable.")
+    environment["PATH"] = os.pathsep.join(
+        (environment["UV_TOOL_BIN_DIR"], environment.get("PATH", ""))
+    )
     environment["UV"] = str(Path(uv).resolve())
-    parent_environment = tmp_path / f"{name}-active-parent-venv"
-    venv.EnvBuilder(with_pip=False).create(parent_environment)
-    environment["VIRTUAL_ENV"] = str(parent_environment)
-    scripts = parent_environment / ("Scripts" if os.name == "nt" else "bin")
-    environment["PATH"] = os.pathsep.join((str(scripts), environment.get("PATH", "")))
-    if custom_actions:
-        environment["LIFECYCLE_CUSTOM_STATE"] = str(tmp_path / f"{name}-custom-state")
-        environment["LIFECYCLE_CUSTOM_RESULT"] = str(
-            tmp_path / f"{name}-cleanup-result"
-        )
-        environment["LIFECYCLE_CUSTOM_BIN"] = str(
-            Path(environment["UV_TOOL_BIN_DIR"])
-            / (name + (".exe" if os.name == "nt" else ""))
-        )
-        payload = root / "src" / f"{name}_distr" / "payload" / "app_lifecycle"
-        (payload / "actions.py").write_text(
-            '"""Consumer-owned setup and cleanup actions."""\n'
-            "import os\n"
-            "from pathlib import Path\n\n"
-            "def prepare_project(prepared, project_directory):\n"
-            '    Path(os.environ["LIFECYCLE_CUSTOM_STATE"]).write_text(\n'
-            '        str(project_directory), encoding="utf-8"\n'
-            "    )\n\n"
-            "def cleanup_project(_context):\n"
-            '    Path(os.environ["LIFECYCLE_CUSTOM_STATE"]).unlink()\n'
-            '    executable = Path(os.environ["LIFECYCLE_CUSTOM_BIN"])\n'
-            '    Path(os.environ["LIFECYCLE_CUSTOM_RESULT"]).write_text(\n'
-            '        "present" if executable.exists() else "missing", encoding="utf-8"\n'
-            "    )\n",
-            encoding="utf-8",
-        )
-        install = payload / "install.py"
-        install_source = install.read_text(encoding="utf-8")
-        install_source = install_source.replace(
-            "        prepared = selection.prepare(Path(staging).resolve())\n",
-            "        prepared = selection.prepare(Path(staging).resolve())\n"
-            "        if selection.source.kind != 'editable':\n"
-            '            raise RuntimeError("Custom project setup requires an editable source.")\n'
-            "        from .actions import prepare_project\n\n"
-            "        prepare_project(prepared, Path(selection.source.requirement))\n",
-            1,
-        )
-        install.write_text(install_source, encoding="utf-8")
-        uninstall = payload / "uninstall.py"
-        uninstall_source = uninstall.read_text(encoding="utf-8")
-        uninstall_source = uninstall_source.replace(
-            "    handoff = start_uninstall_handoff(\n"
-            "        preparation.plan,\n"
-            "        original_pid=original_pid or os.getpid(),\n"
-            "    )\n",
-            "    from .actions import cleanup_project\n\n"
-            "    handoff = start_uninstall_handoff(\n"
-            "        preparation.plan,\n"
-            "        original_pid=original_pid or os.getpid(),\n"
-            "        provider_cleanup=cleanup_project,\n"
-            "    )\n",
-            1,
-        )
-        uninstall.write_text(uninstall_source, encoding="utf-8")
-    build = subprocess.run(
-        [sys.executable, "-m", f"{name}_distr.make_artifacts"],
-        cwd=root,
-        env=environment,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert build.returncode == 0, build.stdout + build.stderr
-    check = subprocess.run(
-        [sys.executable, "-m", f"{name}_distr.make_artifacts", "--check"],
-        cwd=root,
-        env=environment,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert check.returncode == 0, check.stdout + check.stderr
-    settings = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
-    app_id = settings["tool"]["apprc"]["distribution"]["app-id"]
-    if os.name == "nt":
-        state = Path(environment["LOCALAPPDATA"]) / app_id / "installation"
-    elif sys.platform == "darwin":
-        state = (
-            Path(environment["HOME"])
-            / "Library"
-            / "Application Support"
-            / app_id
-            / "installation"
-        )
-    else:
-        state = Path(environment["XDG_DATA_HOME"]) / app_id / "installation"
-    return root, environment, state
-
-
-@pytest.fixture
-def consumer(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> Iterator[tuple[Path, dict[str, str], Path]]:
-    """Create a generated consumer with isolated native installation roots."""
-    yield _create_consumer(tmp_path, monkeypatch, name="lifecycle_consumer")
-
-
-def _run(
-    command: list[str], *, cwd: Path, env: dict[str, str]
-) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        command, cwd=cwd, env=env, text=True, capture_output=True, check=False
-    )
-
-
-def _run_launcher_pty(
-    executable: Path,
-    *,
-    cwd: Path,
-    env: dict[str, str],
-    marker: bytes,
-    authority: Path,
-) -> int:
-    """Run the real management surface without replacing invalid authority."""
-    import fcntl
-    import pty
-    import termios
-
-    environment = env | {"TERM": "xterm-256color", "COLUMNS": "120", "LINES": "40"}
-    master, slave = pty.openpty()
-    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
-    process = subprocess.Popen(
-        [str(executable), "launcher"],
-        cwd=cwd,
-        env=environment,
-        stdin=slave,
-        stdout=slave,
-        stderr=slave,
-    )
-    os.close(slave)
-    output = bytearray()
-    authority_bytes = authority.read_bytes()
-    try:
-        deadline = time.monotonic() + 20
-        while marker not in re.sub(rb"\x1b\[[0-?]*[ -/]*[@-~]", b"", bytes(output)):
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise AssertionError(
-                    f"Launcher did not reach its management screen: {bytes(output)!r}"
-                )
-            readable, _, _ = select.select([master], [], [], remaining)
-            if readable:
-                output.extend(os.read(master, 65536))
-        os.write(master, b"q")
-        deadline = time.monotonic() + 20
-        while process.poll() is None:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise AssertionError("Launcher did not exit after Quit.")
-            readable, _, _ = select.select([master], [], [], min(remaining, 0.25))
-            if readable:
-                try:
-                    output.extend(os.read(master, 65536))
-                except OSError:
-                    break
-        status = process.wait(timeout=5)
-        assert authority.read_bytes() == authority_bytes
-        return status
-    finally:
-        if process.poll() is None:
-            process.terminate()
-            process.wait(timeout=5)
-        os.close(master)
-
-
-def _installer(root: Path, name: str) -> Path:
-    """Return the generated main installer used for saved repair tests."""
-    return (
-        root / "src" / f"{name}_distr" / "artifacts" / "installer" / "main-installer.py"
-    )
-
-
-def _install_command(root: Path, *arguments: str) -> list[str]:
-    """Invoke the generated Python developer entry from any working directory."""
-    entry = root / "app-install.py"
-    return [sys.executable, str(entry), *arguments]
-
-
-def _uninstall_command(state: Path, *arguments: str) -> list[str]:
-    forwarded = arguments or ("--yes",)
-    if os.name == "nt":
-        return ["cmd.exe", "/d", "/c", str(state / "uninstall.cmd"), *forwarded]
-    return [str(state / "uninstall.sh"), *forwarded]
-
-
-def test_generated_consumer_install_uses_installer_location_and_launches(
-    consumer: tuple[Path, dict[str, str], Path], tmp_path: Path
-) -> None:
-    root, environment, state = consumer
-    name = "lifecycle_consumer"
-    unrelated = tmp_path / "unrelated caller directory"
-    unrelated.mkdir()
-    result = _run(
-        _install_command(root, "--layout", "native"),
-        cwd=unrelated,
-        env=environment,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-    executable = Path(environment["UV_TOOL_BIN_DIR"]) / (
-        name + (".exe" if os.name == "nt" else "")
-    )
-    paths = _run(
-        [str(executable), "config", "paths", "--json"],
-        cwd=unrelated,
-        env=environment,
-    )
-    assert paths.returncode == 0, paths.stdout + paths.stderr
-    authority = state / "installation.json"
-    valid_authority = authority.read_bytes()
-    authority.write_text("{invalid", encoding="utf-8")
-    invalid_authority_paths = _run(
-        [str(executable), "config", "paths", "--json"],
-        cwd=unrelated,
-        env=environment,
-    )
-    assert invalid_authority_paths.returncode != 0
-    shown = _run(
-        [str(executable), "installation", "show", "--json"],
-        cwd=unrelated,
-        env=environment,
-    )
-    assert shown.returncode == 0, shown.stdout + shown.stderr
-    assert json.loads(shown.stdout)["status"] == "invalid"
-    diagnosed = _run(
-        [str(executable), "installation", "doctor", "--json"],
-        cwd=unrelated,
-        env=environment,
-    )
-    assert diagnosed.returncode == 1
-    assert json.loads(diagnosed.stdout)["status"] == "invalid"
-    preview = _run(
-        [str(executable), "installation", "uninstall", "--dry-run", "--json"],
-        cwd=unrelated,
-        env=environment,
-    )
-    assert preview.returncode == 0, preview.stdout + preview.stderr
-    if os.name != "nt":
-        status = _run_launcher_pty(
-            executable,
-            cwd=unrelated,
+    environment["UV_PYTHON_DOWNLOADS"] = "never"
+    for arguments in (
+        ("lock", "--python", sys.executable),
+        ("sync", "--locked", "--no-default-groups", "--python", sys.executable),
+    ):
+        result = subprocess.run(
+            [str(uv), *arguments],
+            cwd=root,
             env=environment,
-            marker=b"AppRC launcher",
-            authority=authority,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=300,
         )
-        assert status == 0
-    authority.write_bytes(valid_authority)
-    launcher = root / "app-launch.py"
-    launch_command = [sys.executable, str(launcher), "version"]
-    launched = _run(launch_command, cwd=unrelated, env=environment)
-    assert launched.returncode == 0, launched.stdout + launched.stderr
-    assert launched.stdout.strip() == "0.1.0"
-    command_source = root / "src" / name / "cli" / "app.py"
-    command_text = command_source.read_text(encoding="utf-8")
-    command_source.write_text(
-        command_text.replace(
+        _succeeded(result)
+    # > Registration must reuse this already synchronized environment.
+    environment["UV_NO_SYNC"] = "1"
+    (root / "checkout-sentinel.txt").write_bytes(b"developer checkout\n")
+    (root / ".venv" / "environment-sentinel.txt").write_bytes(
+        b"developer environment\n"
+    )
+    return Consumer(
+        root,
+        environment,
+        installation_directory("lifecycle_consumer", environment=environment),
+        Path(uv).resolve(),
+    )
+
+
+def _assert_checkout_retained(consumer: Consumer) -> None:
+    assert (consumer.root / "checkout-sentinel.txt").read_bytes() == (
+        b"developer checkout\n"
+    )
+    assert (
+        consumer.root / ".venv" / "environment-sentinel.txt"
+    ).read_bytes() == b"developer environment\n"
+    assert consumer.command.is_file()
+
+
+def test_editable_registration_reuses_environment_and_live_source(
+    consumer: Consumer, tmp_path: Path
+) -> None:
+    """Register a checkout, run elsewhere and observe later source edits."""
+    environment = consumer.root / ".venv"
+    before = environment.stat()
+    configuration = (environment / "pyvenv.cfg").read_bytes()
+    lock = (consumer.root / "uv.lock").read_bytes()
+    _succeeded(consumer.register())
+    record = consumer.record()
+    assert record["schema_version"] == 3
+    assert record["status"] == "ready"
+    assert record["identity"]["app_id"] == consumer.name
+    runtime = record["active_runtime"]
+    assert Path(runtime["project"]) == consumer.root.resolve()
+    assert Path(runtime["environment"]) == environment.resolve()
+    assert record["retiring_runtime_ids"] == []
+    assert (environment.stat().st_dev, environment.stat().st_ino) == (
+        before.st_dev,
+        before.st_ino,
+    )
+    assert (environment / "pyvenv.cfg").read_bytes() == configuration
+    assert (consumer.root / "uv.lock").read_bytes() == lock
+    _assert_checkout_retained(consumer)
+
+    unrelated = tmp_path / "unrelated caller"
+    unrelated.mkdir()
+    conflicting = tmp_path / "unrelated environment"
+    conflicting.mkdir()
+    hostile = consumer.environment | {
+        "VIRTUAL_ENV": str(conflicting),
+        "PYTHONPATH": str(conflicting),
+    }
+    observed = subprocess.run(
+        [str(consumer.global_command), "diagnose", "--json"],
+        cwd=unrelated,
+        env=hostile,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    _succeeded(observed)
+    payload = json.loads(observed.stdout)
+    assert Path(payload["package_file"]).is_relative_to(consumer.root)
+    assert Path(payload["python_executable"]).parent == consumer.command.parent
+    paths = consumer.run("app", "paths", "--json")
+    _succeeded(paths)
+    path_result = json.loads(paths.stdout)
+    placement = record["placement"]
+    assert path_result["layout"] == "native"
+    assert path_result["source"] == "installation"
+    assert path_result["paths"]["config"] == placement["config_dir"]
+    assert path_result["paths"]["appdata"] == placement["appdata_dir"]
+
+    source = consumer.root / "src" / consumer.name / "cli" / "app.py"
+    source.write_text(
+        source.read_text(encoding="utf-8").replace(
             "typer.echo(_package_version())",
-            'typer.echo("editable source changed")',
+            'typer.echo("live editable source")',
             1,
         ),
         encoding="utf-8",
     )
-    changed = _run([str(executable), "version"], cwd=unrelated, env=environment)
-    assert changed.returncode == 0, changed.stdout + changed.stderr
-    assert changed.stdout.strip() == "editable source changed"
-    recorded_tool_dir = environment["UV_TOOL_DIR"]
-    recorded_tool_bin = environment["UV_TOOL_BIN_DIR"]
-    misleading_tools = tmp_path / "misleading tools"
-    misleading_bins = tmp_path / "misleading bins"
-    misleading_tools.mkdir()
-    misleading_bins.mkdir()
-    environment["UV_TOOL_DIR"] = str(misleading_tools)
-    environment["UV_TOOL_BIN_DIR"] = str(misleading_bins)
-    reinstalled = _run(
-        _install_command(root, "--layout", "native"),
+    changed = subprocess.run(
+        [str(consumer.global_command), "version"],
         cwd=unrelated,
-        env=environment,
+        env=hostile,
+        capture_output=True,
+        text=True,
+        check=False,
     )
-    assert reinstalled.returncode == 0, reinstalled.stdout + reinstalled.stderr
-    environment["UV_TOOL_DIR"] = recorded_tool_dir
-    environment["UV_TOOL_BIN_DIR"] = recorded_tool_bin
-    assert executable.is_file()
-    launched = _run([str(executable), "--help"], cwd=unrelated, env=environment)
-    assert launched.returncode == 0, launched.stdout + launched.stderr
+    _succeeded(changed)
+    assert changed.stdout.strip() == "live editable source"
+    _succeeded(consumer.register())
+    refreshed = consumer.record()
+    assert refreshed["generation_id"] == record["generation_id"]
+    assert refreshed["placement"] == record["placement"]
+    assert refreshed["active_runtime"] == runtime
+    _assert_checkout_retained(consumer)
 
 
-def test_external_repair_rejects_another_app_identity(
-    consumer: tuple[Path, dict[str, str], Path],
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """An external installer cannot repair a different app's authority."""
-    root, environment, state = consumer
-    installed = _run(
-        _install_command(root, "--layout", "native"),
-        cwd=tmp_path,
-        env=environment,
-    )
-    assert installed.returncode == 0, installed.stdout + installed.stderr
-    other_workspace = tmp_path / "other consumer workspace"
-    other_workspace.mkdir()
-    other_root, other_environment, other_state = _create_consumer(
-        other_workspace, monkeypatch, name="other_lifecycle_consumer"
-    )
-    other_install = _run(
-        _install_command(other_root, "--layout", "native"),
-        cwd=tmp_path,
-        env=other_environment,
-    )
-    assert other_install.returncode == 0, other_install.stdout + other_install.stderr
-    prior_authority = (other_state / "installation.json").read_bytes()
-    refused = _run(
-        [
-            sys.executable,
-            str(_installer(root, "lifecycle_consumer")),
-            "--repair",
-            "--directory",
-            str(other_state),
-        ],
-        cwd=tmp_path,
-        env=environment,
-    )
+def test_managed_install_from_checkout_requires_setup(consumer: Consumer) -> None:
+    """An app without an authored installer must not invent managed acquisition."""
+    refused = consumer.run("app", "install", "--yes", "--skip-setup")
     assert refused.returncode != 0
-    assert (other_state / "installation.json").read_bytes() == prior_authority
+    assert "setup" in (refused.stdout + refused.stderr).lower()
+    assert not (consumer.directory / "installation.json").exists()
+    _assert_checkout_retained(consumer)
 
 
-def test_saved_default_uninstall_retains_recovery_support(
-    consumer: tuple[Path, dict[str, str], Path], tmp_path: Path
+def test_editable_repair_leaves_environment_management_to_uv(
+    consumer: Consumer,
 ) -> None:
-    root, environment, state = consumer
-    name = "lifecycle_consumer"
-    installed = _run(
-        [sys.executable, str(_installer(root, name)), "--layout", "native"],
-        cwd=tmp_path,
-        env=environment,
-    )
-    assert installed.returncode == 0, installed.stdout + installed.stderr
-    initial_record = json.loads(
-        (state / "installation.json").read_text(encoding="utf-8")
-    )
-    saved_snapshot = initial_record["current"]
-    assert saved_snapshot is not None
-    uninstall = state / ("uninstall.cmd" if os.name == "nt" else "uninstall.sh")
-    project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
-    app_id = project["tool"]["apprc"]["distribution"]["app-id"]
-    if os.name == "nt":
-        appdata = Path(environment["LOCALAPPDATA"]) / app_id
-    elif sys.platform == "darwin":
-        appdata = Path(environment["HOME"]) / "Library" / "Application Support" / app_id
-    else:
-        appdata = Path(environment["XDG_DATA_HOME"]) / app_id / "appdata"
-    appdata.mkdir(parents=True, exist_ok=True)
-    retained = appdata / "retained-by-default.txt"
-    retained.write_text("keep user data\n", encoding="utf-8")
-    unknown = Path(environment["HOME"]) / "unknown-user-data.txt"
-    unknown.write_text("leave unowned data untouched\n", encoding="utf-8")
-    removed = _run(_uninstall_command(state), cwd=tmp_path, env=environment)
-    assert removed.returncode == 0, removed.stdout + removed.stderr
-    record = json.loads((state / "installation.json").read_text(encoding="utf-8"))
-    assert record["status"] == "removed-retained"
-    assert record["current"] is None
-    assert record["last_successful"] is not None
-    assert uninstall.is_file()
-    assert retained.read_text(encoding="utf-8") == "keep user data\n"
-    assert unknown.read_text(encoding="utf-8") == "leave unowned data untouched\n"
-    tool_dir = Path(environment["UV_TOOL_DIR"])
-    executable = Path(environment["UV_TOOL_BIN_DIR"]) / (
-        name + (".exe" if os.name == "nt" else "")
-    )
-    assert not (tool_dir / name).exists()
-    assert not (tool_dir / name.replace("_", "-")).exists()
-    assert not executable.exists()
-
-    unrelated = tmp_path / "repair caller outside checkout"
-    unrelated.mkdir()
-    wrong_directory = tmp_path / "not the saved installation"
-    wrong_directory.mkdir()
-    refused = _run(
-        [
-            sys.executable,
-            str(state / "repair-installer.py"),
-            "--repair",
-            "--directory",
-            str(wrong_directory),
-        ],
-        cwd=unrelated,
-        env=environment,
-    )
-    assert refused.returncode != 0
-    unchanged = json.loads((state / "installation.json").read_text(encoding="utf-8"))
-    assert unchanged["status"] == "removed-retained"
-    misleading_tools = tmp_path / "misleading repair tools"
-    misleading_bins = tmp_path / "misleading repair bins"
-    misleading_tools.mkdir()
-    misleading_bins.mkdir()
-    repair_environment = environment | {
-        "UV_TOOL_DIR": str(misleading_tools),
-        "UV_TOOL_BIN_DIR": str(misleading_bins),
-    }
-    repaired = _run(
-        [
-            sys.executable,
-            str(state / "repair-installer.py"),
-            "--repair",
-            "--directory",
-            str(state),
-        ],
-        cwd=unrelated,
-        env=repair_environment,
-    )
-    assert repaired.returncode == 0, repaired.stdout + repaired.stderr
-    assert executable.is_file()
-    assert not tuple(misleading_tools.iterdir())
-    assert not tuple(misleading_bins.iterdir())
-    repaired_record = json.loads(
-        (state / "installation.json").read_text(encoding="utf-8")
-    )
-    assert repaired_record["status"] == "ready"
-    assert repaired_record["current"] is not None
-    assert repaired_record["current"]["source"] == saved_snapshot["source"]
-    assert repaired_record["current"]["backend"] == saved_snapshot["backend"]
-    runs = _run([str(executable), "--help"], cwd=unrelated, env=environment)
-    saved_repair = _run(
-        [sys.executable, str(state / "repair-installer.py")],
-        cwd=unrelated,
-        env=environment,
-    )
-    assert saved_repair.returncode == 0, saved_repair.stdout + saved_repair.stderr
-    assert executable.is_file()
-    assert runs.returncode == 0, runs.stdout + runs.stderr
-
-    external_repair = _run(
-        [
-            sys.executable,
-            str(_installer(root, "lifecycle_consumer")),
-            "--repair",
-            "--directory",
-            str(state),
-        ],
-        cwd=unrelated,
-        env=environment,
-    )
-    assert external_repair.returncode == 0, (
-        external_repair.stdout + external_repair.stderr
-    )
-    wrong_external_address = _run(
-        [
-            sys.executable,
-            str(_installer(root, "lifecycle_consumer")),
-            "--repair",
-            "--directory",
-            str(wrong_directory),
-        ],
-        cwd=unrelated,
-        env=environment,
-    )
-    assert wrong_external_address.returncode != 0
-    assert (
-        json.loads((state / "installation.json").read_text(encoding="utf-8"))["status"]
-        == "ready"
-    )
-
-    removed_again = _run(_uninstall_command(state), cwd=unrelated, env=environment)
-    assert removed_again.returncode == 0, removed_again.stdout + removed_again.stderr
-    retained_record = json.loads(
-        (state / "installation.json").read_text(encoding="utf-8")
-    )
-    assert retained_record["status"] == "removed-retained"
-    assert retained_record["current"] is None
-    assert retained.exists()
-    assert unknown.read_text(encoding="utf-8") == "leave unowned data untouched\n"
-    assert uninstall.is_file()
-    assert not executable.exists()
+    """Report the developer's recovery command without preparing a runtime slot."""
+    _succeeded(consumer.register())
+    before = consumer.record()
+    configuration = (consumer.root / ".venv" / "pyvenv.cfg").read_bytes()
+    repaired = consumer.run("app", "repair")
+    assert "uv sync --locked" in repaired.stdout + repaired.stderr
+    assert consumer.record() == before
+    assert (consumer.root / ".venv" / "pyvenv.cfg").read_bytes() == configuration
+    _assert_checkout_retained(consumer)
 
 
-def test_saved_complete_uninstall_removes_owned_lifecycle_authority(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+def test_editable_uninstall_retains_checkout_environment_and_user_data(
+    consumer: Consumer, tmp_path: Path
 ) -> None:
-    """Remove owned authority and program while explicitly retaining custom config."""
-    root, environment, state = _create_consumer(
-        tmp_path,
-        monkeypatch,
-        name="lifecycle_consumer",
-        custom_actions=True,
-    )
-    name = "lifecycle_consumer"
-    installed = _run(
-        [sys.executable, str(_installer(root, name)), "--layout", "native"],
-        cwd=tmp_path,
-        env=environment,
-    )
-    assert installed.returncode == 0, installed.stdout + installed.stderr
-    executable = Path(environment["UV_TOOL_BIN_DIR"]) / name
-    assert executable.is_file()
-    record = json.loads((state / "installation.json").read_text(encoding="utf-8"))
-    config_root = Path(record["placement"]["config_dir"])
-    custom_config = config_root / "custom-settings.toml"
-    custom_config.write_text("user setting = true\n", encoding="utf-8")
-    removed = _run(
-        _uninstall_command(
-            state,
-            "--complete",
-            "--category",
-            "config",
-            "--category",
-            "appdata",
-            "--forget-retained",
-            "--yes",
-        ),
-        cwd=tmp_path,
-        env=environment,
-    )
-    assert removed.returncode == 0, removed.stdout + removed.stderr
-    assert not executable.exists()
-    assert not (state / "installation.json").exists()
-    assert not (state / "repair-installer.py").exists()
-    assert custom_config.read_text(encoding="utf-8") == "user setting = true\n"
-    assert not Path(environment["LIFECYCLE_CUSTOM_STATE"]).exists()
-    assert (
-        Path(environment["LIFECYCLE_CUSTOM_RESULT"]).read_text(encoding="utf-8")
-        == "present"
-    )
+    """Remove only owned integrations, then reconnect retained resource placement."""
+    _succeeded(consumer.register())
+    record = consumer.record()
+    appdata = Path(record["placement"]["appdata_dir"])
+    data = appdata / "user-data.txt"
+    data.write_bytes(b"retain application data\n")
+    unknown = consumer.directory / "unknown-user-file"
+    unknown.write_bytes(b"do not sweep installation children\n")
+    unrelated = Path(consumer.environment["UV_TOOL_BIN_DIR"]) / "unrelated-command"
+    unrelated.write_bytes(b"not an AppRC integration\n")
+    removed = consumer.run("app", "uninstall", "--yes", cwd=tmp_path)
+    _succeeded(removed)
+    retained = consumer.record()
+    assert retained["status"] == "removed-retained"
+    assert retained["active_runtime"] is None
+    assert retained["operation"] is None
+    assert not os.path.lexists(consumer.global_command)
+    assert data.read_bytes() == b"retain application data\n"
+    assert unknown.read_bytes() == b"do not sweep installation children\n"
+    assert unrelated.read_bytes() == b"not an AppRC integration\n"
+    _assert_checkout_retained(consumer)
+    _succeeded(consumer.register())
+    assert consumer.record()["placement"] == record["placement"]
+    shown = consumer.run("config", "show", "--json")
+    _succeeded(shown)
 
 
-@pytest.mark.skipif(
-    os.name == "nt", reason="The maintained TUI driver uses a POSIX PTY."
-)
-def test_launcher_saved_uninstall_waits_for_initiating_process_exit(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+def test_installed_consumer_hooks_initialize_and_purge_exact_owned_data(
+    consumer: Consumer, tmp_path: Path
 ) -> None:
-    """Run the actual Textual launcher and its saved uninstall handoff in a PTY."""
-    import fcntl
-    import pty
-    import termios
+    """Run installed providers before removing integrations, never the developer env."""
+    module = consumer.root / "src" / consumer.name / "installation.py"
+    module.write_text(
+        textwrap.dedent('''\
+            """Consumer-owned idempotent initialization and exact cleanup."""
+            import os
+            import sys
+            from pathlib import Path
 
-    root, environment, state = _create_consumer(
-        tmp_path, monkeypatch, name="lifecycle_consumer", custom_actions=True
-    )
-    name = "lifecycle_consumer"
-    installed = _run(
-        [sys.executable, str(_installer(root, name)), "--layout", "native"],
-        cwd=root,
-        env=environment,
-    )
-    assert installed.returncode == 0, installed.stdout + installed.stderr
-    executable = Path(environment["UV_TOOL_BIN_DIR"]) / name
-    environment.update(TERM="xterm-256color", COLUMNS="120", LINES="60")
-    master, slave = pty.openpty()
-    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 60, 120, 0, 0))
-    process = subprocess.Popen(
-        [str(executable), "launcher"],
-        cwd=Path(environment["HOME"]),
-        env=environment,
-        stdin=slave,
-        stdout=slave,
-        stderr=slave,
-    )
-    os.close(slave)
-    output = bytearray()
+            import apprc as rc
+            from apprc.definition.installation import CleanupInventory, InventoryEntry
+            from apprc.distribution.runtime.controllers import default_cleanup_inventory
+            from apprc.user_files.app_home.writes import file_revision
 
-    def read_until(marker: bytes) -> None:
-        deadline = time.monotonic() + 20
-        while marker not in re.sub(rb"\x1b\[[0-?]*[ -/]*[@-~]", b"", bytes(output)):
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise AssertionError(
-                    f"Launcher did not display {marker!r}: {bytes(output)!r}"
+            def initialize(context):
+                root = context.placement.appdata_dir
+                assert root is not None
+                marker = root / "consumer-owned.txt"
+                if not marker.exists():
+                    marker.write_bytes(b"initialized by installed provider")
+
+            def inventory(inspection, categories, forget_retained):
+                base = default_cleanup_inventory(
+                    inspection, categories=categories, forget_retained=True
                 )
-            readable, _, _ = select.select([master], [], [], remaining)
-            if not readable:
-                continue
-            try:
-                output.extend(os.read(master, 65536))
-            except OSError as error:
-                raise AssertionError(
-                    f"Launcher exited before displaying {marker!r}: {bytes(output)!r}"
-                ) from error
+                entries, retained = list(base.entries), list(base.retained)
+                root = inspection.record.placement.appdata_dir
+                if "appdata" in categories and root is not None:
+                    marker = root / "consumer-owned.txt"
+                    entries.append(
+                        InventoryEntry(marker, "file", file_revision(marker), "appdata")
+                    )
+                    unknown = set(root.iterdir()) - {
+                        marker, root / ".apprc-owner.json"
+                    }
+                    if unknown and not forget_retained:
+                        raise rc.InstallationError("Unknown appdata is not owned.")
+                    if not unknown:
+                        retained = [item for item in retained if item.path != root]
+                        entries.append(InventoryEntry(root, "directory", None, "appdata"))
+                return CleanupInventory(tuple(entries), tuple(retained))
 
-    def click_button(label: bytes) -> None:
-        """Click the current rendered label rather than guessing focus order."""
-        read_until(label)
-        rendered = bytes(output)
-        label_at = rendered.rfind(label)
-        positions = tuple(re.finditer(rb"\x1b\[(\d+);(\d+)H", rendered[:label_at]))
-        assert label_at >= 0 and positions, rendered.decode(errors="replace")
-        cursor = positions[-1]
-        prefix = re.sub(
-            rb"\x1b\[[0-?]*[ -/]*[@-~]", b"", rendered[cursor.end() : label_at]
-        ).decode("utf-8")
-        row = int(cursor[1])
-        column = int(cursor[2]) + len(prefix) + 1
-        os.write(
-            master,
-            f"\x1b[<0;{column};{row}M\x1b[<0;{column};{row}m".encode(),
-        )
-
-    try:
-        click_button(b"Uninstall")
-        click_button(b"Remove program")
-        authority = state / "installation.json"
-        deadline = time.monotonic() + 30
-        while process.poll() is None:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise AssertionError(
-                    "Launcher did not exit after saved uninstall confirmation: "
-                    + bytes(output).decode(errors="replace")
+            def cleanup(context):
+                sentinel = Path(os.environ["LIFECYCLE_ENV_SENTINEL"])
+                assert sentinel.read_bytes() == b"developer environment\\n"
+                Path(os.environ["LIFECYCLE_HOOK_LOG"]).write_text(
+                    str(Path(sys.prefix)) + "\\n" + str(context.directory),
+                    encoding="utf-8",
                 )
-            readable, _, _ = select.select([master], [], [], min(remaining, 0.1))
-            if readable:
-                try:
-                    output.extend(os.read(master, 65536))
-                except OSError:
-                    break
-        assert process.wait(timeout=30) == 0, bytes(output).decode(errors="replace")
-        deadline = time.monotonic() + 20
-        while time.monotonic() < deadline:
-            if authority.is_file():
-                record = json.loads(authority.read_text(encoding="utf-8"))
-                if record["status"] == "removed-retained":
-                    break
-            time.sleep(0.05)
-        record = json.loads(authority.read_text(encoding="utf-8"))
-        assert record["status"] == "removed-retained", bytes(output).decode(
-            errors="replace"
-        )
-        assert record["current"] is None
-        assert not executable.exists()
-        assert (state / "uninstall.sh").is_file()
-        assert not Path(environment["LIFECYCLE_CUSTOM_STATE"]).exists()
-        assert (
-            Path(environment["LIFECYCLE_CUSTOM_RESULT"]).read_text(encoding="utf-8")
-            == "present"
-        )
-    finally:
-        if process.poll() is None:
-            process.terminate()
-            process.wait(timeout=5)
-        os.close(master)
 
-
-def test_custom_project_setup_and_cleanup_run_in_real_lifecycle(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    name = "custom_lifecycle_consumer"
-    root, environment, state = _create_consumer(
-        tmp_path, monkeypatch, name=name, custom_actions=True
+            INSTALLATION_HOOKS = rc.InstallationHooks(
+                initialize="lifecycle_consumer.installation:initialize",
+                inventory="lifecycle_consumer.installation:inventory",
+                cleanup="lifecycle_consumer.installation:cleanup",
+            )
+            '''),
+        encoding="utf-8",
     )
-    marker = Path(environment["LIFECYCLE_CUSTOM_STATE"])
-    installed = _run(
-        [sys.executable, str(_installer(root, name)), "--layout", "native"],
-        cwd=tmp_path,
-        env=environment,
+    project = consumer.root / "pyproject.toml"
+    with project.open("a", encoding="utf-8") as stream:
+        stream.write(
+            "\n[tool.apprc.distribution.hooks]\n"
+            'initialize = "lifecycle_consumer.installation:initialize"\n'
+            'inventory = "lifecycle_consumer.installation:inventory"\n'
+            'cleanup = "lifecycle_consumer.installation:cleanup"\n'
+        )
+    log = tmp_path / "provider-cleanup.log"
+    consumer.environment["LIFECYCLE_HOOK_LOG"] = str(log)
+    consumer.environment["LIFECYCLE_ENV_SENTINEL"] = str(
+        consumer.root / ".venv" / "environment-sentinel.txt"
     )
-    assert installed.returncode == 0, installed.stdout + installed.stderr
-    assert marker.is_file()
-    assert marker.read_text(encoding="utf-8") == str(root)
-    executable = Path(environment["LIFECYCLE_CUSTOM_BIN"])
-    removed = _run(
-        [str(executable), "installation", "uninstall", "--yes"],
-        cwd=tmp_path,
-        env=environment,
+    _succeeded(consumer.register())
+    record = consumer.record()
+    marker = Path(record["placement"]["appdata_dir"]) / "consumer-owned.txt"
+    assert marker.read_bytes() == b"initialized by installed provider"
+    marker.write_bytes(b"preserve later application changes")
+    _succeeded(consumer.register())
+    assert marker.read_bytes() == b"preserve later application changes"
+    removed = consumer.run(
+        "app",
+        "uninstall",
+        "--complete",
+        "--category",
+        "config",
+        "--category",
+        "appdata",
+        "--yes",
     )
-    assert removed.returncode == 0, removed.stdout + removed.stderr
+    _succeeded(removed)
+    assert log.read_text(encoding="utf-8").splitlines() == [
+        str((consumer.root / ".venv").resolve()),
+        str(consumer.directory),
+    ]
     assert not marker.exists()
-    assert (
-        Path(environment["LIFECYCLE_CUSTOM_RESULT"]).read_text(encoding="utf-8")
-        == "present"
-    )
-    record = json.loads((state / "installation.json").read_text(encoding="utf-8"))
-    assert record["status"] == "removed-retained"
-    assert record["current"] is None
-    assert record["last_successful"] is not None
-    assert not Path(environment["LIFECYCLE_CUSTOM_BIN"]).exists()
-    assert (state / "installation.json").is_file()
+    assert not os.path.lexists(consumer.global_command)
+    _assert_checkout_retained(consumer)
 
 
-def test_saved_support_link_failure_preserves_installation_for_recovery(
-    consumer: tuple[Path, dict[str, str], Path], tmp_path: Path
+def test_editable_registration_refuses_unknown_command_collision(
+    consumer: Consumer,
 ) -> None:
-    """Reject linked saved support without deleting the app, then recover."""
-    root, environment, state = consumer
-    installed = _run(
+    consumer.global_command.write_bytes(b"unowned command\n")
+    refused = consumer.register()
+    assert refused.returncode != 0
+    assert consumer.global_command.read_bytes() == b"unowned command\n"
+    assert not (consumer.directory / "installation.json").exists()
+    assert not (Path(consumer.environment["XDG_CONFIG_HOME"]) / consumer.name).exists()
+    assert not (
+        Path(consumer.environment["XDG_DATA_HOME"]) / consumer.name / "appdata"
+    ).exists()
+    _assert_checkout_retained(consumer)
+
+
+@pytest.mark.parametrize("location", ["off-path", "checkout", "environment"])
+def test_registration_requires_external_command_directory_on_path(
+    consumer: Consumer, tmp_path: Path, location: str
+) -> None:
+    """Do not claim a developer-owned directory or invent PATH/profile changes."""
+    directory = {
+        "off-path": tmp_path / "not-on-path",
+        "checkout": consumer.root / "global-commands",
+        "environment": consumer.root / ".venv" / "global-commands",
+    }[location]
+    directory.mkdir()
+    if location != "off-path":
+        consumer.environment["PATH"] = os.pathsep.join(
+            (str(directory), consumer.environment["PATH"])
+        )
+    refused = consumer.register("--command-directory", str(directory))
+    assert refused.returncode != 0
+    assert not tuple(directory.iterdir())
+    assert not (consumer.directory / "installation.json").exists()
+    _assert_checkout_retained(consumer)
+
+
+def test_registration_rejects_an_interpreter_outside_checkout_environment(
+    consumer: Consumer,
+) -> None:
+    """A source import cannot substitute the active repository's actual venv."""
+    venv_config = (consumer.root / ".venv" / "pyvenv.cfg").read_bytes()
+    environment_sentinel = (
+        consumer.root / ".venv" / "environment-sentinel.txt"
+    ).read_bytes()
+    refused = subprocess.run(
         [
             sys.executable,
-            str(_installer(root, "lifecycle_consumer")),
-            "--layout",
-            "native",
+            "-m",
+            consumer.name,
+            "app",
+            "install",
+            "-e",
+            "--yes",
+            "--skip-setup",
         ],
-        cwd=tmp_path,
-        env=environment,
+        cwd=consumer.root,
+        env=consumer.environment | {"PYTHONPATH": str(consumer.root / "src")},
+        capture_output=True,
+        text=True,
+        check=False,
     )
-    assert installed.returncode == 0, installed.stdout + installed.stderr
-    inspection = state / "inspection.py"
-    saved_inspection = inspection.read_bytes()
-    outside = tmp_path / "linked inspection.py"
-    outside.write_bytes(saved_inspection)
-    inspection.unlink()
-    inspection.symlink_to(outside)
-    failed = _run(_uninstall_command(state), cwd=tmp_path, env=environment)
-    assert failed.returncode != 0
-    command = Path(environment["UV_TOOL_BIN_DIR"]) / "lifecycle_consumer"
-    assert command.is_file()
-    inspection.unlink()
-    inspection.write_bytes(saved_inspection)
-    recovered = _run(_uninstall_command(state), cwd=tmp_path, env=environment)
-    assert recovered.returncode == 0, recovered.stdout + recovered.stderr
-    assert not command.exists()
+    assert refused.returncode != 0
+    assert not (consumer.directory / "installation.json").exists()
+    assert not os.path.lexists(consumer.global_command)
+    assert (consumer.root / ".venv" / "pyvenv.cfg").read_bytes() == venv_config
+    assert (
+        consumer.root / ".venv" / "environment-sentinel.txt"
+    ).read_bytes() == environment_sentinel
+    _assert_checkout_retained(consumer)
 
 
-def test_generated_support_directory_link_is_rejected(
-    consumer: tuple[Path, dict[str, str], Path],
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.skipif(os.name == "nt", reason="POSIX readlink ownership.")
+def test_retargeted_command_link_is_not_deleted(
+    consumer: Consumer, tmp_path: Path
 ) -> None:
-    """Reject a linked lifecycle support directory before reading its contents."""
-    import importlib.util
+    """Identical destination bytes do not authorize deleting a different link."""
+    _succeeded(consumer.register())
+    command = consumer.global_command
+    assert command.is_symlink()
+    original = os.readlink(command)
+    replacement = tmp_path / "unowned command target"
+    replacement.write_bytes(consumer.command.read_bytes())
+    command.unlink()
+    command.symlink_to(replacement)
+    before = consumer.record()
+    removed = consumer.run("app", "uninstall", "--yes")
+    assert "Refusing to remove a modified global command" in (
+        removed.stdout + removed.stderr
+    )
+    updated = consumer.record()
+    assert updated["operation"] is not None
+    assert updated["operation"] != before["operation"]
+    assert command.is_symlink()
+    assert os.readlink(command) == str(replacement)
+    assert replacement.read_bytes() == consumer.command.read_bytes()
+    _assert_checkout_retained(consumer)
+    command.unlink()
+    command.symlink_to(original)
+    _succeeded(consumer.run("app", "uninstall", "--yes"))
+    assert not os.path.lexists(command)
 
-    root, _, _ = consumer
-    project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
-    app_id = project["tool"]["apprc"]["distribution"]["app-id"]
-    payload = root / "src" / "lifecycle_consumer_distr" / "payload"
-    lifecycle = payload / "app_lifecycle"
-    support = lifecycle / "_support"
-    outside = tmp_path / "external support"
-    shutil.copytree(support, outside)
-    shutil.rmtree(support)
-    support.symlink_to(outside, target_is_directory=True)
-    module_spec = importlib.util.spec_from_file_location(
-        "generated_lifecycle_install",
-        lifecycle / "install.py",
-    )
-    assert module_spec is not None and module_spec.loader is not None
-    module = importlib.util.module_from_spec(module_spec)
-    module_spec.loader.exec_module(module)
-    monkeypatch.setattr(sys, "path", [str(payload), *sys.path[1:]])
-    monkeypatch.setattr(
-        sys, "argv", [str(tmp_path / "unmanaged" / "main-installer.py")]
-    )
-    with pytest.raises(RuntimeError, match="support directory is missing or linked"):
-        module._support_files(app_id)
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX parent symlink containment.")
+@pytest.mark.parametrize("boundary", ["installation", "command-directory"])
+def test_registration_rejects_linked_lifecycle_boundaries(
+    consumer: Consumer, tmp_path: Path, boundary: str
+) -> None:
+    """Do not canonicalize user-selected lifecycle paths to bypass link guards."""
+    outside = tmp_path / "outside lifecycle boundary"
+    outside.mkdir()
+    sentinel = outside / "unowned"
+    sentinel.write_bytes(b"preserve linked target\n")
+    if boundary == "installation":
+        consumer.directory.parent.mkdir(parents=True, exist_ok=True)
+        consumer.directory.symlink_to(outside, target_is_directory=True)
+        arguments: tuple[str, ...] = ()
+    else:
+        linked = tmp_path / "linked command directory"
+        linked.symlink_to(outside, target_is_directory=True)
+        consumer.environment["PATH"] = os.pathsep.join(
+            (str(linked), consumer.environment["PATH"])
+        )
+        arguments = ("--command-directory", str(linked))
+    refused = consumer.register(*arguments)
+    assert refused.returncode != 0
+    assert sentinel.read_bytes() == b"preserve linked target\n"
+    assert not (outside / "installation.json").exists()
+    assert not (outside / consumer.command.name).exists()
+    _assert_checkout_retained(consumer)
+
+
+@pytest.mark.parametrize("invalid", ["{invalid", '{"schema_version":2}'])
+def test_invalid_authority_is_not_replaced_by_registration(
+    consumer: Consumer, invalid: str
+) -> None:
+    _succeeded(consumer.register())
+    authority = consumer.directory / "installation.json"
+    authority.write_text(invalid, encoding="utf-8")
+    before = authority.read_bytes()
+    refused = consumer.register()
+    assert refused.returncode != 0
+    assert authority.read_bytes() == before
+    shown = consumer.run("config", "show", "--json")
+    assert shown.returncode != 0
+    _assert_checkout_retained(consumer)
 
 
 @pytest.mark.skipif(
-    not sys.platform.startswith("linux"),
-    reason="Linux resource migration paths.",
+    not sys.platform.startswith("linux"), reason="Linux resource migration paths."
 )
-def test_saved_installer_resumes_interrupted_current_resource_migration(
-    consumer: tuple[Path, dict[str, str], Path],
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+def test_interrupted_resource_migration_preserves_editable_ownership(
+    consumer: Consumer, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Resume schema-2 resource moves through the maintained installer."""
+    """Resume exact SDK resource inventory without changing the checkout runtime."""
     import apprc as rc
     from apprc.definition.installation import (
         InstallationPlacement,
@@ -834,134 +583,76 @@ def test_saved_installer_resumes_interrupted_current_resource_migration(
     )
     from apprc.definition.paths import Layout, ResourceKind
     from apprc.user_files.app_home.writes import file_revision
+    from apprc.user_files.installation.migration import resume_migration
 
-    root, environment, state = consumer
-    installed = _run(
-        _install_command(root, "--layout", "native"),
-        cwd=tmp_path,
-        env=environment,
-    )
-    assert installed.returncode == 0, installed.stdout + installed.stderr
-
-    executable = Path(environment["UV_TOOL_BIN_DIR"]) / "lifecycle_consumer"
-    for command in (("config", "init"), ("appdata", "init")):
-        initialized = _run(
-            [str(executable), *command],
-            cwd=tmp_path,
-            env=environment,
-        )
-        assert initialized.returncode == 0, initialized.stdout + initialized.stderr
-
-    project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
-    app_id = project["tool"]["apprc"]["distribution"]["app-id"]
+    _succeeded(consumer.register())
     manager = rc.AppRC(
-        app_id=app_id,
-        paths=rc.Paths(config=True, appdata=True),
-    ).installation(environment=environment)
-    inspection = manager.inspect()
-    record = inspection.record
-    assert record is not None
-    assert record.status == "ready"
-    source_roots: dict[ResourceKind, Path | None] = {
-        "config": record.placement.config_dir,
-        "appdata": record.placement.appdata_dir,
-    }
-    assert all(path is not None for path in source_roots.values())
-    appdata_root = source_roots["appdata"]
-    assert appdata_root is not None
-    payload = appdata_root / "migration-payload.bin"
-    payload.write_bytes(b"preserve this application data")
-
-    destination_root = tmp_path / "migrated resources"
-    destinations: list[Path] = []
+        app_id=consumer.name, paths=rc.Paths(config=True, appdata=True)
+    ).installation(environment=consumer.environment)
+    record = manager.inspect().record
+    assert record is not None and record.active_runtime is not None
+    runtime = record.active_runtime
+    config, appdata = record.placement.config_dir, record.placement.appdata_dir
+    assert config is not None and appdata is not None
+    payload = appdata / "migration-payload.bin"
+    payload.write_bytes(b"preserve application data")
+    destination = tmp_path / "migrated resources"
     entries: list[InventoryEntry] = []
-    for kind, source_root in source_roots.items():
-        assert source_root is not None
-        assert source_root.is_dir()
-        for source in sorted(source_root.rglob("*")):
+    targets: list[Path] = []
+    roots: dict[ResourceKind, Path] = {"config": config, "appdata": appdata}
+    for kind, root in roots.items():
+        for source in sorted(root.rglob("*")):
             if source.is_dir():
                 continue
             assert source.is_file() and not source.is_symlink()
-            relative = source.relative_to(source_root)
-            destination = destination_root / kind / relative
             entries.append(InventoryEntry(source, "file", file_revision(source), kind))
-            destinations.append(destination)
-    assert any(entry.path.name == ".apprc-owner.json" for entry in entries)
-    assert payload in {entry.path for entry in entries}
-    owner_marker_contents = {
-        kind: (source_root / ".apprc-owner.json").read_bytes()
-        for kind, source_root in source_roots.items()
-        if source_root is not None
-    }
+            targets.append(destination / kind / source.relative_to(root))
     placement = InstallationPlacement(
-        Layout.single_root(destination_root),
-        config_dir=destination_root / "config",
-        appdata_dir=destination_root / "appdata",
+        Layout.single_root(destination),
+        config_dir=destination / "config",
+        appdata_dir=destination / "appdata",
         capabilities=record.placement.capabilities,
-    )
-    inventory = MigrationInventory(
-        tmp_path,
-        destination_root,
-        tuple(entries),
-        tuple(destinations),
     )
     plan = manager.plan_migration(
         placement,
-        inventory=inventory,
+        inventory=MigrationInventory(
+            tmp_path, destination, tuple(entries), tuple(targets)
+        ),
         quiescent=True,
     )
     original_rename = Path.rename
 
-    def interrupt_after_payload_move(source: Path, destination: Path) -> Path:
-        moved = original_rename(source, destination)
+    def interrupt(source: Path, target: Path) -> Path:
+        moved = original_rename(source, target)
         if source == payload:
-            raise RuntimeError("simulated interruption after resource move")
+            raise RuntimeError("interrupted after resource move")
         return moved
 
-    monkeypatch.setattr(Path, "rename", interrupt_after_payload_move)
-    with pytest.raises(RuntimeError, match="simulated interruption"):
+    monkeypatch.setattr(Path, "rename", interrupt)
+    with pytest.raises(RuntimeError, match="interrupted after resource move"):
         manager.migrate(plan, quiescent=True)
     monkeypatch.setattr(Path, "rename", original_rename)
-
     pending = manager.inspect()
-    assert pending.status == "incomplete"
     assert pending.record is not None and pending.record.operation is not None
-    assert pending.record.operation.kind == "migrate"
-    assert pending.record.migration is not None
-    assert pending.record.migration.phase == "staged"
     assert pending.revision is not None
-    unknown = appdata_root / "unlisted-user-content.txt"
-    unknown.write_text("leave unlisted content untouched", encoding="utf-8")
-
-    resumed = _run(
-        [
-            sys.executable,
-            str(_installer(root, "lifecycle_consumer")),
-            "--repair",
-            "--directory",
-            str(state),
-        ],
-        cwd=tmp_path,
-        env=environment,
+    assert pending.record.active_runtime == runtime
+    unknown = appdata / "unlisted-user-content.txt"
+    unknown.write_bytes(b"leave unlisted content untouched")
+    resumed = resume_migration(
+        consumer.directory,
+        operation_id=pending.record.operation.operation_id,
+        expected_revision=pending.revision,
     )
-    assert resumed.returncode == 0, resumed.stdout + resumed.stderr
-
-    final = manager.inspect()
-    assert final.status == "ready"
-    assert final.record is not None
-    assert final.record.operation is None
-    assert final.record.migration is not None
-    assert final.record.migration.phase == "activated"
-    assert final.record.placement == placement
-    assert final.record.current is not None
-    assert final.record.current.placement == placement
-    assert (destination_root / "appdata" / payload.name).read_bytes() == (
-        b"preserve this application data"
+    assert resumed.record is not None
+    assert resumed.record.status == "ready"
+    assert resumed.record.operation is None
+    assert resumed.record.placement == placement
+    assert resumed.record.active_runtime == runtime
+    assert (destination / "appdata" / payload.name).read_bytes() == (
+        b"preserve application data"
     )
-    assert (
-        destination_root / "appdata" / ".apprc-owner.json"
-    ).read_bytes() == owner_marker_contents["appdata"]
-    assert (
-        destination_root / "config" / ".apprc-owner.json"
-    ).read_bytes() == owner_marker_contents["config"]
-    assert unknown.read_text(encoding="utf-8") == "leave unlisted content untouched"
+    assert unknown.read_bytes() == b"leave unlisted content untouched"
+    _assert_checkout_retained(consumer)
+    shown = consumer.run("config", "show", "--json")
+    _succeeded(shown)
+    assert str(destination / "config") in shown.stdout

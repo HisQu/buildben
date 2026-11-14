@@ -1,27 +1,27 @@
-"""Stateful contract tests for standard GitHub wheel/sdist publication."""
+"""Tests for native release staging and publication."""
 
 from __future__ import annotations
 
 import hashlib
-import io
 import json
-import shutil
-import tarfile
-import threading
 import os
+import shutil
 import subprocess
 import sys
+import threading
 import tomllib
-import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
-from support_release import copy_release_tooling, write_release_fixture
+from support_release import (
+    copy_release_tooling,
+    write_package_pair,
+    write_release_fixture,
+)
 
-from buildben_dev.packaging import release_assets
-from buildben_dev.packaging import release_manifest
+from buildben_dev.packaging import release_assets, release_manifest
 
 COMMIT = "a" * 40
 TAG_OBJECT = "b" * 40
@@ -107,20 +107,14 @@ class StatefulReleaseApi:
         return 0
 
 
-def _refresh_manifest(directory: Path, names: list[str]) -> None:
+def _refresh_checksums(directory: Path, names: list[str]) -> None:
     payload = {
         name: (directory / name).read_bytes()
         for name in names
-        if name != release_manifest.MANIFEST_NAME
+        if name != release_manifest.CHECKSUMS_NAME
     }
-    content = release_manifest.manifest_bytes(
-        payload,
-        app_id=PROJECT["name"],
-        distribution=PROJECT["name"],
-        version=VERSION,
-        commit=COMMIT,
-    )
-    (directory / release_manifest.MANIFEST_NAME).write_bytes(content)
+    content = release_manifest.checksum_bytes(payload, app_id=PROJECT["name"])
+    (directory / release_manifest.CHECKSUMS_NAME).write_bytes(content)
 
 
 def _prepared(directory: Path) -> tuple[StatefulReleaseApi, list[str]]:
@@ -139,9 +133,7 @@ def _prepared(directory: Path) -> tuple[StatefulReleaseApi, list[str]]:
     return api, names
 
 
-def test_draft_publishes_exact_verified_package_and_installer_assets(
-    tmp_path: Path,
-) -> None:
+def test_draft_publishes_exact_verified_native_assets(tmp_path: Path) -> None:
     payload = tmp_path / "packages"
     api, names = _prepared(payload)
 
@@ -173,17 +165,12 @@ def test_partial_upload_failure_keeps_draft_reusable(tmp_path: Path) -> None:
     assert {name for name, _ in api.assets.values()} == set(names)
 
 
-def test_upload_rejects_mismatched_package_metadata_before_mutating_draft(
+def test_upload_rejects_corrupt_checksum_before_mutating_draft(
     tmp_path: Path,
 ) -> None:
-    payload = tmp_path / "packages"
+    payload = tmp_path / "release"
     api, names = _prepared(payload)
-    with zipfile.ZipFile(payload / names[0], "w") as wheel:
-        wheel.writestr(
-            f"{PROJECT['name']}-{VERSION}.dist-info/METADATA",
-            f"Metadata-Version: 2.1\nName: other-project\nVersion: {VERSION}\n\n",
-        )
-    _refresh_manifest(payload, names)
+    (payload / release_manifest.CHECKSUMS_NAME).write_bytes(b"corrupt\n")
 
     with pytest.raises(release_assets.ReleaseError):
         release_assets.upload(api, "HisQu/buildben", TAG, COMMIT, payload, names)
@@ -235,21 +222,17 @@ def test_finalize_rejects_missing_asset_without_publishing(tmp_path: Path) -> No
     assert api.release is not None and api.release["draft"] is True
 
 
-def test_upload_rejects_partial_and_unsafe_sdist_before_mutating_draft(
+def test_upload_rejects_incomplete_or_malformed_native_inventory(
     tmp_path: Path,
 ) -> None:
-    payload = tmp_path / "packages"
+    payload = tmp_path / "release"
     api, names = _prepared(payload)
 
     with pytest.raises(release_assets.ReleaseError):
         release_assets.upload(api, "HisQu/buildben", TAG, COMMIT, payload, names[:1])
-    unsafe = payload / names[1]
-    with tarfile.open(unsafe, "w:gz") as archive:
-        content = b"escape"
-        item = tarfile.TarInfo("../escape/PKG-INFO")
-        item.size = len(content)
-        archive.addfile(item, io.BytesIO(content))
-    _refresh_manifest(payload, names)
+    (payload / release_manifest.CHECKSUMS_NAME).write_text(
+        "malformed\n", encoding="ascii"
+    )
     with pytest.raises(release_assets.ReleaseError):
         release_assets.upload(api, "HisQu/buildben", TAG, COMMIT, payload, names)
 
@@ -274,17 +257,13 @@ def test_upload_replaces_only_same_named_draft_assets(tmp_path: Path) -> None:
     payload = tmp_path / "packages"
     api, names = _prepared(payload)
     release_assets.upload(api, "HisQu/buildben", TAG, COMMIT, payload, names)
-    wheel = payload / names[0]
-    with zipfile.ZipFile(wheel, "w") as archive:
-        archive.writestr(
-            f"{PROJECT['name']}-{VERSION}.dist-info/METADATA",
-            f"Metadata-Version: 2.1\nName: {PROJECT['name']}\nVersion: {VERSION}\n\nupdated",
-        )
-    _refresh_manifest(payload, names)
+    setup = payload / names[1]
+    setup.write_bytes(b"updated native executable")
+    _refresh_checksums(payload, names)
 
     release_assets.upload(api, "HisQu/buildben", TAG, COMMIT, payload, names)
 
-    assert set(api.deleted) == {names[0], release_manifest.MANIFEST_NAME}
+    assert set(api.deleted) == {names[1], release_manifest.CHECKSUMS_NAME}
     assert {name for name, _ in api.assets.values()} == set(names)
     assert api.release is not None and api.release["draft"] is True
 
@@ -398,107 +377,85 @@ def test_gh_upload_sends_length_and_preserves_binary_bytes(
     assert received == [payload]
 
 
-def test_release_manifest_rejects_corrupt_native_payload_before_publication(
+def test_release_checksum_rejects_corrupt_native_payload_before_publication(
     tmp_path: Path,
 ) -> None:
-    payload = tmp_path / "packages"
+    payload = tmp_path / "release"
     api, names = _prepared(payload)
     release_assets.upload(api, "HisQu/buildben", TAG, COMMIT, payload, names)
-    asset_id = next(
-        key for key, (name, _) in api.assets.items() if name == "main-installer.py"
-    )
-    api.assets[asset_id] = ("main-installer.py", b"corrupt replacement")
+    setup_name = next(name for name in names if name.endswith("setup-linux-x86_64"))
+    asset_id = next(key for key, (name, _) in api.assets.items() if name == setup_name)
+    api.assets[asset_id] = (setup_name, b"corrupt replacement")
     with pytest.raises(release_assets.ReleaseError):
         release_assets.finalize(api, "HisQu/buildben", TAG, COMMIT)
     assert api.release is not None and api.release["draft"] is True
 
 
 @pytest.mark.parametrize(
-    "corruption",
-    (
-        "identity",
-        "commit",
-        "size",
-        "digest",
-        "duplicate",
-        "unknown",
-        "bool-schema",
-        "format-type",
-    ),
+    "corruption", ("digest", "duplicate", "unexpected", "malformed")
 )
-def test_manifest_contract_rejects_invalid_structure_or_integrity(
-    tmp_path: Path,
-    corruption: str,
+def test_checksum_contract_rejects_invalid_inventory(
+    tmp_path: Path, corruption: str
 ) -> None:
-    payload = tmp_path / "packages"
+    payload = tmp_path / "release"
     _, names = _prepared(payload)
-    path = payload / release_manifest.MANIFEST_NAME
-    value = json.loads(path.read_bytes())
-    if corruption == "identity":
-        value["app_id"] = "foreign"
-    elif corruption == "commit":
-        value["commit"] = "c" * 40
-    elif corruption == "size":
-        value["assets"][0]["size"] += 1
-    elif corruption == "digest":
-        value["assets"][0]["sha256"] = "0" * 64
+    path = payload / release_manifest.CHECKSUMS_NAME
+    lines = path.read_text(encoding="ascii").splitlines()
+    if corruption == "digest":
+        lines[0] = "0" * 64 + lines[0][64:]
     elif corruption == "duplicate":
-        value["assets"].append(value["assets"][0])
-    elif corruption == "unknown":
-        value["other_authority"] = "not allowed"
-    elif corruption == "bool-schema":
-        value["schema_version"] = True
+        lines.append(lines[0])
+    elif corruption == "unexpected":
+        lines.append("a" * 64 + "  unexpected.exe")
     else:
-        value["payload_format"] = []
-    path.write_text(json.dumps(value), encoding="utf-8")
+        lines[0] = "malformed"
+    path.write_text("\n".join(lines) + "\n", encoding="ascii")
     with pytest.raises(ValueError):
-        release_manifest.validate_manifest(
+        release_manifest.validate_checksums(
             {name: (payload / name).read_bytes() for name in names},
             app_id=PROJECT["name"],
-            distribution=PROJECT["name"],
-            version=VERSION,
-            commit=COMMIT,
         )
 
 
-def test_manual_pypi_verifies_full_release_but_keeps_only_packages(
+def test_manual_pypi_uses_separate_wheel_and_sdist_inputs(
     tmp_path: Path,
 ) -> None:
-    payload = tmp_path / "release"
-    api, names = _prepared(payload)
-    release_assets.upload(api, "HisQu/buildben", TAG, COMMIT, payload, names)
+    release_directory = tmp_path / "release"
+    api, names = _prepared(release_directory)
+    release_assets.upload(api, "HisQu/buildben", TAG, COMMIT, release_directory, names)
     assert api.release is not None
     api.release["draft"] = False
     metadata = tmp_path / "github-release.json"
     metadata.write_text(json.dumps(api._body()), encoding="utf-8")
-    snapshot = tmp_path / "pypi"
-    snapshot.mkdir()
-    package_names = names[:2]
-    for name in package_names:
-        shutil.copyfile(payload / name, snapshot / name)
-    verified = release_assets.verify_pypi_packages(
+    package_directory = tmp_path / "pypi"
+    package_directory.mkdir()
+    package_names = write_package_pair(
+        package_directory, distribution=PROJECT["name"], version=VERSION
+    )
+    (package_directory / ".gitignore").write_text("*\n", encoding="utf-8")
+    assert release_assets.verify_pypi_packages(
         api,
         "HisQu/buildben",
         TAG,
         COMMIT,
         metadata=metadata,
-        directory=snapshot,
-    )
-    assert set(verified) == set(package_names)
-    assert {path.name for path in snapshot.iterdir()} == set(package_names)
-    asset_id = next(
-        key for key, (name, _) in api.assets.items() if name == "main-installer.py"
-    )
-    api.assets[asset_id] = ("main-installer.py", b"changed after upload")
-    with pytest.raises(release_assets.ReleaseError):
+        directory=package_directory,
+    ) == tuple(sorted(package_names))
+    (package_directory / "unexpected.txt").write_text("extra", encoding="utf-8")
+    with pytest.raises(
+        release_assets.ReleaseError, match="exactly one wheel and one sdist"
+    ):
         release_assets.verify_pypi_packages(
             api,
             "HisQu/buildben",
             TAG,
             COMMIT,
             metadata=metadata,
-            directory=snapshot,
+            directory=package_directory,
         )
+    assert not set(package_names).intersection(
+        release_manifest.native_asset_names(PROJECT["name"])
+    )
 
 
 @pytest.mark.parametrize("scaffold", (False, True))
@@ -528,7 +485,6 @@ def test_stage_and_verify_cli_check_actual_release_without_rewriting(
         version="1.0.0",
         commit=COMMIT,
     )
-    (payload / release_manifest.MANIFEST_NAME).unlink()
     environment = dict(os.environ)
     environment["PYTHONPATH"] = str(project / "src")
     common = [
@@ -541,8 +497,10 @@ def test_stage_and_verify_cli_check_actual_release_without_rewriting(
         "--directory",
         str(payload),
     ]
+    setup_names = [name for name in names if name != release_manifest.CHECKSUMS_NAME]
+    (payload / release_manifest.CHECKSUMS_NAME).unlink()
     staged = subprocess.run(
-        [sys.executable, "-m", module, "stage", *common, "--files", *names[:-1]],
+        [sys.executable, "-m", module, "stage", *common, "--files", *setup_names],
         cwd=project,
         env=environment,
         text=True,
@@ -561,7 +519,7 @@ def test_stage_and_verify_cli_check_actual_release_without_rewriting(
     )
     assert verified.returncode == 0, verified.stderr
     assert set(verified.stdout.splitlines()) == set(names)
-    changed = payload / "main-installer.py"
+    changed = payload / setup_names[0]
     changed.write_bytes(b"unexpected release payload")
     rejected = subprocess.run(
         [sys.executable, "-m", module, "verify", *common],
@@ -572,4 +530,29 @@ def test_stage_and_verify_cli_check_actual_release_without_rewriting(
         check=False,
     )
     assert rejected.returncode != 0
-    assert changed.read_bytes() == b"unexpected release payload"
+
+
+def test_native_checksum_inventory_accepts_only_final_setup_assets(
+    tmp_path: Path,
+) -> None:
+    """The release inventory contains exactly the two setup files and checksums."""
+    app_id = "example-app"
+    setups = {
+        name: f"setup: {name}".encode()
+        for name in release_manifest.native_asset_names(app_id)
+        if name != release_manifest.CHECKSUMS_NAME
+    }
+    for name, content in setups.items():
+        (tmp_path / name).write_bytes(content)
+    (tmp_path / release_manifest.CHECKSUMS_NAME).write_bytes(
+        release_manifest.checksum_bytes(setups, app_id=app_id)
+    )
+    assert release_manifest.validate_directory(
+        tmp_path, app_id=app_id, exact=True
+    ) == release_manifest.native_asset_names(app_id)
+
+    changed = tmp_path / next(iter(setups))
+    changed.write_bytes(b"tampered setup")
+    with pytest.raises(ValueError, match="SHA-256"):
+        release_manifest.validate_directory(tmp_path, app_id=app_id, exact=True)
+    assert changed.read_bytes() == b"tampered setup"

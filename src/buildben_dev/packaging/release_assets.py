@@ -1,4 +1,4 @@
-"""Stage and publish validated Buildben release assets through GitHub."""
+"""Stage and publish validated native Buildben release assets."""
 # > Run this CLI from the checked project root so prepare reads its pyproject.toml.
 
 from __future__ import annotations
@@ -17,16 +17,14 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Protocol
-from typing import Literal
 
 from .release_manifest import (
-    MANIFEST_NAME,
+    CHECKSUMS_NAME,
     asset_basename,
+    checksum_bytes,
     expected_asset_names,
-    manifest_bytes,
-    validate_manifest,
+    validate_checksums,
 )
-
 from .release_notes import validate_tag_version
 
 SHA_RE = re.compile(r"^[0-9a-f]{40,64}$")
@@ -410,7 +408,6 @@ def _check_asset_names(names: list[str]) -> tuple[str, ...]:
         return expected_asset_names(
             names,
             app_id=_project_app_id(_project()[0]),
-            payload_format="zipapp" if "main-installer.pyz" in names else "script",
         )
     except ValueError as error:
         raise ReleaseError(str(error)) from error
@@ -439,18 +436,9 @@ def _validate_local_files(
             raise ReleaseError(f"Release asset is not a regular file: {filename}.")
         payload[filename] = path.read_bytes()
     try:
-        validate_manifest(
-            payload,
-            app_id=_project_app_id(name),
-            distribution=re.sub(r"[-_.]+", "-", name).lower(),
-            version=version,
-            commit=identity.commit,
-        )
+        validate_checksums(payload, app_id=_project_app_id(name))
     except ValueError as error:
         raise ReleaseError(str(error)) from error
-    for filename, content in payload.items():
-        if filename.endswith((".whl", ".tar.gz")):
-            _validate_package(directory / filename, name, version, content)
     return payload
 
 
@@ -461,51 +449,27 @@ def stage(
     repository: str,
     tag: str,
     commit: str,
-    payload_format: Literal["script", "zipapp"] = "script",
 ) -> tuple[str, ...]:
-    """Create integrity metadata after final package and native-entry generation.
-
-    :param directory: Dedicated final release staging directory.
-    :param names: Explicit package/native-entry names, excluding the manifest.
-    :param repository: Explicit owner/repository release identity.
-    :param tag: Exact version tag; no tag is created.
-    :param commit: Immutable source identity; no Git mutation is performed.
-    :param payload_format: Explicit selected installer format.
-    :return: Complete deterministic upload list, including the manifest.
-    """
+    """Write the final checksum inventory for exactly two native setups."""
     identity = Identity(_repository(repository), _tag(tag), _sha(commit))
-    name, version = _project()
+    _name, version = _project()
     if identity.tag != f"v{version}":
         raise ReleaseError("Project version does not match the release tag.")
-    complete = [*names, MANIFEST_NAME]
+    complete = [*names, CHECKSUMS_NAME]
+    app_id = _project_app_id(_project()[0])
     try:
-        expected_asset_names(
-            complete,
-            app_id=_project_app_id(name),
-            payload_format=payload_format,
-        )
+        expected_asset_names(complete, app_id=app_id)
         if {entry.name for entry in directory.iterdir()} - set(complete):
             raise ReleaseError("Staging directory contains unexpected release files.")
-        payload = {}
+        payload: dict[str, bytes] = {}
         for filename in names:
             path = directory / filename
             if not path.is_file() or path.is_symlink():
                 raise ReleaseError(f"Release asset is not a regular file: {filename}.")
             payload[filename] = path.read_bytes()
-        for filename, content in payload.items():
-            if filename.endswith((".whl", ".tar.gz")):
-                _validate_package(directory / filename, name, version, content)
-        content = manifest_bytes(
-            payload,
-            app_id=_project_app_id(name),
-            distribution=re.sub(r"[-_.]+", "-", name).lower(),
-            version=version,
-            commit=identity.commit,
-            payload_format=payload_format,
-        )
+        (directory / CHECKSUMS_NAME).write_bytes(checksum_bytes(payload, app_id=app_id))
     except ValueError as error:
         raise ReleaseError(str(error)) from error
-    (directory / MANIFEST_NAME).write_bytes(content)
     _validate_local_files(directory, complete, identity)
     return tuple(sorted(complete))
 
@@ -754,15 +718,11 @@ def verify_pypi_packages(
     metadata: Path,
     directory: Path,
 ) -> tuple[str, ...]:
-    """Verify the full release while retaining package-only PyPI input.
+    """Validate independently built wheel/sdist inputs for conditional PyPI use.
 
-    :param api: Authenticated read boundary.
-    :param repository: Explicit owner/repository.
-    :param tag: Exact already-published version tag.
-    :param commit: Independently resolved immutable tag commit.
-    :param metadata: Captured GitHub release metadata for this snapshot.
-    :param directory: Existing wheel/sdist-only download directory.
-    :return: Verified package names; native helpers never enter PyPI input.
+    Native setup assets are published only to the GitHub Release. Python package
+    files remain ordinary build outputs and are supplied separately to this
+    verifier.
     """
     identity = Identity(_repository(repository), _tag(tag), _sha(commit))
     _tag_commit(api, identity)
@@ -773,39 +733,25 @@ def verify_pypi_packages(
         or release.get("draft") is not False
     ):
         raise ReleaseError("Manual publication requires the exact non-draft release.")
-    assets = _assets(release)
-    _check_asset_names(list(assets))
-    with tempfile.TemporaryDirectory(prefix="buildben-pypi-contract-") as temporary:
-        root = Path(temporary)
-        for name, asset in assets.items():
-            (root / name).write_bytes(_asset_bytes(api, identity, asset))
-        payload = _validate_local_files(
-            root, sorted(assets), identity, expected_version=identity.tag[1:]
-        )
-        packages = tuple(
-            sorted(name for name in payload if name.endswith((".whl", ".tar.gz")))
-        )
-        if {entry.name for entry in directory.iterdir()} != set(packages):
-            raise ReleaseError(
-                "PyPI input must contain only the verified wheel and source archive."
-            )
-        for name in packages:
-            path = directory / name
-            if (
-                not path.is_file()
-                or path.is_symlink()
-                or path.read_bytes() != payload[name]
-            ):
-                raise ReleaseError(
-                    "PyPI input differs from the verified release manifest."
-                )
+    name, version = _project()
+    if identity.tag != f"v{version}":
+        raise ReleaseError("Project version does not match the release tag.")
+    if directory.is_symlink() or not directory.is_dir():
+        raise ReleaseError("PyPI input directory is missing or linked.")
+    entries = tuple(path for path in directory.iterdir() if path.name != ".gitignore")
+    wheels = tuple(path for path in entries if path.name.endswith(".whl"))
+    sdists = tuple(path for path in entries if path.name.endswith(".tar.gz"))
+    if len(entries) != 2 or len(wheels) != 1 or len(sdists) != 1:
+        raise ReleaseError("PyPI input must contain exactly one wheel and one sdist.")
+    for path in (*wheels, *sdists):
+        _validate_package(path, name, version)
     _tag_commit(api, identity)
-    return packages
+    return tuple(sorted(path.name for path in entries))
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Prepare and publish validated GitHub release assets."
+        description="Prepare and publish validated native release assets."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     prepare_parser = subparsers.add_parser("prepare")
@@ -813,12 +759,12 @@ def _parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("--tag", required=True)
     prepare_parser.add_argument("--commit", required=True)
     prepare_parser.add_argument("--notes", type=Path, required=True)
-    item = subparsers.add_parser("upload")
-    item.add_argument("--repository", required=True)
-    item.add_argument("--tag", required=True)
-    item.add_argument("--commit", required=True)
-    item.add_argument("--directory", type=Path, required=True)
-    item.add_argument("--files", nargs="+", required=True)
+    upload_parser = subparsers.add_parser("upload")
+    upload_parser.add_argument("--repository", required=True)
+    upload_parser.add_argument("--tag", required=True)
+    upload_parser.add_argument("--commit", required=True)
+    upload_parser.add_argument("--directory", type=Path, required=True)
+    upload_parser.add_argument("--files", nargs="+", required=True)
     for verb in ("finalize", "wait-ci"):
         item = subparsers.add_parser(verb)
         item.add_argument("--repository", required=True)
@@ -832,9 +778,6 @@ def _parser() -> argparse.ArgumentParser:
         item.add_argument("--directory", type=Path, required=True)
         if verb == "stage":
             item.add_argument("--files", nargs="+", required=True)
-            item.add_argument(
-                "--payload-format", choices=("script", "zipapp"), default="script"
-            )
         elif verb == "verify-pypi":
             item.add_argument("--metadata", type=Path, required=True)
     return parser
@@ -851,7 +794,6 @@ def main(argv: list[str] | None = None, *, api: Api | None = None) -> int:
                 repository=args.repository,
                 tag=args.tag,
                 commit=args.commit,
-                payload_format=args.payload_format,
             )
             print("\n".join(names))
         elif args.command == "verify":
@@ -873,7 +815,7 @@ def main(argv: list[str] | None = None, *, api: Api | None = None) -> int:
                 metadata=args.metadata,
                 directory=args.directory,
             )
-            print("Verified release manifest and package-only PyPI input.")
+            print("Verified independently built wheel and sdist inputs.")
         elif args.command == "prepare":
             release = prepare(
                 client, args.repository, args.tag, args.commit, args.notes

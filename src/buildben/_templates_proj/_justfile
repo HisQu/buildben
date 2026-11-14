@@ -465,7 +465,6 @@ _release-artifact-check notes_output build_only="false" notes_input="":
     fi
     notes_output="{{notes_output}}"
     notes_input={{quote(notes_input)}}
-    rm -rf dist
     mkdir -p "$(dirname "$notes_output")"
     if [[ -n "$notes_input" ]]; then
         if [[ ! -f "$notes_input" ]]; then
@@ -480,12 +479,12 @@ _release-artifact-check notes_output build_only="false" notes_input="":
     else
         python src/{my_project}_dev/packaging/release_notes.py "$version" "${identity_args[@]}" "${notes_args[@]}" --output "$notes_output"
     fi
-    uv build --python 3.12 --no-sources --no-build-logs
+    just build-python-packages
     shopt -s nullglob
-    wheels=(dist/*.whl)
-    sdists=(dist/*.tar.gz)
+    wheels=(.cache/apprc/python-packages/*.whl)
+    sdists=(.cache/apprc/python-packages/*.tar.gz)
     if [[ "${#wheels[@]}" -ne 1 || "${#sdists[@]}" -ne 1 ]]; then
-        echo "Expected exactly one wheel and one sdist in dist/." >&2
+        echo "Expected exactly one wheel and one sdist in .cache/apprc/python-packages/." >&2
         exit 1
     fi
     wheel_distribution="$(printf '%s' "{my_project}" | tr '[:upper:]' '[:lower:]' | tr -s '._-' '_')"
@@ -501,14 +500,25 @@ _release-artifact-check notes_output build_only="false" notes_input="":
     uv run --with twine --no-project -- twine check "${wheels[0]}" "${sdists[0]}"
 
 make-artifacts:
-    PYTHONPATH=src uv run --locked python -m {my_project}_distr.make_artifacts
+    PYTHONPATH=src uv run --locked --group dev python -m {my_project}_distr.make_artifacts
 
 check-artifacts:
-    PYTHONPATH=src uv run --locked python -m {my_project}_distr.make_artifacts --check
+    PYTHONPATH=src uv run --locked --group dev python -m {my_project}_distr.make_artifacts --check
+build-python-packages:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p .cache/apprc/python-packages
+    if [[ -f frontend/package.json ]]; then
+        PYTHONPATH=src uv run --locked --group dev python -m {my_project}_distr.make_artifacts --python-packages
+    else
+        uv build --wheel --sdist --python 3.12 --no-sources --no-build-logs --out-dir .cache/apprc/python-packages
+    fi
 
-# Bundle the published GUI runtime extra using AppRC's native release producer.
+
+
+# Build and stage the two SDK-produced native setups.
 stage-release-assets tag commit:
-    PYTHONPATH=src uv run --locked --group dev python -m {my_project}_dev.packaging.release_stage {{quote(tag)}} {{quote(commit)}} --extra gui
+    PYTHONPATH=src uv run --locked --group dev python -m {my_project}_dev.packaging.release_stage {{quote(tag)}} {{quote(commit)}}
 
 # Build standard wheel and sdist once without running the full source matrix.
 build-release-inputs notes_file="":
@@ -523,8 +533,8 @@ release-wheel-smoke:
     #!/usr/bin/env bash
     set -euo pipefail
     shopt -s nullglob
-    wheels=(dist/*.whl)
-    if [[ "${#wheels[@]}" -ne 1 ]]; then echo "Expected exactly one wheel in dist/." >&2; exit 1; fi
+    wheels=(.cache/apprc/python-packages/*.whl)
+    if [[ "${#wheels[@]}" -ne 1 ]]; then echo "Expected exactly one wheel in .cache/apprc/python-packages/." >&2; exit 1; fi
     version="$(uv version --short)"
     wheel="$(realpath "${wheels[0]}")"
     artifact_uri="$(python -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve().as_uri())' "$wheel")"
@@ -533,34 +543,11 @@ release-wheel-smoke:
     trap 'rm -rf "$smoke_root"' EXIT
     (cd "$smoke_root"; uv run --isolated --python 3.12 --with "{my_project} @ $artifact_uri" python "$smoke_script" --expected-version "$version")
 
-# Exercise the editable Python entry against an immutable main-source archive.
+# Build native setups and exercise managed and editable registration paths.
 release-install-smoke:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [[ -n "${INSTALLER_SMOKE_MAIN_SOURCE:-}" && -z "${INSTALLER_SMOKE_MAIN_COMMIT:-}" || -z "${INSTALLER_SMOKE_MAIN_SOURCE:-}" && -n "${INSTALLER_SMOKE_MAIN_COMMIT:-}" ]]; then
-        echo "INSTALLER_SMOKE_MAIN_SOURCE and INSTALLER_SMOKE_MAIN_COMMIT must be supplied together." >&2
-        exit 1
-    fi
+    just make-artifacts
     just check-artifacts
-    smoke_root="$(mktemp -d)"
-    trap 'rm -rf "$smoke_root"' EXIT
-    if [[ -n "${INSTALLER_SMOKE_MAIN_SOURCE:-}" ]]; then
-        if [[ ! -f "$INSTALLER_SMOKE_MAIN_SOURCE" ]]; then
-            echo "Main source archive does not exist: $INSTALLER_SMOKE_MAIN_SOURCE" >&2
-            exit 1
-        fi
-        main_commit="$INSTALLER_SMOKE_MAIN_COMMIT"
-    else
-        main_commit="$(git rev-parse HEAD)"
-        archive_file="$smoke_root/main-source.tar.gz"
-        git archive --format=tar.gz --prefix="{my_project}-${main_commit}/" --output="$archive_file" "$main_commit"
-        main_source="$(realpath "$archive_file")"
-        if command -v cygpath >/dev/null 2>&1; then main_source="$(cygpath -m "$main_source")"; fi
-        export INSTALLER_SMOKE_MAIN_SOURCE="$main_source"
-        export INSTALLER_SMOKE_MAIN_COMMIT="$main_commit"
-    fi
-    export INSTALLER_SMOKE_CLIENT="${INSTALLER_SMOKE_CLIENT:-curl}"
-    uv run --locked --group dev -- python -m pytest -q "tests/test_{my_project}_package.py" -k "source_install_smoke"
+    APPRC_TEST_PYAPP=1 uv run --locked --group dev -- python -m pytest -q "tests/test_{my_project}_package.py" -k "editable_install_registers_the_existing_checkout_and_environment or managed_setup_registers_native_runtime_and_real_resources"
 # Rehearse the release gate. It does not upload anything.
 release-check:
     #!/usr/bin/env bash
@@ -690,7 +677,7 @@ release level="patch":
         exit 1
     fi
 
-# Publish the artifacts attached to an existing GitHub Release.
+# Request the separately validated PyPI workflow for an existing release tag.
 publish-pypi tag:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -718,12 +705,6 @@ publish-pypi tag:
     fi
     if [[ "$is_draft" == "true" ]]; then
         echo "GitHub Release ${tag} is still a draft and cannot be published." >&2
-        exit 1
-    fi
-    wheel_count="$(gh release view "$tag" --json assets --jq '[.assets[].name | select(endswith(".whl"))] | length')"
-    sdist_count="$(gh release view "$tag" --json assets --jq '[.assets[].name | select(endswith(".tar.gz"))] | length')"
-    if [[ "$wheel_count" != 1 || "$sdist_count" != 1 ]]; then
-        echo "GitHub Release ${tag} must contain exactly one wheel and one source archive." >&2
         exit 1
     fi
 

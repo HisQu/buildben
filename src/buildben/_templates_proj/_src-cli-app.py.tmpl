@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import sys
 from importlib import metadata
 from pathlib import Path
@@ -15,6 +14,8 @@ import typer
 import <my_project>
 from <my_project>.config.app import APP_RC
 from <my_project>.config.bundle import <MyProject>Config
+from <my_project>.installation import INSTALLATION_HOOKS
+<frontend_web_import>
 
 PACKAGE_NAME = "<my_project>"
 VERSION_FALLBACK = "0.1.0"
@@ -132,57 +133,34 @@ rc.cli.mount_app_cli(
     APP_RC,
     runtime_policy=rc.cli.CliRuntimePolicy(
         runtime_independent_commands={
-            "launcher": rc.cli.RuntimeIndependentCommand(skip_empty=True),
             "version": rc.cli.RuntimeIndependentCommand(skip_empty=True),
             "diagnose": rc.cli.RuntimeIndependentCommand(skip_empty=True),
         },
         extra_cli_flag_options={"--json"},
     ),
     runtime_payload=_config_show_payload,
+    launcher_spec=rc.tui.LauncherSpec(
+        actions=(
+            rc.tui.LauncherAction(
+                id="main",
+                label="Run <my_project>",
+                argv=lambda _launcher, _interactive: (
+                    sys.executable,
+                    "-m",
+                    PACKAGE_NAME,
+                ),
+                group="main",
+                interactive=True,
+            ),
+        ),
+        title="<my_project>",
+    ),
     setup_logging=_setup_app_logging,
     logger=LOG,
+    installation_hooks=INSTALLATION_HOOKS,
+    installation_management=True,
 )
-
-
-@app.command("launcher")
-def launcher_cmd(ctx: typer.Context) -> None:
-    """Open the optional installed AppRC launcher."""
-    context = rc.cli.installation_command_context_from(ctx)
-    if context is None:
-        raise RuntimeError("Launcher recovery context was not prepared.")
-    controls = context.runtime_options
-    executable = Path(sys.executable).with_name(
-        PACKAGE_NAME + (".exe" if os.name == "nt" else "")
-    )
-    arguments = tuple(rc.cli.cli_runtime_options_to_args(controls))
-    rc.tui.run_launcher(
-        APP_RC,
-        spec=rc.tui.LauncherSpec(
-            actions=(
-                rc.tui.LauncherAction(
-                    id="main",
-                    label="Run <my_project>",
-                    argv=lambda _launcher, _interactive: (
-                        str(executable),
-                        *arguments,
-                    ),
-                    group="main",
-                    interactive=True,
-                ),
-            ),
-            title="<my_project>",
-        ),
-        options=rc.ResolveOptions(
-            workspace=controls.workspace,
-            layout=controls.layout,
-            env_files=controls.env_files,
-            env_file_overrides_os_environ=controls.env_file_overrides_os_environ,
-            load_dotenv_layers=controls.load_dotenv_layers,
-        ),
-        environment=context.environment,
-    )
-
-
+<frontend_web_command>
 @app.command("version")
 def version_cmd() -> None:
     """Print the installed package version."""

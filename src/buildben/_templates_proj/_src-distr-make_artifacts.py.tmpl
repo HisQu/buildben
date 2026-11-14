@@ -1,90 +1,271 @@
-"""Generate deterministic AppRC lifecycle artifacts for this application."""
+"""Build native setups or ordinary Python packages from committed source."""
 
 from __future__ import annotations
 
 import argparse
+import dataclasses
+import hashlib
 import importlib
-import tomllib
-from pathlib import Path, PurePosixPath
-from typing import cast
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+from zipfile import ZipFile
 
 from apprc.distribution import (
-    Artifact,
-    DistributionSpec,
-    PayloadTree,
-    generate_artifacts,
-    install_support_files,
-    inspect_capabilities,
+    build_project_snapshot,
     read_project_metadata,
-    write_artifacts,
 )
-from apprc.distribution.models import ProjectMetadata
+from apprc.distribution.metadata import (
+    inspect_capabilities,
+    read_distribution_spec,
+)
+from apprc.distribution.models import DistributionSpec, ProjectMetadata
+from apprc.distribution.native import NativeTarget
 
-
-def _payload(root: Path, metadata: ProjectMetadata) -> PayloadTree:
-    return PayloadTree(
-        root / metadata.distribution_path / "payload",
-        tuple(
-            PurePosixPath("app_lifecycle") / name
-            for name in (
-                "__init__.py",
-                "install.py",
-                "uninstall.py",
-                "actions.py",
-            )
-        ),
-    )
+<frontend_prepare_import>
+TARGETS: tuple[NativeTarget, ...] = (
+    "x86_64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+)
 
 
 def distribution_spec(
     root: Path, metadata: ProjectMetadata
 ) -> DistributionSpec:
-    """Build the AppRC source identity without native build configuration."""
+    """Read the SDK declaration and require installed capabilities and hooks."""
+    spec = read_distribution_spec(root)
+    if spec.metadata != metadata:
+        raise ValueError(
+            "Project metadata changed while composing native setup."
+        )
     if metadata.identity.apprc_reference is None:
         raise ValueError("tool.apprc.distribution.apprc-reference is required")
-    settings = tomllib.loads(
-        (root / "pyproject.toml").read_text(encoding="utf-8")
-    )
-    project = cast(dict[str, object], settings["project"])
     module_name, object_name = metadata.identity.apprc_reference.split(":", 1)
     declaration = getattr(importlib.import_module(module_name), object_name)
-    urls = project.get("urls", {})
-    repository = urls.get("Repository") if isinstance(urls, dict) else None
-    return DistributionSpec(
-        metadata=metadata,
-        capabilities=inspect_capabilities(declaration),
-        repository_url=repository,
+    if inspect_capabilities(declaration) != spec.capabilities:
+        raise ValueError(
+            "APP_RC capabilities differ from pyproject declaration."
+        )
+    hooks_module = importlib.import_module(
+        f"{module_name.split('.', 1)[0]}.installation"
     )
+    hooks = getattr(hooks_module, "INSTALLATION_HOOKS")
+    if hooks != spec.hooks:
+        raise ValueError(
+            "Installed INSTALLATION_HOOKS differ from pyproject hooks."
+        )
+    return dataclasses.replace(spec, hooks=hooks)
+
+
+def _uv_executable() -> Path:
+    """Resolve the uv executable already selected by the authoring environment."""
+    import os
+
+    selected = os.environ.get("UV") or shutil.which("uv")
+    if selected is None:
+        raise FileNotFoundError("Package authoring requires uv on PATH or UV.")
+    return Path(selected).expanduser().resolve(strict=True)
+
+
+def _validate_committed_declaration(root: Path, revision: str) -> None:
+    """Reject dirty or revision-mismatched distribution declarations."""
+    result = subprocess.run(
+        ["git", "-C", str(root), "show", f"{revision}:pyproject.toml"],
+        check=True,
+        capture_output=True,
+    )
+    if result.stdout != (root / "pyproject.toml").read_bytes():
+        raise ValueError(
+            "Current pyproject.toml differs from the selected committed revision."
+        )
+
+
+def build_python_packages(
+    root: Path,
+    *,
+    revision: str = "HEAD",
+    output: Path | None = None,
+) -> tuple[Path, ...]:
+    """Build a wheel and sdist from the same private preparation as native setup.
+
+    :param root: Committed application repository, never modified by preparation.
+    :param revision: Git revision supplying the complete locked source tree.
+    :param output: Package destination, defaulting to .cache/apprc/python-packages.
+    :return: Published wheel and source archive, containing prepared package assets.
+    """
+    root = root.resolve()
+    _validate_committed_declaration(root, revision)
+    spec = distribution_spec(root, read_project_metadata(root))
+    output = (
+        output
+        if output is not None
+        else root / ".cache" / "apprc" / "python-packages"
+    ).absolute()
+    if output.is_symlink():
+        raise ValueError("Python package output cannot be a symlink.")
+    with tempfile.TemporaryDirectory(prefix="python-packages-") as temporary:
+        stage = Path(temporary)
+        project = build_project_snapshot(
+            spec,
+            revision=revision,
+            destination=stage / "project.zip",
+            prepare=<frontend_prepare_callback>,
+        )
+        source = stage / "source"
+        # > This private archive was just created and validated by the SDK.
+        with ZipFile(project.archive) as archive:
+            archive.extractall(source)
+        packages = stage / "packages"
+        packages.mkdir()
+        subprocess.run(
+            [
+                str(_uv_executable()),
+                "build",
+                "--wheel",
+                "--sdist",
+                "--python",
+                "3.12",
+                "--no-sources",
+                "--no-build-logs",
+                "--package",
+                spec.metadata.identity.distribution,
+                "--out-dir",
+                str(packages),
+            ],
+            cwd=source,
+            check=True,
+        )
+        wheels = tuple(packages.glob("*.whl"))
+        sdists = tuple(packages.glob("*.tar.gz"))
+        if len(wheels) != 1 or len(sdists) != 1:
+            raise ValueError("Expected exactly one built wheel and one sdist.")
+        if output.exists() and not output.is_dir():
+            raise ValueError("Python package output must be a directory.")
+        output.mkdir(parents=True, exist_ok=True)
+        published: list[Path] = []
+        for package in (*wheels, *sdists):
+            target = output / package.name
+            if target.is_symlink() or (
+                target.exists() and not target.is_file()
+            ):
+                raise ValueError(
+                    f"Package output is not a regular file: {target}"
+                )
+            shutil.copyfile(package, target)
+            published.append(target)
+        return tuple(published)
+
+
+def build_artifacts(
+    root: Path,
+    *,
+    revision: str = "HEAD",
+    extras: tuple[str, ...] = (),
+    targets: tuple[NativeTarget, ...] = TARGETS,
+) -> tuple[Path, ...]:
+    """Snapshot the selected committed workspace and publish native setup files."""
+    from apprc.distribution import build_native_distribution
+
+    root = root.resolve()
+    _validate_committed_declaration(root, revision)
+    metadata = read_project_metadata(root)
+    spec = distribution_spec(root, metadata)
+    cache = root / ".cache" / "apprc"
+    if cache.parent.is_symlink() or cache.is_symlink():
+        raise ValueError("The .cache/apprc staging path is unsafe.")
+    cache.mkdir(parents=True, exist_ok=True)
+    if cache.exists() and not cache.is_dir():
+        raise ValueError("The .cache/apprc staging path is not a directory.")
+    with tempfile.TemporaryDirectory(prefix="author-", dir=cache) as temporary:
+        stage = Path(temporary)
+        project = build_project_snapshot(
+            spec,
+            revision=revision,
+            destination=stage / "project.zip",
+            prepare=<frontend_prepare_callback>,
+        )
+        native = build_native_distribution(
+            spec,
+            project,
+            uv=_uv_executable(),
+            workspace=stage / "native",
+            targets=targets,
+            extras=extras,
+        )
+        return tuple(artifact.path for artifact in native.artifacts) + (
+            native.checksums.project_root / native.checksums.destination,
+        )
+
+
+def check_artifacts(root: Path) -> None:
+    """Validate committed declarations and final checksums without writing."""
+    import re
+
+    _validate_committed_declaration(root, "HEAD")
+    metadata = read_project_metadata(root)
+    distribution_spec(root, metadata)
+    dist = root / "dist"
+    if dist.is_symlink() or not dist.is_dir():
+        raise ValueError("dist is missing or not a regular directory.")
+    checksums = dist / "SHA256SUMS"
+    if checksums.is_symlink() or not checksums.is_file():
+        raise ValueError("dist/SHA256SUMS is missing or not a regular file.")
+    rows: dict[str, str] = {}
+    for line in checksums.read_text(encoding="ascii").splitlines():
+        match = re.fullmatch(r"([0-9a-f]{64})  ([A-Za-z0-9_.-]+)", line)
+        if match is None or match[2] in rows:
+            raise ValueError(
+                "dist/SHA256SUMS contains an invalid or duplicate row."
+            )
+        rows[match[2]] = match[1]
+    expected = {
+        f"{metadata.identity.app_id}-setup-linux-x86_64",
+        f"{metadata.identity.app_id}-setup-windows-x86_64.exe",
+    }
+    if set(rows) != expected:
+        raise ValueError(
+            "dist/SHA256SUMS does not declare exactly both setup files."
+        )
+    for name, digest in rows.items():
+        path = root / "dist" / name
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(
+                f"Native setup is missing or not a regular file: {name}"
+            )
+        if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+            raise ValueError(f"Native setup SHA-256 does not match: {name}")
 
 
 def main() -> None:
-    """Render authored payload and check or write its declared outputs."""
+    """Build committed packages/setups or validate existing native outputs."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true")
+    parser.add_argument("--revision", default="HEAD")
+    parser.add_argument("--extra", action="append", default=[])
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--check", action="store_true")
+    mode.add_argument("--python-packages", action="store_true")
+    parser.add_argument("--output", type=Path)
     arguments = parser.parse_args()
-    root = Path(__file__).resolve().parents[2]
-    metadata = read_project_metadata(root)
-    spec = distribution_spec(root, metadata)
-    base_payload = _payload(root, metadata)
-    payload_root = metadata.distribution_path / "payload"
-    resources: list[PurePosixPath] = []
-    support_resources: list[Artifact] = []
-    for relative, content in install_support_files(spec, base_payload).items():
-        resource = PurePosixPath("app_lifecycle/_support") / relative
-        support_resources.append(
-            Artifact(
-                payload_root / resource,
-                content,
-                relative.name in {"launch.sh", "uninstall.sh"},
-                root,
-            )
+    if arguments.output is not None and not arguments.python_packages:
+        parser.error("--output requires --python-packages")
+    if arguments.extra and arguments.python_packages:
+        parser.error(
+            "--extra selects native runtime extras, not package builds"
         )
-        resources.append(resource)
-    write_artifacts(support_resources, check=arguments.check)
-    payload = PayloadTree(
-        root / payload_root, base_payload.modules, resources=tuple(resources)
-    )
-    write_artifacts(generate_artifacts(spec, payload), check=arguments.check)
+    root = Path(__file__).resolve().parents[2]
+    if arguments.check:
+        check_artifacts(root)
+    elif arguments.python_packages:
+        build_python_packages(
+            root,
+            revision=arguments.revision,
+            output=arguments.output,
+        )
+    else:
+        build_artifacts(
+            root, revision=arguments.revision, extras=tuple(arguments.extra)
+        )
 
 
 if __name__ == "__main__":

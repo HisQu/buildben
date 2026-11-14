@@ -48,17 +48,18 @@ All notable changes to `{my_project}` will be documented in this file.
 ### 💥 Breaking changes
 
 <br>
-- Breaking: Generated root `app-install.sh`, `app-install.cmd`,
-  `app-launch.sh`, and `app-launch.cmd` entries are replaced by
-  `app-install.py` and `app-launch.py` for checkout development; release
-  installers are native platform executables.
-  Affected: Maintainers and users invoking those root install/launch wrappers.
-  Migration: Use the Python entries from a checkout and the matching
-  `{my_project}-install-*` native executable from a release.
+- Breaking: Generated projects no longer provide root install, launch, or
+  uninstall helper scripts. Checkout registration now uses
+  `uv run --locked <command> app install -e`; releases use the platform
+  `<app-id>-setup-*` executable.
+  Affected: Maintainers and users of generated helper scripts or the former
+  source-selection installer.
+  Migration: Synchronize the existing checkout with `uv sync --locked` and run
+  `uv run --locked <command> app install -e`, or run the matching release setup.
 
 ### ➕ Added
-- Added SDK-authored Linux and Windows native release installers and launchers,
-  with a retained authenticated runtime payload and exact outer asset manifest.
+- Added committed-project snapshot authoring and Linux/Windows native setups
+  with `SHA256SUMS`; authored app hooks now ship in the installed package.
 
 <br>
 

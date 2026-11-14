@@ -83,7 +83,6 @@ def _project_directories(
     """
     directories = [
         project_root / "tests",
-        project_root / "tests" / "support_source_transport",
         project_root / "assets",
         project_root / "examples",
         project_root / "docs",
@@ -92,8 +91,7 @@ def _project_directories(
         project_root / ".github" / "workflows",
         project_root / ".github" / "workflows_inactive",
         project_root / "src" / name,
-        project_root / "src" / f"{name}_distr" / "payload" / "app_lifecycle",
-        project_root / "src" / f"{name}_distr" / "artifacts",
+        project_root / "src" / f"{name}_distr",
         project_root / "src" / f"{name}_dev" / "packaging",
         project_root / "src" / name / "cli",
         project_root / "src" / name / "config",
@@ -192,11 +190,6 @@ def _project_template_transfers(
         / f"{name}_dev"
         / "packaging"
         / "release_assets.py",
-        "_src-dev-packaging-release_notes.py.tmpl": project_root
-        / "src"
-        / f"{name}_dev"
-        / "packaging"
-        / "release_notes.py",
         "_src-dev-packaging-release_manifest.py.tmpl": project_root
         / "src"
         / f"{name}_dev"
@@ -207,6 +200,11 @@ def _project_template_transfers(
         / f"{name}_dev"
         / "packaging"
         / "release_stage.py",
+        "_src-dev-packaging-release_notes.py.tmpl": project_root
+        / "src"
+        / f"{name}_dev"
+        / "packaging"
+        / "release_notes.py",
         "_src-dev-packaging-install_smoke.py.tmpl": project_root
         / "src"
         / f"{name}_dev"
@@ -216,54 +214,15 @@ def _project_template_transfers(
         / "src"
         / f"{name}_distr"
         / "make_artifacts.py",
-        "_src-distr-payload-init.py.tmpl": project_root
-        / "src"
-        / f"{name}_distr"
-        / "payload"
-        / "app_lifecycle"
-        / "__init__.py",
-        "_src-distr-payload-install.py.tmpl": project_root
-        / "src"
-        / f"{name}_distr"
-        / "payload"
-        / "app_lifecycle"
-        / "install.py",
-        "_src-distr-payload-uninstall.py.tmpl": project_root
-        / "src"
-        / f"{name}_distr"
-        / "payload"
-        / "app_lifecycle"
-        / "uninstall.py",
+        "_src-installation.py.tmpl": project_root / "src" / name / "installation.py",
         "_src-distr-payload-actions.py.tmpl": project_root
         / "src"
         / f"{name}_distr"
-        / "payload"
-        / "app_lifecycle"
         / "actions.py",
         "_MANIFEST.in": project_root / "MANIFEST.in",
         "_tests-test_package.py.tmpl": project_root
         / "tests"
         / f"test_{name}_package.py",
-        "_tests-support_source_transport-server.py.tmpl": project_root
-        / "tests"
-        / "support_source_transport"
-        / "server.py",
-        "_tests-support_source_transport-sitecustomize.py.tmpl": project_root
-        / "tests"
-        / "support_source_transport"
-        / "sitecustomize.py",
-        "_tests-support_source_transport-gh": project_root
-        / "tests"
-        / "support_source_transport"
-        / "gh",
-        "_tests-support_source_transport-gh.py.tmpl": project_root
-        / "tests"
-        / "support_source_transport"
-        / "gh.py",
-        "_tests-support_source_transport-gh.cmd": project_root
-        / "tests"
-        / "support_source_transport"
-        / "gh.cmd",
         "_tests-test_documentation.py.tmpl": project_root
         / "tests"
         / "test_documentation.py",
@@ -279,6 +238,12 @@ def _project_template_transfers(
         frontend_root = project_root / "frontend"
         transfers.update(
             {
+                "_src-distr-prepare.py.tmpl": project_root
+                / "src"
+                / f"{name}_distr"
+                / "prepare.py",
+                "_src-web.py.tmpl": project_root / "src" / name / "web.py",
+                "_tests-test_web.py.tmpl": project_root / "tests" / "test_web.py",
                 "_frontend-justfile": frontend_root / "justfile",
                 "_frontend-package.json": frontend_root / "package.json",
                 "_frontend-bun.lock": frontend_root / "bun.lock",
@@ -355,6 +320,26 @@ def _project_placeholders(
             "[group('Frontend')]\nmod front 'frontend/justfile'" if frontend else ""
         ),
         "<frontend_ci_job>": frontend_ci_job,
+        "<frontend_prepare_import>": (
+            f"from {name}_distr.prepare import prepare_project\n" if frontend else ""
+        ),
+        "<frontend_prepare_callback>": ("prepare_project" if frontend else "None"),
+        "<frontend_package_data>": '"_web/**/*",' if frontend else "",
+        "<frontend_web_import>": (
+            f"from {name}.web import serve\n" if frontend else ""
+        ),
+        "<frontend_web_command>": (
+            "\n\n"
+            '@app.command("web")\n'
+            "def web_cmd(\n"
+            "    host: Annotated[str, typer.Option('--host')] = '127.0.0.1',\n"
+            "    port: Annotated[int, typer.Option('--port')] = 8000,\n"
+            ") -> None:\n"
+            '    """Serve the installed static frontend on localhost."""\n'
+            "    serve(host, port)\n\n"
+            if frontend
+            else "\n"
+        ),
         "<frontend_gitignore>": (
             "frontend/node_modules/\n"
             "frontend/dist/\n"
@@ -392,10 +377,6 @@ def _create_init_files(project_root: Path, name: str) -> None:
     utils.create_init_dot_py(project_root / "src" / f"{name}_dev")
     utils.create_init_dot_py(project_root / "src" / f"{name}_dev" / "packaging")
     utils.create_init_dot_py(project_root / "src" / f"{name}_distr")
-    utils.create_init_dot_py(project_root / "src" / f"{name}_distr" / "payload")
-    utils.create_init_dot_py(
-        project_root / "src" / f"{name}_distr" / "payload" / "app_lifecycle"
-    )
     utils.create_init_dot_py(package_root / "cli", imports=["app"])
     utils.create_init_dot_py(
         package_root / "utils",

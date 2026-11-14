@@ -56,11 +56,17 @@ This project follows Semantic Versioning.
 
 ### 💥 Breaking changes
 
-- Breaking: Regenerated projects replace shell/CMD bootstrap entries with Python
-  checkout entries and a strict native release asset contract. Affected:
-  generated-project users and release automation. Migration: update commands and
-  automation to the Python entries and exact native asset names, then regenerate
-  project artifacts; no compatibility shim is provided.
+- Breaking: Replaced generated lifecycle wrappers/payloads and schema-2 uv-tool
+  installation with complete locked project snapshots, schema-3 runtime slots
+  and one stable native command. Existing installations need explicit
+  resource-preserving retirement/reinstallation; generated apps and automation
+  must use native setup or `uv run --locked <app> app install -e`. No converter,
+  old source selector or wheel override compatibility layer remains.
+- Breaking: `just make-artifacts` now compiles setup and requires the authoring
+  Rust/LLVM/cargo-xwin toolchain. Only two setup executables and `SHA256SUMS`
+  are final native outputs under ignored `dist/`; intermediate copies stay in
+  ignored `.cache/apprc/`. Do not commit generated artifacts or expect separate
+  launcher/uninstaller assets.
 
 <br>
 
@@ -71,16 +77,17 @@ This project follows Semantic Versioning.
   Generated roots expose grouped `just front sync|dev|check|test|build` recipes
   and an independent frontend CI job without changing Python-only generation
   or Python dependency and distribution ownership.
-- Added native producer and locked repository-bundle templates with the
-  appropriate GUI runtime extra. Ordinary Python generation remains Rust-free.
+- Added complete-project native setup authoring and hybrid static-asset
+  preparation. Generated AppRC apps share typed application hooks, recorded
+  runtime dispatch and lightweight editable registration.
 
 <br>
 
 ### 💔 Changed
 
-- Pin authoring, scaffold and generated lifecycle inputs to published AppRC
-  0.34.0 using its immutable release commit, while keeping Buildben's runtime
-  dependency list empty.
+- Pin authoring and generated projects to the immutable AppRC cutover source,
+  while keeping Buildben's argparse business CLI and empty runtime dependency
+  list. Normal pip installation remains independent of AppRC.
 
 <br>
 

@@ -65,21 +65,20 @@ package descriptions. Contributors and coding agents must follow them.
 
 ### Installation instructions
 
-- Describe release-native entrypoints as `{my_project}-install-linux-x86_64`
-  and `{my_project}-install-windows-x86_64.exe`; download the complete
-  manifest-validated asset set before running them.
-- Describe checkout development through `python app-install.py` and
-  `python app-launch.py`. Keep `app-uninstall.sh` and `app-uninstall.cmd`
-  as the root uninstall wrappers; Windows saved launch/handoff files remain
-  under the SDK-generated support tree.
-- Document `just make-artifacts`, no-write `just check-artifacts`, and the
-  separate native `just stage-release-assets TAG FULL_COMMIT` release step.
-  Ordinary artifact generation must not invoke Rust.
-- The native release recipe selects the published `gui` runtime extra and
-  typed `bundle-repositories`; never use development groups or manual
-  runtime overrides for bundled native dependencies.
-- Explain that the app wheel excludes `{my_project}_distr`, while its source
-  archive includes authored source, Python entries, and required support files.
+- Describe native setup files as `{my_project}-setup-linux-x86_64` and
+  `{my_project}-setup-windows-x86_64.exe`, with `SHA256SUMS` covering exactly
+  those outputs.
+- Describe editable checkout setup as
+  `uv run --locked {my_project} app install -e`; do not document generated
+  root installer, launcher, or uninstall helpers.
+- Document `just make-artifacts` as committed Git snapshot authoring with
+  optional `--revision`; document `just check-artifacts` as read-only
+  declaration and checksum validation. Both final outputs and intermediates
+  must match the native authoring contract.
+- Keep application `InstallationHooks` in the installed package. Authored
+  distribution build actions are not installed lifecycle hooks.
+- Keep ordinary wheel/sdist packaging and the existing conditional PyPI policy
+  independent from native setup generation.
 
 ### Names and explanations
 

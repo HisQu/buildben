@@ -1,0 +1,93 @@
+"""The ordinary wheel and sdist contain usable React package resources."""
+
+from __future__ import annotations
+
+import re
+import subprocess
+import sys
+import tarfile
+import zipfile
+from pathlib import Path
+
+from <my_project>_distr.make_artifacts import build_python_packages
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_python_packages_serve_the_committed_frontend_outside_checkout(
+    tmp_path: Path,
+) -> None:
+    """Build locked package assets privately and exercise the installed server."""
+    tracked_inputs = tuple(
+        path for path in (
+            ROOT / "pyproject.toml", ROOT / "uv.lock", ROOT / "pylock.toml",
+            ROOT / "frontend" / "package.json", ROOT / "frontend" / "bun.lock",
+        ) if path.is_file()
+    )
+    input_bytes = {path: path.read_bytes() for path in tracked_inputs}
+    output = tmp_path / "packages"
+    wheel, sdist = build_python_packages(ROOT, output=output)
+
+    with zipfile.ZipFile(wheel) as archive:
+        wheel_assets = {
+            name: archive.read(name)
+            for name in archive.namelist()
+            if name.startswith("<my_project>/_web/")
+        }
+    assert "<my_project>/_web/index.html" in wheel_assets
+    index = wheel_assets["<my_project>/_web/index.html"]
+    script_match = re.search(rb'<script[^>]+src="([^"]+\.js)"', index)
+    assert script_match is not None
+    script_path = b"<my_project>/_web/" + script_match[1].lstrip(b"/")
+    assert script_path.decode() in wheel_assets
+
+    with tarfile.open(sdist, "r:gz") as archive:
+        sdist_names = archive.getnames()
+    assert any(
+        name.endswith("src/<my_project>/_web/index.html")
+        for name in sdist_names
+    )
+
+    script = """
+import sys
+import re
+from threading import Thread
+from urllib.parse import urljoin
+from importlib.resources import files
+
+sys.path.insert(0, sys.argv[1])
+from <my_project>.web import static_server
+
+expected = files("<my_project>").joinpath("_web", "index.html").read_bytes()
+script = re.search(rb'<script[^>]+src="([^"]+\.js)"', expected)
+assert script is not None
+with static_server("127.0.0.1", 0) as server:
+    worker = Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    try:
+        with urlopen(f"http://127.0.0.1:{server.server_port}/") as response:
+            assert response.status == 200
+            assert response.read() == expected
+        script_url = urljoin(
+            f"http://127.0.0.1:{server.server_port}/",
+            script.group(1).decode(),
+        )
+        with urlopen(script_url) as response:
+            assert response.status == 200
+            assert response.read()
+    finally:
+        server.shutdown()
+        worker.join()
+"""
+    subprocess.run(
+        [sys.executable, "-I", "-c", script, str(wheel)],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert {path: path.read_bytes() for path in tracked_inputs} == input_bytes
+    assert not (ROOT / "src" / "<my_project>" / "_web").exists()
+    assert not (ROOT / "frontend" / "node_modules").exists()
+    assert not (ROOT / "frontend" / "dist").exists()

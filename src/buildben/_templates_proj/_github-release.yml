@@ -32,7 +32,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.12"
+          version: "0.13.6"
           enable-cache: false
       - name: Wait for normal CI on this exact commit
         env:
@@ -57,7 +57,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.12"
+          version: "0.13.6"
           enable-cache: false
       - name: Prepare or reuse the tag draft
         id: prepare
@@ -88,10 +88,15 @@ jobs:
     steps:
       - name: Checkout release commit
         uses: actions/checkout@v5
+      - name: Install Bun for React package authoring
+        if: hashFiles('frontend/package.json') != ''
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.12"
+          version: "0.13.6"
           enable-cache: auto
       - name: Install just
         uses: extractions/setup-just@v4
@@ -115,12 +120,19 @@ jobs:
           set -euo pipefail
           mkdir -p release
           printf '%s' "$RELEASE_NOTES_BASE64" | base64 --decode > release/release-notes.md
-      - name: Check tracked management artifacts without rewriting
-        run: just check-artifacts
       - name: Build and validate package once
         run: just build-release-inputs release/release-notes.md
       - name: Smoke the built wheel once on Python 3.12
         run: just release-wheel-smoke
+      - name: Preserve the independent Python release packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-release-packages
+          path: |
+            .cache/apprc/python-packages/*.whl
+            .cache/apprc/python-packages/*.tar.gz
+          if-no-files-found: error
+          retention-days: 14
       - name: Install Linux native cross-compilation toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -130,8 +142,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes clang llvm lld
           cargo install cargo-xwin --version 0.23.1 --locked
-      - name: Stage release-native entries and integrity manifest
+      - name: Stage native setup executables and SHA256SUMS
         run: just stage-release-assets "$GITHUB_REF_NAME" "$GITHUB_SHA"
+      - name: Validate native outputs without rebuilding
+        run: just check-artifacts
       - name: Upload the exact verified release asset set
         env:
           GH_TOKEN: ${{ github.token }}
@@ -159,7 +173,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.12"
+          version: "0.13.6"
           enable-cache: false
       - name: Validate staged assets and publish the draft
         env:
@@ -185,10 +199,13 @@ jobs:
     steps:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
-      - name: Download package assets from the published release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir dist --pattern '*.whl' --pattern '*.tar.gz'
+        with:
+          version: "0.13.6"
+      - name: Download the independently built Python release packages
+        uses: actions/download-artifact@v8
+        with:
+          name: python-release-packages
+          path: .cache/apprc/python-packages
       - name: Publish to PyPI with trusted publishing
         shell: bash
         run: |
@@ -198,7 +215,7 @@ jobs:
           uv publish \
             --trusted-publishing always \
             --check-url "https://pypi.org/simple/${normalized_project}/" \
-            dist/*
+            .cache/apprc/python-packages/*
   manual_pypi_preflight:
     name: Check manual PyPI release policy
     if: github.event_name == 'workflow_dispatch'
@@ -232,7 +249,11 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.12"
+          version: "0.13.6"
+      - name: Install Bun for committed React package authoring
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
 
       - name: Validate workflow-run commit and requested tag
         id: release_policy
@@ -318,34 +339,38 @@ jobs:
             exit 1
           fi
           version="$(cut -c 2- <<< "$RELEASE_TAG")"
-          wheel_count="$(jq '[.assets[].name | select(endswith(".whl"))] | length' "$release_metadata")"
-          sdist_count="$(jq '[.assets[].name | select(endswith(".tar.gz"))] | length' "$release_metadata")"
-          if [[ "$wheel_count" != "1" || "$sdist_count" != "1" ]]; then
-            echo "GitHub Release $RELEASE_TAG must contain exactly one wheel and one source archive." >&2
-            exit 1
-          fi
-          wheel_name="$(jq -er '[.assets[].name | select(endswith(".whl"))][0]' "$release_metadata")"
-          sdist_name="$(jq -er '[.assets[].name | select(endswith(".tar.gz"))][0]' "$release_metadata")"
-          if [[ "$wheel_name" != "$PACKAGE_NAME-$version-"*.whl || "$sdist_name" != "$PACKAGE_NAME-$version.tar.gz" || "$wheel_name" == */* || "$wheel_name" == *$'\n'* || "$wheel_name" == *$'\r'* ]]; then
-            echo "Release asset filenames do not match tag $RELEASE_TAG." >&2
-            exit 1
-          fi
-          wheel_asset_id="$(jq -er --arg name "$wheel_name" '.assets[] | select(.name == $name) | .id | select(type == "number" and . > 0)' "$release_metadata")"
-          sdist_asset_id="$(jq -er --arg name "$sdist_name" '.assets[] | select(.name == $name) | .id | select(type == "number" and . > 0)' "$release_metadata")"
-
           snapshot_dir="manual-pypi-snapshot"
           mkdir "$snapshot_dir"
-          gh api "/repos/$GITHUB_REPOSITORY/releases/assets/$wheel_asset_id" --header "Accept: application/octet-stream" > "$snapshot_dir/$wheel_name"
-          gh api "/repos/$GITHUB_REPOSITORY/releases/assets/$sdist_asset_id" --header "Accept: application/octet-stream" > "$snapshot_dir/$sdist_name"
-          expected_files="$(printf '%s\n%s' "$sdist_name" "$wheel_name" | LC_ALL=C sort)"
-          actual_files="$(find "$snapshot_dir" -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort)"
-          if [[ "$actual_files" != "$expected_files" || ! -f "$snapshot_dir/$wheel_name" || -L "$snapshot_dir/$wheel_name" || ! -f "$snapshot_dir/$sdist_name" || -L "$snapshot_dir/$sdist_name" ]]; then
-            echo "Downloaded release files do not match the selected wheel and source archive." >&2
+          source_dir="$(mktemp -d)"
+          trap 'rm -f "$release_metadata"; rm -rf "$source_dir"' EXIT
+          git archive --format=tar "$target_commit" | tar -xf - -C "$source_dir"
+          source_version="$(cd "$source_dir" && uv version --short)"
+          if [[ "$source_version" != "$version" ]]; then
+            echo "Target source version $source_version does not match $RELEASE_TAG." >&2
             exit 1
           fi
-          PYTHONPATH=src python -m {my_project}_dev.packaging.release_assets verify-pypi \
-            --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" \
-            --commit "$target_commit" --metadata "$release_metadata" --directory "$snapshot_dir"
+          packages_dir="$source_dir/.cache/apprc/python-packages"
+          mkdir -p "$packages_dir"
+          if [[ -f "$source_dir/frontend/package.json" ]]; then
+            (cd "$source_dir" && PYTHONPATH="$source_dir/src:$GITHUB_WORKSPACE/src" uv run --project "$source_dir" --locked --group dev -- python -m {my_project}_distr.make_artifacts --python-packages --output "$packages_dir")
+          else
+            (cd "$source_dir" && uv build --wheel --sdist --python 3.12 --no-sources --no-build-logs --out-dir "$packages_dir")
+          fi
+          cp -- "$packages_dir"/*.whl "$snapshot_dir/"
+          cp -- "$packages_dir"/*.tar.gz "$snapshot_dir/"
+          package_files=("$snapshot_dir"/*.whl "$snapshot_dir"/*.tar.gz)
+          if [[ "${#package_files[@]}" -ne 2 ]]; then
+            echo "Target source build did not produce exactly one wheel and source archive." >&2
+            exit 1
+          fi
+          wheel_name="$(basename "${package_files[0]}")"
+          sdist_name="$(basename "${package_files[1]}")"
+          (
+            cd "$source_dir"
+            PYTHONPATH="$GITHUB_WORKSPACE/src" python -m {my_project}_dev.packaging.release_assets verify-pypi \
+              --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" \
+              --commit "$target_commit" --metadata "$release_metadata" --directory "$GITHUB_WORKSPACE/$snapshot_dir"
+          )
           uvx --from twine twine check "$snapshot_dir/$wheel_name" "$snapshot_dir/$sdist_name"
 
           python3 - "$snapshot_dir/manifest.json" "$release_id" "$RELEASE_TAG" "$active_commit" "$tag_object_sha" "$target_commit" "$wheel_name" "$sdist_name" <<'PY'
@@ -444,7 +469,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.12"
+          version: "0.13.6"
 
       - name: Download the preflight snapshot by artifact ID
         uses: actions/download-artifact@v8

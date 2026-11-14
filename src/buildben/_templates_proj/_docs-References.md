@@ -33,9 +33,7 @@
 | [config/app.py](../src/{my_project}/config/app.py) | The shared [AppRC](Explanations.md#apprc) declaration. |
 | [config/sections/app.py](../src/{my_project}/config/sections/app.py) | The `AppSettings` [config section](Explanations.md#config-sections). |
 | [config/bundle.py](../src/{my_project}/config/bundle.py) | The application's [config bundle](Explanations.md#config-bundle). |
-| [`{my_project}_distr`](../src/{my_project}_distr) | Authored lifecycle payload, generator, and SDK-produced management artifacts. |
-| `app-install.py` / `app-launch.py` | Root Python developer entries for install and saved launch. |
-| `app-uninstall.sh` / `app-uninstall.cmd` | Root uninstall wrappers for POSIX and Windows. |
+| [<my_project> installation providers](../src/{my_project}/installation.py) | Typed hooks captured by the installed application runtime. |
 | [tests](../tests) | Automated checks. |
 | [examples](../examples) | Small user-facing programs, described in [Examples](EXAMPLES.md). |
 | [docs](.) | Documentation, following the [authoring rules](README.md#documentation-rules). |
@@ -48,96 +46,60 @@ Application resources use declared paths captured for the invocation; see
 
 | Command | Result |
 | --- | --- |
-| `{my_project} --help` | Show business commands and AppRC's Maintenance management panel without requiring business setup. |
+| `{my_project} --help` | Show application commands and AppRC's maintenance group without business setup. |
+| `{my_project} launch` | Open the SDK-mounted Textual launcher. |
 | `{my_project} version` | Print the installed package version. |
-| `{my_project} launcher` | Open the optional single-event-loop installed launcher. |
-| `{my_project} installation show [--json]` | Inspect installation authority without mutation. |
-| `{my_project} installation doctor [--json]` | Diagnose installation state without resolving business settings. |
-| `{my_project} installation migrate --dry-run` | Preview an explicit resource or layout migration without writes. |
-| `{my_project} installation repair [--installer PATH]` | Repair the saved installation using explicit matching support. |
-| `{my_project} installation uninstall --dry-run` | Preview the selected uninstall without mutation. |
-| `{my_project} config show --json` | Print the application config payload from its captured runtime snapshot. |
+| `{my_project} app paths --json` | Inspect recorded application paths. |
+| `{my_project} app doctor --json` | Diagnose installation state without resolving business settings. |
+| `{my_project} app install -e` | Register the existing checkout environment as editable. |
+| `{my_project} app repair` | Repair an eligible managed installation. |
+| `{my_project} app uninstall --dry-run` | Preview program removal without mutation. |
+| `{my_project} config show --json` | Print settings from the captured runtime snapshot. |
 | `{my_project} config edit` | Open the optional config editor. |
 
-`config show --json` contains package/version, paths, workspace selection, and
-the current config payload. Missing business settings do not disable installation
-show, doctor, dry-run, or repair management.
+Missing business settings do not disable the SDK-mounted launcher or
+installation maintenance commands.
 
 ## Installer reference
 
-`src/{my_project}_distr/make_artifacts.py` composes the authored lifecycle
-payload with AppRC's deterministic generator. Run `just make-artifacts` after
-editing it, and `just check-artifacts` to check tracked files without rewriting
-includes the generator, payload, and generated artifacts.
+`src/{my_project}_distr/make_artifacts.py` composes the authored application
+declaration with `build_project_snapshot()` and `build_native_distribution()`.
+Run `just make-artifacts [--revision REVISION]` to snapshot a committed Git
+revision (default `HEAD`) and compile the Linux and Windows setup files.
+Intermediates stay under `.cache/apprc`; final outputs are `dist/<app-id>-setup-linux-x86_64`,
+`dist/<app-id>-setup-windows-x86_64.exe`, and `dist/SHA256SUMS`.
+`just check-artifacts` is read-only: it validates declarations, the exact
+checksum inventory, and the final setup bytes.
 
 | Path | Purpose |
 | --- | --- |
-| `app-install.py` | Rust-free Python developer entry for checkout or remote source selection. |
-| `app-launch.py` | Python dispatch to AppRC's saved launch management program. |
-| `app-uninstall.sh`, `app-uninstall.cmd` | Invoke the saved authored uninstallation procedure. |
-| `src/{my_project}_distr/payload/app_lifecycle/install.py` | Repository-owned source acquisition and installation composition. |
-| `src/{my_project}_distr/payload/app_lifecycle/uninstall.py` | Repository-owned uninstall preview and handoff composition. |
-| `src/{my_project}_distr/artifacts/` | SDK-generated support tree, including retained Windows wrappers. |
+| `src/{my_project}/installation.py` | Installed application's shared typed `InstallationHooks`. |
+| `src/{my_project}_distr/actions.py` | Authored native build actions; not imported as installed hooks. |
+| `src/{my_project}_distr/make_artifacts.py` | Committed source preparation and ordinary/native package composition. |
+| `src/{my_project}_distr/prepare.py` | Private-copy React build preparation, when enabled. |
+| `src/{my_project}/_web/` | Built static frontend package data, when enabled. |
 
-The Python developer entry uses the current checkout; native release installers
-use the authenticated bundled runtime by default. `--version X.Y.Z` selects a
-published release, while `--main` resolves remote `main` once to a full commit.
-`--github-client gh` selects authenticated GitHub CLI transport. For declared
-resource capabilities, choose `--layout native` or
-`--layout single-root --root ABSOLUTE_PATH`. A reinstall reuses saved absolute
-resource paths unless layout is explicitly overridden.
-
-An operating-system temporary directory may itself be a platform alias. The
-installer resolves its private staging directory and authenticated payload
-transport paths before AppRC validation. Source identity and digest checks stay
-unchanged; this does not allow symlinks in installation metadata or managed
-application-resource paths.
-
-Release preparation uses `just check-artifacts`, builds one validated wheel
-and sdist, then runs `just stage-release-assets TAG FULL_COMMIT`. The helper
-stages the exact package pair, four SDK-generated native executables, and the
-original Python installer payload in `release/assets`, then delegates
-manifest creation to the strict release asset contract. Package builds do not
-generate artifacts or access the network.
+For React projects, `just build-python-packages` prepares the committed source
+privately and builds only the declared workspace package's wheel/sdist under
+`.cache/apprc/python-packages/`, without native compilation. Python-only projects
+use plain `uv build` without an SDK authoring group or lockfile. Native setups
+remain in `dist/`.
 
 ## Uninstaller reference
 
-`app-uninstall.sh` and `app-uninstall.cmd` route through the repository-authored
-uninstall module and saved AppRC controller. The default retains declared
-application resources and installation recovery support. Complete removal
-requires selection of every tracked root, or explicit retention consent through
-`--forget-retained`, followed by confirmation. A declared root is tracked even
-when its directory is currently absent.
-
-| Option | Effect |
-| --- | --- |
-| `--complete` | Remove lifecycle authority after every tracked root is selected or explicitly retained. |
-| `--category config\|appdata\|cache\|state` | Select one owned resource category; repeat as needed. |
-| `--forget-retained` | Consent to leaving unselected or unprovable files on disk while forgetting their installation authority. |
-| `--yes` | Confirm the requested uninstall without an interactive prompt. |
-
-The saved controller is kept under the fixed native
-`installation/` directory, separate from appdata. Inspection and recovery use
-`{my_project} installation show`, `{my_project} installation doctor`, and
-`{my_project} installation repair`; these management commands do not require
-business settings to resolve.
-
-Project-specific cleanup belongs in ordinary repository functions called while
-the program remains installed. Without `--forget-retained`, cleanup that cannot
-prove ownership keeps the affected resource and installation authority for
-recovery. With that explicit consent, retained files are not deleted. External
-workspaces, shared uv, and shared Python are never inferred as removal targets.
+Use `{my_project} app uninstall --dry-run` to inspect removal. The default
+program removal retains declared application resources; explicitly select
+resource categories for deletion. Editable checkout files and environments are
+never removal targets.
 
 ## Installation placement
 
-The installer supports `native` paths or one explicit `single-root` layout.
-`--layout` and `--root` are installer options; `--root` is valid only with
-`--layout single-root` and must be absolute. The saved placement records enabled
-resource paths, which reinstallation reuses by default. This resource layout is
-separate from the program environment: `uv tool install` manages the application
-program in its tool environment, while `--layout` selects declared application
-resource locations. Changing layout does not move the installed program or
-automatically move existing resource contents.
+The setup executable manages a native application runtime from the committed
+snapshot. `app install -e` registers the existing `.venv` from the intended
+checkout without managing its dependencies or files. Application resources are
+placed using the declared native or single-root layout; the recorded absolute
+paths are reused on reinstall. The resource layout does not relocate the
+program environment, and changing layout does not move existing data.
 
 
 Buildben does not adopt legacy installer receipts. The installer uses current

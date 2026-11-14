@@ -12,9 +12,9 @@ from dataclasses import dataclass
 REQUIRED_RESOURCES = (
     "buildben/_templates_proj/_justfile",
     "buildben/_templates_proj/_github-ci.yml",
+    "buildben/_templates_proj/_src-installation.py.tmpl",
     "buildben/_templates_proj/_src-distr-make_artifacts.py.tmpl",
-    "buildben/_templates_proj/_src-distr-payload-install.py.tmpl",
-    "buildben/_templates_proj/_src-distr-payload-uninstall.py.tmpl",
+    "buildben/_templates_proj/_src-distr-prepare.py.tmpl",
     "buildben/_templates_proj/_src-dev-packaging-release_stage.py.tmpl",
 )
 

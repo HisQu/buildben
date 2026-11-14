@@ -101,8 +101,8 @@ black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://gith
 
 Editable pip installation needs Python `>=3.12` and a virtual environment.
 The native installer can provision uv/Python without administrator privileges;
-it does not require the application or AppRC to be installed first. Network
-access is needed for selected sources, Python and unresolved dependencies.
+it does not require Buildben or AppRC to be installed first. Network and Git
+credentials may be needed for locked Python/dependency acquisition.
 
 ### 🏃Quick & Dirty:
 ```bash
@@ -113,88 +113,48 @@ python -m pip install -e "."    # venv recommended
 
 ### Native installer entries
 
-> [!IMPORTANT]
-> This checkout uses the immutable AppRC source pins declared in `pyproject.toml`.
-> Those sources can include unreleased SDK fixes; changing source pins and locks
-> publishes neither Buildben nor AppRC. Use the checkout entries below to test
-> changes that are not in the latest release.
+Native setup embeds the complete committed project and `uv.lock`, rather than
+selecting a remote branch, release or wheel at installation time. Run
+`buildben-setup-linux-x86_64` on Linux or
+`buildben-setup-windows-x86_64.exe` on Windows after verifying its entry in
+`SHA256SUMS`. These names apply only to releases that contain the new assets;
+this source update does not publish one.
 
-From a complete checkout, run the Python developer entry:
-
-```sh
-python app-install.py
-```
-
-```powershell
-python app-install.py
-```
-
-This installs the actual editable application project, including dirty local
-changes. It does not archive `HEAD` or silently replace missing local payload
-with downloaded code. If tracked artifacts are missing/stale, the author runs
-`just make-artifacts`; CI uses `just check-artifacts` without rewriting.
-Ordinary `python -m pip install -e .` remains supported and unmanaged by this
-uv-tool lifecycle.
-
-Published releases contain a strict integrity manifest, the wheel and original
-source archive, four SDK-built native frontends (`buildben-install-*` and
-`buildben-launch-*` for Linux x86-64 and Windows x86-64), and the standalone
-Python installer payload. Download the native frontend for the host platform;
-it carries the exact authored installer and verifies the matching source
-archive before installation. The manifest binds every asset to its size,
-digest, version, and immutable source commit. Do not combine assets from
-different releases.
-
-The root `app-install.sh` and `app-install.cmd` frontends are no longer
-generated. The saved Windows `launch.cmd` and `launch.ps1` support remain
-available for launching an installed application. Ordinary
-`python -m pip install -e .` also remains supported and unmanaged by this
-uv-tool lifecycle.
-
-| Selection | Installer behavior |
-| --- | --- |
-| Complete checkout, no source override | Install the actual local project editable. |
-| Downloaded release-native entry, no source override | Install the exact release embedded in that entry. |
-| `--version X.Y.Z` | Install the selected published stable release. |
-| `--main` | Resolve remote main once and install that captured commit's matching source/runtime inputs. |
-
-`--main` cannot be combined with `--version`; it requires GitHub access and may
-select unreleased code. The installer reports the captured source commit, since
-the package version alone may also identify a release. Public access uses
-anonymous requests. For authenticated access use `--github-client gh` after
-`gh auth login` and `gh auth setup-git`; curl does not inherit gh credentials,
-and private VCS dependencies still need Git authentication.
-
-For an AppRC application, first installation offers OS-native versus single-root
-placement, displays exact enabled resource paths, and explains the distinction:
-
-
-- **Application resources:** config, persistent appdata, disposable cache and
-  operational state, only when individually declared by the application.
-- **Program environment:** Python, the uv-managed virtual environment and its
-  dependencies. Choosing an application root does not relocate these.
-- **Installation metadata:** durable support at a fixed native address, outside
-  a chosen single root and outside disposable state.
-
-Reinstallation keeps saved placement unless explicitly switched:
+The stable installed command is **`bube`**, from
+`tool.apprc.distribution.command-name`. Business commands run in its recorded
+locked runtime slot, regardless of the shell's active environment.
+Core maintenance uses the native manager independently:
 
 ```sh
-python app-install.py --layout native
-python app-install.py --layout single-root --root "/absolute/path/application-files"
+bube app paths --json
+bube app doctor --json
+bube app repair
 ```
 
-```powershell
-python app-install.py --layout single-root --root 'D:\ApplicationFiles'
+Buildben itself retains its ordinary argparse CLI and an empty
+`[project].dependencies`. Native management does not add AppRC as an application
+runtime dependency. An unmanaged `python -m pip install -e .` remains supported;
+it does not acquire a managed installation record.
+
+Generated AppRC applications instead provide first-class editable registration:
+
+```sh
+uv run --locked <app> app install -e
 ```
 
-`--root` is valid only with single-root and must be absolute; native accepts no
-root. A switch preserves previous owned resource locations as retired targets;
-it does not automatically move arbitrary databases or user projects. Invocation
-layout controls and `apprc.defaults.env` are not persistence for installer choices.
+This registers the checkout's existing `.venv` without copying or owning it.
+Git/uv handle updates and recovery; this lightweight developer path deliberately
+does not add an independent native bootstrap.
 
-Buildben itself declares no AppRC data capabilities and has no AppRC runtime
-dependency. It therefore creates no config/appdata/cache/state resource roots.
-Its durable `installation.json` and current-platform support use:
+Application resource placement remains distinct from the program:
+
+- OS-native or explicit single-root config/appdata/cache/state, only when
+  declared by the application.
+- Managed Python and dependencies in immutable-location runtime slots.
+- Fixed native installation authority outside disposable resources.
+
+Buildben declares no application resource categories. Its installation
+authority remains at these locations:
 
 | OS | Buildben installation directory |
 | --- | --- |
@@ -202,202 +162,121 @@ Its durable `installation.json` and current-platform support use:
 | macOS | `~/Library/Application Support/buildben/installation` |
 | Windows | `%LOCALAPPDATA%\buildben\installation` |
 
-The source generator lives in `src/buildben_distr/`; generated applications own
-the corresponding `<app>_distr` package. Its ordinary-Python payload controls
-project setup/cleanup while reusing AppRC's shared runtime. The saved Windows
-`launch.cmd` and `launch.ps1` invoke application launch support; launch never
-installs/syncs an environment. Buildben launches its direct CLI, while generated
-AppRC applications expose their installed Textual `launcher` command.
-
-Managed application environments use Python 3.13, selected by
-`tool.apprc.distribution.runtime-python`. This runtime choice is independent of
-`project.requires-python` (`>=3.12` here), which describes which interpreters
-may install the package. The PyApp bootstrap itself uses Python 3.14; that
-bootstrap version does not change the managed application's runtime.
+Managed runtime Python is 3.13, declared separately from package compatibility
+(`>=3.12`) and PyApp's Python 3.14 management bootstrap. uv owns application
+dependency synchronization; AppRC does not implement another resolver.
 
 ### Authoring lifecycle artifacts
 
-Keep project-specific prerequisites and cleanup in
-`src/<app>_distr/payload/app_lifecycle/`; keep distribution identity and composition
-in `src/<app>_distr/make_artifacts.py`. These are authoring inputs, not another
-installed application package or an alternative lifecycle engine.
-
-After changing those inputs:
+Keep build composition in the authored `src/<app>_distr` package. Application
+lifecycle hooks are importable `module:function` providers in the application,
+not copied/generated Python payloads.
 
 ```sh
 uv sync --locked --all-groups
 just make-artifacts
-just check-artifacts
 ```
 
-Commit the authored inputs and their generated outputs together. `check-artifacts`
-compares expected bytes without rewriting them. Neither package build hooks nor
-an end user's launch should regenerate artifacts or fetch missing checkout code.
+The builder exports one complete Git snapshot, validates its committed lock and
+workspace paths, builds declared frontend assets on that private copy, and
+compiles the native setup. Authoring now requires the existing Rust,
+LLVM/Clang/LLD and pinned `cargo-xwin` toolchain plus uv 0.13.6. This is an
+authoring prerequisite, not a recipient bootstrap requirement; recipients do
+not need uv or the native compiler toolchain.
 
-The artifact authoring and staging recipes select the locked project environment
-through uv. They do not require an activated virtual environment or direnv.
-`just stage-release-assets TAG COMMIT` is the explicit release-only native
-producer: it consumes the already-built wheel and original source archive, then
-uses the pinned AppRC SDK to build Linux and Windows x86-64 installer/launcher
-frontends. Linux native authoring requires Rust, LLVM/Clang/LLD, and pinned
-`cargo-xwin`; the release workflow installs these tools. Ordinary
-`just make-artifacts` and `just check-artifacts` remain Rust-free.
+Commit authored inputs and lockfiles, **not** generated outputs.
+`.cache/apprc/` contains ignored intermediates; ignored `dist/` contains exactly:
 
-Buildben keeps `[project].dependencies` empty so ordinary Python installation
-does not acquire application runtime dependencies. Release staging does not
-replace that policy with hand-authored `DistributionSpec.runtime_requirements`
-or `runtime_overrides`.
+| File | Purpose |
+| --- | --- |
+| `buildben-setup-linux-x86_64` | Linux setup and installed native manager. |
+| `buildben-setup-windows-x86_64.exe` | Windows setup and installed native manager. |
+| `SHA256SUMS` | SHA-256 integrity entries for the two setup executables. |
 
-Generated AppRC applications group management commands in the **Maintenance**
-help panel instead of mixing them with business commands. Use `<app> --help`,
-`<app> installation show --json`, `<app> installation doctor`, and
-`<app> installation uninstall --dry-run` for inspection; `<app> launcher` opens
-the installed Textual launcher. These management entrypoints must remain usable
-when business configuration is missing. Buildben itself keeps its direct CLI
-and does not acquire an AppRC runtime dependency merely to provide installation.
+Standard wheel/sdist package builds are separate from that three-file native
+contract. There is no generated helper forest, private wheelhouse, separate
+launcher asset, wheel override injection or `--main`/`--version` source selector.
+
+Hybrid generated repositories build React assets before snapshotting, exclude
+node_modules/build intermediates and ship static files as Python package data.
+The author needs Bun; installation and normal use do not.
+
+Generated AppRC apps use `config`, optional `workspace` and `app` maintenance
+groups. `<app> launch` opens the existing Textual management launcher through
+the selected application runtime; it is not another native executable.
 
 ### Windows installer verification procedure
 
-Native Windows and macOS installation validation is currently deferred. The
-maintained and scaffolded CI workflows run only on Linux with Python 3.12 and
-3.13. Re-enabling native jobs requires a separately authorized validation pass.
+Native Windows and macOS installation validation remains deferred. Maintained
+and generated CI runs on Linux with Python 3.12/3.13; do not add runners, spending
+or security-policy changes as part of ordinary source integration.
 
-For that Windows pass, restore a `windows-latest` case in the
-[`installation` CI job](.github/workflows/ci.yml). Extend the existing
-`tests/test_release_install.py`, not copied installer functions or a separate
-harness. On the separately authorized native Windows runner, exercise the real
-native `.exe` installer frontend and retained saved `launch.cmd` and
-`launch.ps1` paths. Windows executable compilation and header inspection on Linux
-do not establish native Windows behavior.
-
-On the native Windows runner, run:
-
-```powershell
-uv run --locked python -m pytest -n 0 tests/test_release_install.py -k windows_installer
-```
-
-The source-install consumer smoke must also complete through
-[`just release-install-smoke`](justfile), which checks real source installation
-and saved uninstallation through both Windows entrypoints. Focused tests alone
-do not replace that smoke. Linux checks are useful but do not prove Windows
-installation or behavior.
+A separately authorized Windows pass must exercise the actual setup, stable
+native command, updates, repair, shortcuts and final self-removal through the
+maintained consumer suite—not removed CMD/PowerShell wrappers. Cross-compilation
+and PE-header checks do not prove those operations.
 
 > [!WARNING]
-> From WSL, never launch native Windows verification executables: PowerShell,
-> Windows Python/pytest, `cmd.exe`, or Windows `uv`, directly or through helpers.
-> Do not use a cross-OS virtual environment as a workaround. Previous local
-> attempts terminated the terminal; the cause is unknown. Output capture,
-> `-NoProfile`, and `-NonInteractive` do not establish console isolation, and
-> `CREATE_NO_WINDOW` is not a proven fix. Do not retry locally.
+> Never launch Windows verification through WSL: this includes PowerShell,
+> Windows Python/pytest, `cmd.exe` and Windows uv, directly or through helpers.
+> Captured output, `-NoProfile`, `-NonInteractive` or `CREATE_NO_WINDOW` do not
+> establish isolation. Earlier attempts terminated the terminal; do not retry.
 
-Native Windows verification requires a separately authorized independent runner;
-this WSL terminal is not one. Observe authorized CI runs with Linux `gh` and
-record actual results; configured CI is not evidence that a run completed. If
-permissions, billing, or secrets block validation, record the concrete blocker
-and leave native proof pending. Explicitly authorized Linux-only integration may
-proceed with that gap recorded; it does not establish Windows release readiness
-or authorize publishing. Do not change billing, policy, or security settings or
-publish artifacts to bypass a blocker. Pushes still require explicit authorization.
+Observe authorized independent native runs with Linux `gh` and record their
+actual outcome. A runner/billing/credential blocker leaves that platform
+unverified; it does not authorize publication or bypasses. Linux-only main
+integration is authorized for this cutover, not Windows release readiness.
 
 ### Unix installer staging verification
 
-Run [`just release-install-smoke`](justfile) after changing Unix staging.
-The maintained [consumer tests](tests/test_release_install.py) exercise release
-and pinned-main sources through both the canonical installer and the Unix
-installer rendered by the real scaffolder. Cover physical and symlinked
-temporary parents, actual installation, saved uninstallation, and cleanup.
-The existing macOS `installation` jobs must execute successfully before release;
-main integration with that native gap requires the same explicit user override
-described in the [Windows procedure](#windows-installer-verification-procedure).
+Use the maintained consumer suite and native installation smoke after source
+owners freeze. It must install the real embedded snapshot, not an echoed
+command or mocked resolver. Cover safe temporary/home aliases without weakening
+rejection of untrusted links.
 
-Normalize only the newly created installer-owned staging root before deriving
-extracted-source paths. A macOS system alias such as `/var` must not make valid
-staging fail lifecycle validation. Do not resolve arbitrary lifecycle or
-preflight inputs to bypass their link checks; keep the rejection coverage in
-[`tests/test_lifecycle.py`](tests/test_lifecycle.py).
+Exercise Buildben as the zero-AppRC-dependency consumer and generated apps as
+actual scaffolded consumers. Python-only, multi-package workspace and hybrid
+cases must install their own source; a successful Buildben install cannot prove
+their resource hooks or packaged frontend assets.
 
-Generated-consumer cases must invoke the real scaffolder and AppRC generator,
-then install that consumer's own source—not reuse Buildben as a stand-in.
-Keep both kinds of evidence: canonical Buildben exercises a zero-data
-application, while generated applications exercise declared resources and
-project-specific setup/cleanup alongside the shared lifecycle.
+Linux evidence does not establish macOS behavior. Runtime selection must ignore
+ambient virtual environments, failed replacement must keep the old runtime
+usable, and live child leases must prevent retirement without losing recovery
+authority.
 
 ### Uninstall
 
-Installer-based installations save inspection/removal support outside the
-removable application environment. Use the native path printed by installation,
-or dispatch through the complete checkout:
+The installed native command provides independent program-only removal:
 
 ```sh
-./app-uninstall.sh --dry-run
-./app-uninstall.sh --yes
+bube app uninstall --dry-run
+bube app uninstall --yes
 ```
 
-```powershell
-.\app-uninstall.cmd --dry-run
-.\app-uninstall.cmd --yes
-```
+If that command is missing, use the matching original setup's `app uninstall`
+action. No checkout or generated uninstall script is required. Native
+finalization waits for its initiator before removing owned runtime/command
+files; unknown content, changed revisions and live leases prevent unsafe
+deletion.
 
-Default removal is **program-only**. It verifies actual backend absence, retains
-reconnectable placement/support and records `removed-retained`, not a fictitious
-installed version. For generated applications it retains every config/appdata/
-cache/state resource. Buildben has none. Editable checkout files, workspaces,
-shared uv/Python, shell configuration and unrelated tools are never implicit
-removal targets. There is no inherited legacy `--remove-uv` permission.
+Default removal preserves every application resource. Buildben has none;
+generated apps can declare config/appdata/cache/state. Editable registration
+never owns its checkout or environment. Shared uv/Python, shell profiles,
+workspaces and unrelated tools are not implicit removal targets.
 
-Complete removal is separate. Buildben's zero-resource example removes its
-remaining owned support/authority after confirming the preview:
+For generated applications, complete resource removal additionally requires an
+exact inventory and explicit category/consent. An unavailable application hook
+blocks dependent data purge without blocking independent program removal.
+`--forget-retained` leaves named retained files unmanaged, not deleted.
 
-```sh
-./app-uninstall.sh --dry-run --complete
-./app-uninstall.sh --complete --yes
-```
+Installation schema `3` rejects older authority and Buildben receipts. Finish
+old operations, back up user data and retire the old program with its own
+resource-preserving removal before a fresh install. Do not edit a schema number
+or fabricate a record; there is no converter or compatibility layer.
 
-Generated applications additionally select exact owned resource categories with
-repeatable `--category config|appdata|cache|state`. Persistent config/appdata
-deletion needs explicit consent; `--yes` does not bypass ownership, unknown-file,
-revision or generation checks. `--forget-retained` names retained files in its
-preview and deliberately leaves them unmanaged; it never means they were deleted.
-
-Saved inspection/dry-run is read-only: no uv bootstrap, downloads, environment
-creation or resource initialization. It needs an already available suitable
-Python; otherwise it reports that prerequisite. Mutating removal may provision
-its pinned management dependencies through uv, but uses the saved app-specific
-procedure instead of downloading newer cleanup code. Keep the recorded uv/base
-Python available. The independent controller waits for the actual caller and its
-owned foreground children to exit before deleting the environment.
-
-Incomplete work retains progress and a matching saved/external recovery command.
-Unknown contents and provider failures retain authority rather than claiming
-complete deletion. Complete removal deletes `installation.json` last; afterward
-only lock retirement and empty-container cleanup may occur. Safe lock residue
-under contention is reported, not used as permission to delete a new generation.
-
-Legacy Buildben receipts are not adopted by the current installer or AppRC
-installation authority. Finish any operation started by the old installer
-before removing its managed program. Back up user data first, and use the old
-generation's own removal procedure with its resource-preserving option; if that
-procedure cannot clearly preserve the resource directories, stop and resolve
-that with the old generation before proceeding. Do not fabricate a current
-installation record from a receipt or version label. After the old managed
-program is removed and its resources are preserved, install the current
-checkout as a fresh installation:
-
-```sh
-python app-install.py --layout native
-```
-
-Use `python app-install.py --layout native` on Windows as well. Current
-installation authority does not recognize schema-1 receipts or recover their
-operations. The unmanaged editable pip and uv tool removal guidance below
-applies only when no managed installation authority exists.
-
-For an unmanaged editable pip installation, use that environment's
-`python -m pip uninstall buildben`. For a manually installed uv tool without
-managed authority, use `uv tool uninstall buildben` with its original
-`UV_TOOL_DIR`/`UV_TOOL_BIN_DIR`; do not fabricate a receipt or treat another
-environment discovered on PATH as its owner.
-
+Unmanaged editable installations remain outside this lifecycle: use their own
+`python -m pip uninstall buildben`. A manually installed uv tool without
+managed authority remains owned by its original uv tool directory.
 
 ### Install from a cloned repository
 

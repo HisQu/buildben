@@ -146,88 +146,54 @@ not determine the Python version used by the installed application.
 
 ## Install a release
 
-The release contains native installers and launchers for Linux and Windows.
-Download the exact release inventory, including its manifest, before running
-the platform installer:
+Download the native setup for the current platform together with `SHA256SUMS`:
 
 ```shell
 gh release download vX.Y.Z --repo <github_username>/<my_project>
-./<my_project>-install-linux-x86_64
+./<my_project>-setup-linux-x86_64
 ```
 
-On Windows, run `<my_project>-install-windows-x86_64.exe`. Windows native
-runtime validation remains deferred; do not treat cross-compilation as runtime
-proof.
-
-With no selector, a downloaded native entry installs the exact authenticated
-runtime embedded in that release; it does not move to the latest release.
-`--version X.Y.Z` selects a published release, and `--main` resolves the
-repository's current `main` to one immutable commit for that invocation. These
-choices cannot be combined. `--github-client gh` selects authenticated GitHub
-CLI downloads; public downloads do not inherit GitHub CLI credentials.
-
-From a source checkout, generate its ordinary Python artifacts with
-`just make-artifacts`, then run `python app-install.py` and `python
-app-launch.py`. These commands use the checkout root recorded by the SDK,
-independent of the caller's working directory. `just check-artifacts` verifies
-tracked outputs without invoking Rust or rewriting files. Native compilation
-is a separate release-authoring operation.
-
-The installer offers native or single-root resource placement when the
-application declares resource capabilities. Use `--layout native` for native
-locations or `--layout single-root --root ABSOLUTE_PATH` for a single root.
-Reinstallation keeps the saved absolute placement unless an explicit layout
-override is supplied. Buildben itself declares no application data paths.
-
-Configuration setup is optional and does not block installation management.
-
-<br>
+On Windows, run `<my_project>-setup-windows-x86_64.exe`. The checksum file
+covers exactly those two setup executables. Windows cross-compilation is not
+Windows runtime validation.
 
 ## Install from a checkout
 
-Clone the repository, synchronize its locked authoring environment, and
-generate local AppRC artifacts before running the checkout installer:
+From the intended checkout, prepare its existing environment with the committed
+lock and register the editable application:
 
 ```shell
-git clone https://github.com/<github_username>/<my_project>.git
-cd <my_project>
 uv sync --locked --all-extras --all-groups
-just make-artifacts
+uv run --locked <my_project> app install -e
 ```
 
-Run the generated developer entries from the checkout:
+Editable registration reuses this checkout and its `.venv`; it does not resolve
+dependencies, copy source, or create an environment. Use `uv sync --locked` to
+restore a broken development environment. `just make-artifacts` builds native
+setups from the committed Git revision (defaults to `HEAD`); it does not capture
+uncommitted changes. `just check-artifacts` validates declarations and final
+setup checksums without rebuilding or writing.
 
-```shell
-python app-install.py --layout native
-python app-launch.py
-```
+For React projects, `just build-python-packages` builds the wheel and sdist from
+the same committed, locked source snapshot used by native authoring. Bun runs
+only on the private copy; generated `_web/` files and build intermediates do not
+modify the checkout. The Python packages are staged in
+`.cache/apprc/python-packages/`, separately from native setup files in `dist/`.
 
-The checkout install is editable and uses the actual project files, including
-uncommitted changes. It does not alter the repository's saved source revision.
-Use `just check-artifacts` to check generated outputs without rewriting them.
-
-<br>
+The setup executable performs a managed install of the embedded committed
+project snapshot. Use `app install -e` only from an intended source checkout.
+Application resource placement is recorded and reused on reinstall.
 
 ## Uninstall
 
-Run `./app-uninstall.sh` on Linux or macOS, or `.\app-uninstall.cmd` on Windows.
-The default removes the managed program and retains declared resources and
-installation recovery support. Complete removal requires an explicit request:
+Use `{my_project} app uninstall --dry-run` to inspect removal and
+`{my_project} app uninstall --yes` to remove the program while retaining
+declared resources. Explicitly select resource categories for deletion; unknown
+files and external checkouts are never inferred as cleanup targets.
 
-```shell
-./app-uninstall.sh --complete --category config --category appdata --yes
-```
-
-Use the same options with `app-uninstall.cmd` on Windows. Only select resource
-categories that the application declared; unknown files and external data are
-not inferred as cleanup targets. The saved uninstall code invokes any
-repository-owned cleanup before removing the installed program. Inspection and
-recovery use `{my_project} installation show`, `{my_project} installation
-doctor`, and `{my_project} installation repair`.
-
-The saved controller is stored under the fixed native `installation/` address,
-separate from application data. Repeated commands do not redirect it when the
-shell's `HOME`, XDG variables, or `LOCALAPPDATA` change.
+The installation record and recovery support are stored separately from
+application data. Changing HOME, XDG variables, or LOCALAPPDATA later does not
+redirect an existing installation.
 
 <br>
 
@@ -239,26 +205,21 @@ shell's `HOME`, XDG variables, or `LOCALAPPDATA` change.
 # Usage
 
 The installed command and AppRC management remain available before business
-setup. Run these commands from the installed application environment:
+setup:
 
 ```shell
-{my_project} version
-{my_project} diagnose --json
-{my_project} installation show
-{my_project} config show --json
-{my_project} launcher
+<my_project> version
+<my_project> paths --json
+<my_project> app doctor
+<my_project> config show --json
+<my_project> launch
 ```
 
-Application resources use the paths declared by `APP_RC`. Config, appdata,
-cache, and state are independent capabilities; disabled paths stay absent and
-installation management does not enable them. The `installation/` authority is
-separate from application data. See the
+Application resources use the paths declared by `APP_RC`; installation
+management does not enable undeclared capabilities. See the
 [filesystem capabilities](docs/Explanations.md#filesystem-capabilities) and
 [installation placement reference](docs/References.md#installation-placement).
 
-
-
-<br>
 
 ## Use Feature X
 
