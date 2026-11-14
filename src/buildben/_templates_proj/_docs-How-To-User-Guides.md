@@ -25,75 +25,55 @@ name. Replace demonstration paths with your chosen directories for actual use.
 
 ## Install a release
 
-Download the exact release assets, including the manifest, then run the native
-installer for your platform:
-
-```shell
-gh release download vX.Y.Z --repo <github_username>/<my_project>
-./<my_project>-install-linux-x86_64
-```
-
-On Windows, run `<my_project>-install-windows-x86_64.exe`. Cross-compilation is
-not Windows runtime validation; use the independent native Windows release
-canary before relying on that entry.
-
-The bundled runtime is the default source. `--version X.Y.Z` selects one
-published version; `--main` resolves remote `main` to a full immutable commit
-for that invocation. These options cannot be combined. `--github-client gh`
-requests authenticated GitHub transport without anonymous fallback.
-
-## Install from a checkout
-
-The Python developer installer uses the actual local project files, including
-uncommitted changes. Prepare the locked development environment and ordinary
-generated AppRC payload:
-
-```shell
-uv sync --locked --all-extras --all-groups
-just make-artifacts
-```
-
-Run `python app-install.py --layout native`, then `python app-launch.py`.
-`just check-artifacts` checks the generated Python entries and support files
-without invoking Rust or rewriting them. Native compilation is performed only
-by the explicit release-staging recipe.
-
-## Run the first command
-
-The generated command tree and installation management work before business
+Download the native setup for your platform and `SHA256SUMS`, then run the
 setup:
 
 ```shell
-{my_project} --help
-{my_project} version
-{my_project} installation show
-{my_project} installation doctor
-{my_project} config show --json
+gh release download vX.Y.Z --repo <github_username>/<my_project>
+./<my_project>-setup-linux-x86_64
 ```
 
-The optional `{my_project} launcher` opens management and the installed command
-in one Textual event loop. Missing business settings do not prevent installation
-inspection or supported recovery.
+On Windows, run `<my_project>-setup-windows-x86_64.exe`. `SHA256SUMS` covers
+exactly the two setup files. Cross-compilation does not establish Windows
+runtime behavior.
+
+## Install from a checkout
+
+From the intended checkout, synchronize the existing locked environment and
+register that checkout as an editable application:
+
+```shell
+uv sync --locked --all-extras --all-groups
+uv run --locked <my_project> app install -e
+```
+
+Editable registration does not copy source, create an environment, or resolve
+dependencies. Restore a broken development environment with `uv sync --locked`.
+`just make-artifacts` builds native setup files from the committed Git snapshot;
+`just check-artifacts` checks declarations and final checksums without writing.
+
+## Run the first command
+
+Application commands and maintenance remain available before business setup:
+
+```shell
+<my_project> --help
+<my_project> version
+<my_project> paths --json
+<my_project> app doctor
+<my_project> config show --json
+```
+
+`{my_project} launch` opens management and the installed command through
+AppRC's SDK-mounted Textual launcher. Installation paths and hooks come from the
+recorded application authority.
 
 ## Remove an installation
 
-Run `./app-uninstall.sh` on Linux or macOS, or `.\app-uninstall.cmd` on Windows.
-The default removes the program and retains declared resources and saved
-installation recovery support. Complete removal requires an explicit request:
-
-```shell
-./app-uninstall.sh --complete --category config --category appdata --yes
-```
-
-Repeat `--category` for each declared resource to remove. Unknown files and
-external workspaces are not inferred as cleanup targets. If project cleanup
-fails or cannot prove ownership, the saved record and affected resources remain
-available for recovery. Use `{my_project} installation show`, `doctor`, or
-`repair` when installation state is invalid or incomplete.
-
-The saved helper is outside the removable program environment at the fixed
-native `installation/` address. Changing `HOME`, XDG variables, or
-`LOCALAPPDATA` later does not redirect a saved uninstall.
+Run `<my_project> app uninstall --dry-run` to inspect removal, then
+`<my_project> app uninstall --yes` to remove the program while retaining
+declared resources. Select resource categories explicitly before deleting them.
+Unknown files, checkouts, and developer environments are not cleanup targets.
 
 <br>
 
@@ -174,17 +154,17 @@ sections for passing through application code.
 
 ## Troubleshoot configuration and installation
 
-Use `{my_project} config paths --json` to inspect captured application paths
-and `{my_project} config doctor --json` to inspect settings without writing.
-Use `{my_project} installation doctor` to diagnose saved installation
-authority; it does not require successful business configuration.
+Use `{my_project} app paths --json` to inspect captured application paths and
+`{my_project} config doctor --json` to inspect settings without writing.
+`{my_project} app doctor` diagnoses installation authority without requiring
+successful business configuration.
 
 | Symptom | Action |
 | --- | --- |
 | Command is unavailable | Use the installed environment's executable or `python -m {my_project}`. |
 | A saved setting does not win | Compare [configuration layers](Explanations.md#configuration-files), especially `{MY_PROJECT}_MESSAGE`. |
-| Saved installation paths differ from the current environment | Inspect `{my_project} installation show`; reinstallation retains recorded paths unless explicitly overridden. |
-| Installation authority is invalid or incomplete | Use `installation doctor` and follow the matching `installation repair` guidance. |
+| Saved installation paths differ from the current environment | Inspect `{my_project} app paths`; reinstalling reuses the recorded paths unless changed explicitly. |
+| Installation authority is invalid or incomplete | Use `{my_project} app doctor` and follow the reported repair guidance. |
 
 The [command reference](References.md#command-reference) lists supported
 commands and links to their intended tasks.
@@ -213,20 +193,21 @@ and must not rewrite either file. To add Vite manually to an existing
 frontend, run `bun add -d vite` inside its directory, then commit the manifest
 and lockfile; do not put this command in global provisioning.
 
-Before committing frontend changes:
+Before committing frontend changes, run the frontend checks and Python package
+test:
 
 ```shell
 just front check
 just front test
 just front build
+uv run --locked pytest tests/test_web.py
 ```
 
-Checks include `tsc --noEmit` and ESLint. Vitest runs the real component tests
-through `bun run test`; `bun test` selects a different runner. Build checks
-types before producing `frontend/dist/`. Generated CI runs these same
-commands after frozen sync.
-
-Root `just sync` remains Python-only. JavaScript dependencies do not belong
-in `pyproject.toml` or `uv.lock`, and the Python build does not build, serve,
-or package the frontend automatically. Do not put secrets in browser-visible
-Vite environment variables.
+The Python test builds a wheel and sdist from a committed private source copy,
+then serves the installed wheel's HTML through the standard-library server. It
+requires Bun for React asset preparation but does not build native setups or
+write `_web/`, `frontend/dist/`, or `node_modules/` into the checkout. Release
+package builds use the same locked preparation and select only this workspace
+package; run `just build-python-packages` to build them manually. Python-only
+scaffolds need no Bun and keep their normal package build path. Do not put
+secrets in browser-visible Vite environment variables.

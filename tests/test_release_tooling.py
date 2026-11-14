@@ -9,8 +9,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-import shutil
-from support_release import copy_release_tooling, write_release_fixture
+from support_release import copy_release_tooling
 
 from buildben_dev.packaging import release_notes
 from buildben_dev.packaging.install_smoke import (
@@ -268,35 +267,26 @@ def test_release_notes_require_matching_tag_and_version() -> None:
     ),
 )
 @pytest.mark.parametrize(
-    (
-        "workflow_policy",
-        "target_policy",
-        "release_draft",
-        "move_tag",
-        "expected_ready",
-        "invalid_asset_name",
-    ),
+    ("workflow_policy", "target_policy", "release_draft", "move_tag", "expected_ready"),
     [
-        ("false", "true", False, False, False, False),
-        ("true", "false", False, False, False, False),
-        ("true", "true", False, False, True, False),
-        ("true", "true", True, False, False, False),
-        ("true", "true", "false", False, False, False),
-        ("true", "true", False, True, False, False),
-        ("true", "true", False, False, False, True),
+        ("false", "true", False, False, False),
+        ("true", "false", False, False, False),
+        ("true", "true", False, False, True),
+        ("true", "true", True, False, False),
+        ("true", "true", "false", False, False),
+        ("true", "true", False, True, False),
     ],
 )
-def test_manual_pypi_preflight_uses_workflow_run_commit(
+def test_manual_pypi_preflight_builds_packages_from_tagged_source(
     tmp_path: Path,
     workflow_policy: str,
     target_policy: str,
     release_draft: bool | str,
     move_tag: bool,
     expected_ready: bool,
-    invalid_asset_name: bool,
     workflow_path: str,
 ) -> None:
-    """Use the immutable run SHA and capture assets only when both policies pass."""
+    """Build package-only PyPI input from the validated immutable tag commit."""
     repository_root = Path(__file__).resolve().parents[1]
     script = _manual_pypi_preflight_script(repository_root / workflow_path).replace(
         "{my_project}", "buildben"
@@ -309,9 +299,15 @@ def test_manual_pypi_preflight_uses_workflow_run_commit(
         scaffold=workflow_path.startswith("src/"),
     )
     (repository / "pyproject.toml").write_text(
-        '[project]\nname = "buildben"\nversion = "1.2.3"\n',
+        "[build-system]\nrequires = ['setuptools']\n"
+        "build-backend = 'setuptools.build_meta'\n"
+        "[project]\nname = 'buildben'\nversion = '1.2.3'\n"
+        "[tool.setuptools.packages.find]\nwhere = ['src']\n",
         encoding="utf-8",
     )
+    package = repository / "src" / "buildben"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text('"""Fixture package."""\n', encoding="utf-8")
     git_env = os.environ.copy()
 
     def git(*args: str) -> str:
@@ -336,7 +332,7 @@ def test_manual_pypi_preflight_uses_workflow_run_commit(
     git("config", "commit.gpgsign", "false")
     git("config", "tag.gpgsign", "false")
     write_policy(workflow_policy)
-    git("add", "justfile")
+    git("add", "--all")
     git("commit", "-m", "Record workflow-run release policy")
     workflow_sha = git("rev-parse", "HEAD")
 
@@ -391,6 +387,7 @@ case "$1:$2" in
       if [[ "$argument" == /repos/* ]]; then endpoint="$argument"; fi
     done
     if [[ "$endpoint" == */releases/tags/* ]]; then
+      if [[ -n "$MOVE_TAG_OID" ]]; then git --git-dir "$REMOTE_GIT_DIR" update-ref refs/tags/v1.2.3 "$MOVE_TAG_OID"; fi
       cat "$MANUAL_RELEASE_JSON"
     elif [[ "$endpoint" == */git/ref/tags/* ]]; then
       oid="$(git --git-dir "$REMOTE_GIT_DIR" rev-parse refs/tags/v1.2.3)"
@@ -399,9 +396,6 @@ case "$1:$2" in
       oid="${endpoint##*/}"
       commit="$(git --git-dir "$REMOTE_GIT_DIR" rev-parse "$oid^{commit}")"
       printf '{"object":{"type":"commit","sha":"%s"}}\\n' "$commit"
-    elif [[ "$endpoint" == /repos/buildben/example/releases/assets/* ]]; then
-      if [[ -n "$MOVE_TAG_OID" ]]; then git --git-dir "$REMOTE_GIT_DIR" update-ref refs/tags/v1.2.3 "$MOVE_TAG_OID"; fi
-      cat "$MANUAL_ASSETS/${endpoint##*/}"
     else
       exit 90
     fi
@@ -425,38 +419,12 @@ exit 0
     release_json = tmp_path / "release.json"
     import json
 
-    published = tmp_path / "published-release"
-    published.mkdir()
-    asset_names = write_release_fixture(
-        published,
-        app_id="buildben",
-        distribution="buildben",
-        version="1.2.3",
-        commit=target_commit_sha,
-    )
-    api_assets = tmp_path / "api-assets"
-    api_assets.mkdir()
-    assets = []
-    for index, name in enumerate(asset_names, start=101):
-        shutil.copyfile(published / name, api_assets / str(index))
-        exposed = (
-            "buildben-1.2.3-unsafe/../../escape.whl"
-            if invalid_asset_name and name.endswith(".whl")
-            else name
-        )
-        assets.append({"id": index, "name": exposed})
     release_json.write_text(
         json.dumps(
-            {
-                "id": 42,
-                "tag_name": "v1.2.3",
-                "draft": release_draft,
-                "assets": assets,
-            }
+            {"id": 42, "tag_name": "v1.2.3", "draft": release_draft, "assets": []}
         ),
         encoding="utf-8",
     )
-    wheel, sdist = (published / name for name in asset_names[:2])
     gh_log = tmp_path / "gh.log"
     uvx_log = tmp_path / "uvx.log"
     gh_log.write_text("", encoding="utf-8")
@@ -468,10 +436,10 @@ exit 0
             "ACTIVE_WORKFLOW_REF": "refs/heads/main",
             "ACTIVE_WORKFLOW_SHA": workflow_sha,
             "GITHUB_OUTPUT": str(output_file),
+            "GITHUB_WORKSPACE": str(repository),
             "GITHUB_REPOSITORY": "buildben/example",
             "MANUAL_GH_LOG": str(gh_log),
             "MANUAL_RELEASE_JSON": str(release_json),
-            "MANUAL_ASSETS": str(api_assets),
             "MANUAL_UVX_LOG": str(uvx_log),
             "MOVE_TAG_OID": replacement_tag_sha,
             "PACKAGE_NAME": "buildben",
@@ -507,12 +475,6 @@ exit 0
         assert not output_file.exists()
         return
 
-    if invalid_asset_name:
-        assert result.returncode != 0
-        assert "filenames do not match tag" in result.stderr
-        assert not (repository / "manual-pypi-snapshot").exists()
-        return
-
     assert expected_ready
 
     assert result.returncode == 0, result.stderr
@@ -528,6 +490,8 @@ exit 0
     import json
 
     snapshot = repository / "manual-pypi-snapshot"
+    wheel = next(snapshot.glob("*.whl"))
+    sdist = next(snapshot.glob("*.tar.gz"))
     manifest = json.loads((snapshot / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["release_id"] == 42
     assert manifest["release_tag"] == "v1.2.3"

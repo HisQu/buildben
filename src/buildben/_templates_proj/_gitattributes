@@ -1,2 +1,26 @@
-# -- Preserve SDK-generated Windows command scripts and honor Git whitespace checks.
+# -- Preserve Windows command whitespace and honor Git whitespace checks.
 *.cmd -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+
+# -- Export complete workspace source and locks, never local state.
+/dist export-ignore
+/.cache export-ignore
+/build export-ignore
+/.venv export-ignore
+/venv export-ignore
+/.direnv export-ignore
+/.env export-ignore
+/.env.* export-ignore
+/.envrc.private export-ignore
+/.secrets.env export-ignore
+/INPUT export-ignore
+/OUTPUT export-ignore
+/.agent-sessions export-ignore
+/AGENT_SESSIONS export-ignore
+/.omp export-ignore
+/.git export-ignore
+**/node_modules export-ignore
+**/__pycache__ export-ignore
+**/*.egg-info export-ignore
+/frontend/dist export-ignore
+/frontend/coverage export-ignore
+/frontend/.vitest export-ignore

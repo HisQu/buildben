@@ -324,14 +324,14 @@ _release-artifact-check notes_output build_only="false" notes_input="":
     fi
     uv run --with twine --no-project -- twine check "${wheels[0]}" "${sdists[0]}"
 
-make-artifacts:
-    PYTHONPATH=src uv run --locked python -m buildben_distr.make_artifacts
+make-artifacts revision="HEAD":
+    PYTHONPATH=src uv run --locked python -m buildben_distr.make_artifacts --revision {{quote(revision)}}
 
 check-artifacts:
     PYTHONPATH=src uv run --locked python -m buildben_distr.make_artifacts --check
 
 
-# Stage only the validated release pair and exact SDK-generated native entries.
+# -- Stage only native setup executables and their SHA256SUMS.
 stage-release-assets tag commit:
     PYTHONPATH=src uv run --locked python -m buildben_dev.packaging.release_stage {{quote(tag)}} {{quote(commit)}}
 # Build standard wheel and sdist once without running the full source matrix.
@@ -358,48 +358,17 @@ release-wheel-smoke:
     trap 'rm -rf "$smoke_root"' EXIT
     (cd "$smoke_root"; uv run --isolated --python 3.12 --with "buildben @ $artifact_uri" python "$smoke_script" --expected-version "$version")
 
-# Run the opt-in source installer consumer test against a built sdist.
+# Run maintained native release/install and editable lifecycle consumer tests.
 [group('Release')]
 release-install-smoke:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [[ -n "${INSTALLER_SMOKE_MAIN_SOURCE:-}" && -z "${INSTALLER_SMOKE_MAIN_COMMIT:-}" || -z "${INSTALLER_SMOKE_MAIN_SOURCE:-}" && -n "${INSTALLER_SMOKE_MAIN_COMMIT:-}" ]]; then
-        echo "INSTALLER_SMOKE_MAIN_SOURCE and INSTALLER_SMOKE_MAIN_COMMIT must be supplied together." >&2
-        exit 1
-    fi
-    just check-artifacts
-    if [[ -z "${INSTALLER_SMOKE_SOURCE:-}" ]]; then
-        just build-release-inputs
-        shopt -s nullglob
-        sdists=(dist/*.tar.gz)
-        if [[ "${#sdists[@]}" -ne 1 ]]; then echo "Expected exactly one source archive in dist/." >&2; exit 1; fi
-        smoke_source="$(realpath "${sdists[0]}")"
-        if command -v cygpath >/dev/null 2>&1; then smoke_source="$(cygpath -m "$smoke_source")"; fi
-        export INSTALLER_SMOKE_SOURCE="$smoke_source"
-    fi
-    if [[ ! -f "$INSTALLER_SMOKE_SOURCE" ]]; then echo "Source archive does not exist: $INSTALLER_SMOKE_SOURCE" >&2; exit 1; fi
     version="$(uv version --short)"
     release_commit="$(git rev-parse HEAD)"
     just stage-release-assets "v${version}" "$release_commit"
-    if [[ -z "${INSTALLER_SMOKE_MAIN_SOURCE:-}" ]]; then
-        archive_dir="$(mktemp -d)"
-        trap 'rm -rf "$archive_dir"' EXIT
-        main_commit="$release_commit"
-        archive_file="$archive_dir/main-source.tar.gz"
-        git archive --format=tar.gz --prefix="buildben-${main_commit}/" --output="$archive_file" "$main_commit"
-        main_source="$(realpath "$archive_file")"
-        if command -v cygpath >/dev/null 2>&1; then main_source="$(cygpath -m "$main_source")"; fi
-        export INSTALLER_SMOKE_MAIN_SOURCE="$main_source"
-        export INSTALLER_SMOKE_MAIN_COMMIT="$main_commit"
-    else
-        if [[ ! -f "$INSTALLER_SMOKE_MAIN_SOURCE" ]]; then
-            echo "Main source archive does not exist: $INSTALLER_SMOKE_MAIN_SOURCE" >&2
-            exit 1
-        fi
-        main_commit="$INSTALLER_SMOKE_MAIN_COMMIT"
-    fi
-    export INSTALLER_SMOKE_CLIENT="${INSTALLER_SMOKE_CLIENT:-curl}"
-    uv run --locked python -m pytest -n 0 tests/test_release_install.py -k "source_install_smoke or windows_installer"
+    just check-artifacts
+    export APPRC_TEST_BUILDBEN_NATIVE_ASSETS="$PWD/dist"
+    APPRC_TEST_PYAPP=1 uv run --locked python -m pytest -n 0 -s tests/test_release_install.py tests/test_lifecycle.py -k "native_release_install or editable"
 
 # Rehearse the complete local release gate without publishing anything.
 [group('Release')]

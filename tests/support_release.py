@@ -1,10 +1,10 @@
-"""Package and release fixtures shared by maintained integrity/workflow tests."""
+"""Native release fixtures shared by maintained integrity/workflow tests."""
 
 from __future__ import annotations
 
 import io
-import tarfile
 import shutil
+import tarfile
 import zipfile
 from pathlib import Path
 
@@ -14,13 +14,7 @@ from buildben_dev.packaging import release_manifest
 def write_package_pair(
     directory: Path, *, distribution: str, version: str
 ) -> list[str]:
-    """Write bounded package metadata fixtures for release validation.
-
-    :param directory: Existing isolated release directory.
-    :param distribution: Expected package identity.
-    :param version: Explicit fixture version.
-    :return: Wheel and sdist names, in that order.
-    """
+    """Write standard Python package fixtures independently of native assets."""
     stem = distribution.replace("-", "_")
     wheel_name = f"{stem}-{version}-py3-none-any.whl"
     metadata = (
@@ -44,36 +38,20 @@ def write_release_fixture(
     version: str,
     commit: str,
 ) -> list[str]:
-    """Write a complete package/helper integrity fixture without any publication.
-
-    :param directory: Existing isolated release directory.
-    :param app_id: Persistent application identity.
-    :param distribution: Normalized package identity.
-    :param version: Explicit package/release version.
-    :param commit: Immutable test source identity.
-    :return: Exact package/native/manifest filenames.
-    """
-    names = write_package_pair(directory, distribution=distribution, version=version)
-    native = tuple(
-        f"{app_id}-{action}-{platform}"
-        for action in ("install", "launch")
-        for platform in ("linux-x86_64", "windows-x86_64.exe")
+    """Write the two native setup files and their exact SHA256SUMS."""
+    del distribution, version, commit
+    names = release_manifest.native_asset_names(app_id)
+    payload = {
+        name: f"Native setup fixture: {name}\n".encode()
+        for name in names
+        if name != release_manifest.CHECKSUMS_NAME
+    }
+    for name, content in payload.items():
+        (directory / name).write_bytes(content)
+    (directory / release_manifest.CHECKSUMS_NAME).write_bytes(
+        release_manifest.checksum_bytes(payload, app_id=app_id)
     )
-    names.extend(native)
-    names.extend(release_manifest.SCRIPT_SUPPORT)
-    for name in names[2:]:
-        (directory / name).write_bytes(f"Owned native release asset: {name}\n".encode())
-    payload = {name: (directory / name).read_bytes() for name in names}
-    content = release_manifest.manifest_bytes(
-        payload,
-        app_id=app_id,
-        distribution=distribution,
-        version=version,
-        commit=commit,
-    )
-    (directory / release_manifest.MANIFEST_NAME).write_bytes(content)
-    names.append(release_manifest.MANIFEST_NAME)
-    return names
+    return list(names)
 
 
 def copy_release_tooling(

@@ -1,0 +1,49 @@
+"""Prepare a React frontend only inside AppRC's private project copy."""
+
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+from pathlib import Path
+
+
+def prepare_project(stage_root: Path) -> None:
+    """Build frontend assets on the private checkout and package static files.
+
+    :param stage_root: Private exported Git tree being snapshotted by AppRC.
+    """
+    frontend = stage_root / "frontend"
+    package_web = stage_root / "src" / "<my_project>" / "_web"
+    bun = os.environ.get("BUN") or shutil.which("bun")
+    if bun is None:
+        raise FileNotFoundError(
+            "React snapshot preparation requires Bun (BUN or PATH)."
+        )
+    subprocess.run(
+        [bun, "install", "--frozen-lockfile"], cwd=frontend, check=True
+    )
+    subprocess.run([bun, "run", "build"], cwd=frontend, check=True)
+    built = frontend / "dist"
+    if not (built / "index.html").is_file():
+        raise ValueError("Vite build did not produce frontend/dist/index.html.")
+    if package_web.exists():
+        shutil.rmtree(package_web)
+    shutil.copytree(built, package_web)
+    for name in (
+        "node_modules",
+        "dist",
+        ".vite",
+        ".cache",
+        ".turbo",
+        ".vitest",
+        "coverage",
+        "build",
+    ):
+        generated = frontend / name
+        if generated.is_dir():
+            shutil.rmtree(generated)
+        elif generated.exists():
+            generated.unlink()
+    for generated in frontend.glob("*.tsbuildinfo"):
+        generated.unlink()

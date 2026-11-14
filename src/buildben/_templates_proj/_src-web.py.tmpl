@@ -1,0 +1,44 @@
+"""Serve the installed React bundle without a frontend runtime dependency."""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+from contextlib import contextmanager
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from importlib.resources import as_file, files
+from pathlib import Path
+
+
+@contextmanager
+def static_server(
+    host: str = "127.0.0.1", port: int = 8000,
+) -> Iterator[ThreadingHTTPServer]:
+    """Keep package resources available for a bound testable HTTP server.
+
+    :param host: Local interface to bind.
+    :param port: TCP port to bind.
+    :yield: Bound server whose document root is the installed ``_web`` resource.
+    """
+    resource = files("<my_project>").joinpath("_web")
+    with as_file(resource) as directory:
+        handler = partial(SimpleHTTPRequestHandler, directory=str(Path(directory)))
+        with ThreadingHTTPServer((host, port), handler) as server:
+            yield server
+
+
+def serve(host: str = "127.0.0.1", port: int = 8000) -> None:
+    """Serve packaged frontend files until interrupted by the user.
+
+    :param host: Local interface to bind.
+    :param port: TCP port to bind.
+    """
+    with static_server(host, port) as server:
+        print(
+            f"Serving <my_project> at http://{host}:{server.server_port}/",
+            flush=True,
+        )
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            pass

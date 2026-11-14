@@ -47,7 +47,7 @@ wheels = [
 [[package]]
 name = "apprc"
 version = "0.34.0"
-source = { git = "https://github.com/HisQu/apprc.git?subdirectory=src%2Fapprc_dev%2Fpackaging%2Fterminal&rev=94c9390be83c06c9306d4b37c07cc9b6c49cca73#94c9390be83c06c9306d4b37c07cc9b6c49cca73" }
+source = { git = "https://github.com/HisQu/apprc.git?subdirectory=src%2Fapprc_dev%2Fpackaging%2Fterminal&rev=153f97c5eb56779f1ca4c478e2e944d54ba5c625#153f97c5eb56779f1ca4c478e2e944d54ba5c625" }
 dependencies = [
     { name = "apprc-core" },
     { name = "prompt-toolkit" },
@@ -59,7 +59,7 @@ dependencies = [
 [[package]]
 name = "apprc-core"
 version = "0.34.0"
-source = { git = "https://github.com/HisQu/apprc.git?rev=94c9390be83c06c9306d4b37c07cc9b6c49cca73#94c9390be83c06c9306d4b37c07cc9b6c49cca73" }
+source = { git = "https://github.com/HisQu/apprc.git?rev=153f97c5eb56779f1ca4c478e2e944d54ba5c625#153f97c5eb56779f1ca4c478e2e944d54ba5c625" }
 dependencies = [
     { name = "filelock" },
     { name = "platformdirs" },
@@ -70,14 +70,13 @@ dependencies = [
 
 [package.optional-dependencies]
 distribution = [
-    { name = "jinja2" },
     { name = "packaging" },
 ]
 
 [[package]]
 name = "apprc-gui"
 version = "0.34.0"
-source = { git = "https://github.com/HisQu/apprc.git?subdirectory=src%2Fapprc_dev%2Fpackaging%2Fgui&rev=94c9390be83c06c9306d4b37c07cc9b6c49cca73#94c9390be83c06c9306d4b37c07cc9b6c49cca73" }
+source = { git = "https://github.com/HisQu/apprc.git?subdirectory=src%2Fapprc_dev%2Fpackaging%2Fgui&rev=153f97c5eb56779f1ca4c478e2e944d54ba5c625#153f97c5eb56779f1ca4c478e2e944d54ba5c625" }
 dependencies = [
     { name = "apprc-core" },
     { name = "gradio" },
@@ -230,8 +229,8 @@ gui = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "apprc", git = "https://github.com/HisQu/apprc.git?subdirectory=src%2Fapprc_dev%2Fpackaging%2Fterminal&rev=94c9390be83c06c9306d4b37c07cc9b6c49cca73" },
-    { name = "apprc-core", extras = ["distribution"], git = "https://github.com/HisQu/apprc.git?rev=94c9390be83c06c9306d4b37c07cc9b6c49cca73" },
+    { name = "apprc", git = "https://github.com/HisQu/apprc.git?subdirectory=src%2Fapprc_dev%2Fpackaging%2Fterminal&rev=153f97c5eb56779f1ca4c478e2e944d54ba5c625" },
+    { name = "apprc-core", extras = ["distribution"], git = "https://github.com/HisQu/apprc.git?rev=153f97c5eb56779f1ca4c478e2e944d54ba5c625" },
     { name = "graphviz" },
     { name = "pillow" },
     { name = "pyinstrument", specifier = ">=5.1" },
@@ -241,7 +240,7 @@ dev = [
     { name = "ruff", specifier = ">=0.4" },
     { name = "typer" },
 ]
-gui = [{ name = "apprc-gui", git = "https://github.com/HisQu/apprc.git?subdirectory=src%2Fapprc_dev%2Fpackaging%2Fgui&rev=94c9390be83c06c9306d4b37c07cc9b6c49cca73" }]
+gui = [{ name = "apprc-gui", git = "https://github.com/HisQu/apprc.git?subdirectory=src%2Fapprc_dev%2Fpackaging%2Fgui&rev=153f97c5eb56779f1ca4c478e2e944d54ba5c625" }]
 
 [[package]]
 name = "certifi"

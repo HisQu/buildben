@@ -1,9 +1,9 @@
 include uv.lock
 include pylock.toml
-include app-install.py app-launch.py
-include app-uninstall.sh app-uninstall.cmd
 
 recursive-include src *
+# React's private source preparation creates package resources under src before
+# setuptools reads this manifest; the recursive src rule includes those files.
 
 prune INPUT
 prune OUTPUT
@@ -11,6 +11,7 @@ prune .venv
 prune venv
 prune build
 prune dist
+prune .cache
 prune logs
 prune .agent-sessions
 prune AGENT_SESSIONS

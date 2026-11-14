@@ -25,17 +25,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+      - name: Install Bun for React packaging
+        if: hashFiles('frontend/package.json') != ''
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
+          version: "0.13.6"
           python-version: ${{ matrix.python-version }}
           enable-cache: auto
       - name: Install project from uv.lock
         run: uv sync --locked --all-extras --all-groups
       - name: Check lockfile
         run: uv lock --check
-      - name: Check generated installer artifacts
-        run: just check-artifacts
       - name: Check formatting
         run: uv run --locked ruff format . --check
       - name: Lint
@@ -66,9 +70,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+      - name: Install Bun for React native setup authoring
+        if: hashFiles('frontend/package.json') != ''
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
+          version: "0.13.6"
           python-version: ${{ matrix.python-version }}
           enable-cache: auto
       - name: Install just
@@ -77,7 +87,16 @@ jobs:
           just-version: "1.56.0"
       - name: Install project from uv.lock
         run: uv sync --locked --all-extras --all-groups
-      - name: Install and inspect the generated sdist with uv
+      - name: Install native compiler target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - name: Install pinned native linker tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang llvm lld
+          cargo install cargo-xwin --version 0.23.1 --locked
+      - name: Register and inspect the editable checkout
         run: just release-install-smoke
 
 <frontend_ci_job>

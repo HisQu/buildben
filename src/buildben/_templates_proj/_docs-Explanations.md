@@ -31,11 +31,9 @@ installation-management commands in its Maintenance help panel. Installation
 show, doctor, migration dry-run, repair, and uninstall preview are available
 without resolving ordinary business settings.
 
-The optional `launcher` uses one Textual event loop for management and the
-installed application's command. It captures layout, workspace, dotenv, and
-environment controls from the initiating CLI context. Application startup and
-uninstall remain separate actions; the launcher does not recreate environments
-or run business setup merely to show management.
+`launch` is the SDK-mounted Textual command for the installed application. It
+uses the recorded application runtime and does not recreate environments or
+run business setup merely to show management.
 
 ## AppRC
 

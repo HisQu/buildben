@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import importlib
 import importlib.metadata
-import json
 import os
 import re
 import subprocess
-import sys
 import tomllib
 from pathlib import Path
 
@@ -52,8 +49,20 @@ def sdk_authoring_environment(root: Path) -> tuple[dict[str, str], str, str]:
         revision = next(iter(revisions))
     else:
         revision = override
-    assert re.fullmatch(r"[0-9a-f]{40}", revision), "Supply a full SDK commit hash."
     environment = os.environ.copy()
+    for key in (
+        "VIRTUAL_ENV",
+        "PYTHONHOME",
+        "UV_ACTIVE",
+        "UV_PROJECT_ENVIRONMENT",
+        "UV_PROJECT",
+        "UV_WORKING_DIRECTORY",
+        "UV_PYTHON",
+        "UV_PYTHON_ENVIRONMENT",
+        "UV_NO_SYNC",
+        "UV_FROZEN",
+    ):
+        environment.pop(key, None)
     source = environment.get("APPRC_TEST_SDK_SOURCE")
     if source is None:
         return environment, revision, importlib.metadata.version("apprc-core")
@@ -135,72 +144,3 @@ def disk_bytes(root: Path) -> int:
         for path in root.rglob("*")
         if path.is_file() and not path.is_symlink()
     )
-
-
-def assert_installed_runtime(package: str, sdk_version: str) -> None:
-    """Exercise installed dependencies and initialize declared managed config.
-
-    This entry runs with the installed interpreter under ``-I`` so authoring
-    imports and the generated checkout cannot satisfy runtime requirements.
-
-    :param package: Installed generated application import/distribution name.
-    :param sdk_version: Version read from the immutable SDK snapshot.
-    """
-    from importlib.resources import files
-
-    from apprc.user_files.app_home.ownership import inspect_ownership
-    from apprc.user_files.env_files.secrets import secret_companion_path
-    from packaging.requirements import Requirement
-
-    prefix = Path(sys.prefix).resolve()
-    for module in (package, "apprc", "apprc.cli", "apprc_gui", "gradio"):
-        imported = importlib.import_module(module)
-        module_file = imported.__file__
-        assert module_file is not None, f"{module} has no installed module file."
-        assert Path(module_file).resolve().is_relative_to(prefix)
-    for distribution in ("apprc-core", "apprc", "apprc-gui"):
-        assert importlib.metadata.version(distribution) == sdk_version
-    assert importlib.metadata.version(package) == "0.1.0"
-    assert files(package).joinpath("config/apprc.defaults.env").is_file()
-    visited: set[tuple[str, str]] = set()
-    pending = [(package, "gui")]
-    while pending:
-        distribution, extra = pending.pop()
-        identity = (distribution.casefold().replace("_", "-"), extra)
-        if identity in visited:
-            continue
-        visited.add(identity)
-        environment = {"extra": extra}
-        for value in importlib.metadata.requires(distribution) or ():
-            requirement = Requirement(value)
-            if requirement.marker and not requirement.marker.evaluate(environment):
-                continue
-            observed = importlib.metadata.version(requirement.name)
-            assert not requirement.specifier or requirement.specifier.contains(observed)
-            pending.extend(
-                (requirement.name, requested) for requested in ("", *requirement.extras)
-            )
-    assert {"apprc-core", "apprc", "apprc-gui", "gradio"} <= {
-        name for name, _ in visited
-    }
-    app_rc = importlib.import_module(f"{package}.config.bundle").APP_RC
-    setup = app_rc.manage().setup()
-    assert inspect_ownership(setup.config_dir, package, "config") == "owned"
-    assert setup.user_dotenv is not None and setup.user_dotenv.is_file()
-    secrets = secret_companion_path(setup.user_dotenv)
-    assert secrets.is_file()
-    print(
-        json.dumps(
-            {
-                "prefix": str(prefix),
-                "sdk_version": sdk_version,
-                "checked_requirements": len(visited),
-                "managed_config": str(setup.user_dotenv),
-                "managed_secrets": str(secrets),
-            }
-        )
-    )
-
-
-if __name__ == "__main__":
-    assert_installed_runtime(sys.argv[1], sys.argv[2])

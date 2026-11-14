@@ -15,7 +15,7 @@ and checks, and submission guidance. This page explains the deeper procedures.
 - [Verify and release](#verify-and-release)
   - [Verification](#verification)
   - [Actions artifact diagnostic](#actions-artifact-diagnostic)
-  - [Authored installation artifacts](#authored-installation-artifacts)
+- [Native application authoring](#native-application-authoring)
   - [Windows installer verification procedure](#windows-installer-verification-procedure)
   - [Unix installer staging verification](#unix-installer-staging-verification)
   - [Releases](#releases)
@@ -201,30 +201,27 @@ artifact ID. A successful run proves only that this Actions artifact round-trip
 worked at that time. It does not prove GitHub Release uploads, PyPI publication,
 application correctness, all quota types, or future quota availability.
 
-## Authored installation artifacts
+## Native application authoring
 
-The repository-owned lifecycle composition lives under
-`src/{my_project}_distr/payload/app_lifecycle/`. Edit those ordinary Python
-modules to add application setup or cleanup; installed helpers contain the
-authored payload and do not import the development-only `_distr` package.
+The application declaration and typed `InstallationHooks` live in the installed
+package under `src/{my_project}/`. The separate
+`src/{my_project}_distr/actions.py` contains distribution build actions; it is
+not imported as an installed application hook.
 
-After editing the payload, regenerate the deterministic Python SDK outputs with
-`just make-artifacts`. CI and read-only review use `just check-artifacts`, which
-checks tracked outputs without rewriting files. These ordinary commands remain
-Rust-free. The application wheel excludes `{my_project}_distr`; the source
-archive includes the generator, payload, generated Python entries, and saved
-support resources. Root developer entries are `app-install.py` and
-`app-launch.py`; root shell/CMD wrappers are retained only for uninstall.
+`just make-artifacts` exports the committed Git revision (default `HEAD`) with its
+complete workspace and unchanged `uv.lock`, builds React assets only in that
+private copy, then asks AppRC to compile the Linux and Windows setup files.
+For React projects, `just build-python-packages` uses the same verified private
+source preparation and builds only the selected workspace package's wheel and
+sdist. Python-only projects use plain `uv build` without the SDK authoring group
+or lockfile. Neither route writes generated frontend files into the checkout.
 
-`pyproject.toml` publishes a `gui` runtime extra and declares the AppRC Git
-repository under `tool.apprc.distribution.bundle-repositories`. Native release
-authoring selects `--extra gui` from the locked runtime graph; it does not use
-development groups or manual `DistributionSpec.runtime_overrides`.
-
-Set `tool.apprc.distribution.runtime-python = "3.13"` to select the managed
-application environment's Python minor. Keep this separate from
-`project.requires-python`, which describes package-install compatibility. The
-PyApp bootstrap uses Python 3.14; it is not the application's runtime.
+Both authoring commands require Bun only for React projects; the ordinary Python
+package command does not require AppRC's native compiler. No Bun, Git checkout,
+or frontend source is required to use a built wheel. Native outputs stay under
+`dist/` as setup files and `SHA256SUMS`; ordinary Python packages stay under
+`.cache/apprc/python-packages/`. `just check-artifacts` validates native hashes
+without rebuilding or writing.
 
 ## Windows installer verification procedure
 
@@ -237,9 +234,9 @@ PyApp bootstrap uses Python 3.14; it is not the application's runtime.
 
 
 The generated CI workflow runs Linux checks only. Release staging cross-compiles
-the Windows x64 installer and launcher but never executes those PE files.
-Cross-compilation and Linux tests do not establish Windows runtime behavior;
-complete a separate native Windows canary before relying on that release entry.
+the Windows x64 setup but never executes that PE file. Cross-compilation and
+Linux tests do not establish Windows runtime behavior; complete a separate
+native Windows canary before relying on that setup.
 
 Keep the boundary strict: from WSL, never launch native Windows executables,
 PowerShell, CMD, Windows Python/pytest, or Windows `uv`, directly or through a
@@ -248,17 +245,13 @@ than changing runner policy or using Wine.
 
 ## Unix installer staging verification
 
-The generated project's maintained `tests/test_{my_project}_package.py` covers
-checkout installation from outside the project root, source-selection
-transports, and saved uninstall behavior through real subprocesses. It uses
-isolated HOME, XDG, and uv paths and checks that program-only removal preserves
-the receipt and unrelated data.
+The generated project's maintained tests exercise its AppRC declaration,
+editable command contract, native setup outputs, and installed static package
+data when React is enabled. They do not execute a Windows setup from WSL.
 
-These tests do not execute native release installers. The release canary must
-exercise the exact staged Linux executable. On a separately authorized native
-Windows runner, exercise the real native `.exe` installer and retained saved
-`launch.cmd` and `launch.ps1` paths. Cross-compilation and Linux tests do not
-establish Windows runtime behavior or macOS native filesystem aliases.
+The release canary must exercise the actual Linux setup executable. Windows
+cross-compilation and Linux tests do not establish Windows runtime behavior or
+macOS filesystem behavior; use a separately authorized native runner.
 
 ## Releases
 
@@ -298,24 +291,24 @@ just release patch
 > pushes `main` and the tag. It returns after the push without waiting for
 > GitHub Actions.
 
-The tag workflow reuses one successful full `ci.yml` run for the exact tagged
-commit rather than repeating the full source matrix. The release job builds and
-validates the wheel and original source archive, then uses AppRC's explicit
-native producer to compile four Linux/Windows x64 installer and launcher
-executables. It also stages the original Python installer and one retained
-runtime ZIP, then validates the exact package/native/payload inventory in the
-outer manifest before upload.
+The tag workflow builds the Python wheel/sdist through the private locked-source
+preparation, then uses AppRC to produce the two native setup files and
+`SHA256SUMS`. Only native files are uploaded as GitHub Release assets;
+wheel/sdist publication remains governed separately by `RELEASE_PYPI`.
 
-Native authoring runs only during release staging, after CI installs the pinned
-`cargo-xwin` cross-compiler and LLVM linker tools on Linux. The consumer support
-keeps the saved Windows `launch.cmd` and `launch.ps1` dispatch; cross-compilation
-does not replace these with an unvalidated native Windows launcher. Windows
-runtime execution remains a separate native canary and must never be attempted
-through WSL, Wine, CMD, or PowerShell.
+Native authoring runs with the pinned Rust and cross-compilation toolchain.
+Windows setup output is not executed on Linux. No generated Python installer,
+launcher executable, payload ZIP, or outer release manifest is published.
 
-`just make-artifacts` and `just check-artifacts` do not compile Rust. The
-generated `app-install.py` is the editable checkout entry; release assets use
-native installers. Linux behavior does not establish Windows runtime behavior.
+`just make-artifacts` builds native outputs from a selected committed source
+revision; React projects use `just build-python-packages` to prepare assets
+privately and build only the selected package, without native compilation.
+Python-only projects use plain `uv build`, without requiring an SDK lockfile.
+Both routes stage packages under `.cache/apprc/python-packages/`; native outputs
+remain under `dist/`.
+`just check-artifacts` reads declarations and validates native checksums without
+compiling or rewriting. Linux behavior does not establish Windows runtime
+behavior.
 
 `just build-release-inputs` accepts an optional positional path to already
 validated release notes:
@@ -353,20 +346,10 @@ just release-push vMAJOR.MINOR.PATCH
 Manual publication and retries require `RELEASE_PYPI := "true"` in both the
 current committed `justfile` and the target tag's committed `justfile`. The
 manual workflow applies that check to its selected workflow ref and target
-tag. If both policies are true and a GitHub Release already exists, publish
-its attached artifacts without rebuilding them:
-
-```bash
-just publish-pypi vMAJOR.MINOR.PATCH
-```
-
-The command checks policy before GitHub authentication or network calls. A
-false policy exits locally, and the manual workflow skips before requesting
-the PyPI environment or OIDC token. When both policies are true, the
-unprivileged preflight validates the Release assets, records their hashes and
-release/tag/commit identities in a manifest, and uploads that exact snapshot.
-The PyPI job publishes only the snapshot identified by the preflight artifact
-ID.
+tag. If both policies are true and a GitHub Release already exists, the
+workflow validates separately built wheel/sdist inputs against the selected
+tag version and publishes only those two Python packages to PyPI. Native setup
+files remain GitHub Release assets and never enter PyPI publication.
 
 The preflight detects a tag update or deletion during asset capture. Preventing
 an administrator from changing or deleting the tag while preflight is running

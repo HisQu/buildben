@@ -58,8 +58,8 @@ dependencies = []
 #   uv sync --locked --all-extras --all-groups
 [dependency-groups]
 dev = [
-    "apprc-core[distribution] @ git+https://github.com/HisQu/apprc.git@94c9390be83c06c9306d4b37c07cc9b6c49cca73",
-    "apprc @ git+https://github.com/HisQu/apprc.git@94c9390be83c06c9306d4b37c07cc9b6c49cca73#subdirectory=src/apprc_dev/packaging/terminal",
+    "apprc-core[distribution] @ git+https://github.com/HisQu/apprc.git@153f97c5eb56779f1ca4c478e2e944d54ba5c625",
+    "apprc @ git+https://github.com/HisQu/apprc.git@153f97c5eb56779f1ca4c478e2e944d54ba5c625#subdirectory=src/apprc_dev/packaging/terminal",
     "pytest>=9.0.2",
     "pytest-xdist",     # < Multi-core testing
     "typer",            # < Scaffold CLI smoke tests
@@ -75,7 +75,7 @@ dev = [
     "graphviz",
     "pillow",
 ]
-gui = ["apprc-gui @ git+https://github.com/HisQu/apprc.git@94c9390be83c06c9306d4b37c07cc9b6c49cca73#subdirectory=src/apprc_dev/packaging/gui"]
+gui = ["apprc-gui @ git+https://github.com/HisQu/apprc.git@153f97c5eb56779f1ca4c478e2e944d54ba5c625#subdirectory=src/apprc_dev/packaging/gui"]
 
 
 # =====================================================================
@@ -107,12 +107,12 @@ bube = "buildben.cli:main"
 
 
 
-# -- AppRC source and native-bundle authoring identity.
+# -- AppRC native authoring identity.
 [tool.apprc.distribution]
 app-id = "buildben"
 project-path = "."
 distribution-path = "src/buildben_distr"
-launcher-command = "bube"
+command-name = "bube"
 runtime-python = "3.13"
 # =====================================================================
 # === Tool configurations
@@ -128,17 +128,8 @@ venv = ".venv"
 include = ["src", "tests"]
 exclude = [
     "src/buildben/_templates_proj/.old",
-    "**/*_distr/artifacts",
-    "**/*_distr/payload/app_lifecycle/_support",
     "**/__pycache__",
     "build",
     "dist",
     "*.egg-info",
-]
-
-[tool.ruff]
-# > The SDK generator's exact bytes are checked by `just check-artifacts`.
-extend-exclude = [
-    "**/*_distr/artifacts",
-    "**/*_distr/payload/app_lifecycle/_support",
 ]

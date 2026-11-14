@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
-
-import tarfile
-import zipfile
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import xml.etree.ElementTree as ET
+import zipfile
 from collections.abc import Generator
 from pathlib import Path
 
@@ -304,6 +304,58 @@ def test_frontend_cli_generation_does_not_require_frontend_tools(
     assert listing.returncode == 0, listing.stdout + listing.stderr
 
 
+def test_react_preparation_builds_only_the_private_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Package built assets and remove frontend intermediates from a snapshot."""
+    result = _generate_cli_project(tmp_path, "PreparedReact", frontend="react")
+    assert result.returncode == 0, result.stdout + result.stderr
+    project = tmp_path / "PreparedReact"
+    frontend = project / "frontend"
+    lock_bytes = (frontend / "bun.lock").read_bytes()
+    (frontend / "node_modules").mkdir()
+    (frontend / "node_modules" / "fixture").write_text("temporary", encoding="utf-8")
+
+    module_path = project / "src" / "PreparedReact_distr" / "prepare.py"
+    specification = importlib.util.spec_from_file_location(
+        "prepared_react", module_path
+    )
+    assert specification is not None and specification.loader is not None
+    module = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(module)
+    calls: list[tuple[list[str], Path]] = []
+
+    def run(command: list[str], *, cwd: Path, check: bool) -> None:
+        assert check is True
+        calls.append((command, cwd))
+        if command[1:] == ["run", "build"]:
+            output = cwd / "dist"
+            (output / "assets").mkdir(parents=True)
+            (output / "index.html").write_text(
+                "<main>private build</main>", encoding="utf-8"
+            )
+            (output / "assets" / "app.js").write_text(
+                "console.log('private build')", encoding="utf-8"
+            )
+
+    monkeypatch.setenv("BUN", "bun-fixture")
+    monkeypatch.setattr(subprocess, "run", run)
+    module.prepare_project(project)
+
+    assert calls == [
+        (["bun-fixture", "install", "--frozen-lockfile"], frontend),
+        (["bun-fixture", "run", "build"], frontend),
+    ]
+    assert (frontend / "bun.lock").read_bytes() == lock_bytes
+    assert not (frontend / "node_modules").exists()
+    assert not (frontend / "dist").exists()
+    web = project / "src" / "PreparedReact" / "_web"
+    assert (web / "index.html").read_text(encoding="utf-8") == (
+        "<main>private build</main>"
+    )
+    assert (web / "assets" / "app.js").is_file()
+
+
 @pytest.mark.skipif(
     os.environ.get("BUILDBEN_FRONTEND_SMOKE") != "1",
     reason="real frontend consumer requires explicit opt-in",
@@ -470,40 +522,6 @@ def bube_test_project(
     proot = tmp_path / "bube_test_tmp"
 
     try:
-        # -- Generate through the consumer's real authored AppRC entry point
-        _run(
-            [sys.executable, "-m", "bube_test_tmp_distr.make_artifacts"],
-            cwd=proot,
-            env=_project_env(proot),
-        )
-        artifact_root = proot / "src" / "bube_test_tmp_distr" / "artifacts"
-        generated = {
-            path: path.read_bytes()
-            for path in (
-                *artifact_root.rglob("*"),
-                *(
-                    proot / name
-                    for name in (
-                        "app-install.py",
-                        "app-launch.py",
-                        "app-uninstall.sh",
-                        "app-uninstall.cmd",
-                    )
-                ),
-            )
-            if path.is_file()
-        }
-        _run(
-            [
-                sys.executable,
-                "-m",
-                "bube_test_tmp_distr.make_artifacts",
-                "--check",
-            ],
-            cwd=proot,
-            env=_project_env(proot),
-        )
-        assert all(path.read_bytes() == content for path, content in generated.items())
         yield proot
     finally:
         shutil.rmtree(proot, ignore_errors=True)
@@ -513,6 +531,31 @@ def test_scaffolded_project_runs_pytest(bube_test_project: Path) -> None:
     """Run pytest inside the generated project."""
     proot = bube_test_project
     proj_name = "bube_test_tmp"
+    from support_native_release import pin_fixture_sdk, sdk_authoring_environment
+
+    uv = shutil.which("uv")
+    assert uv is not None, "Generated editable lifecycle checks require uv."
+    environment, revision, _ = sdk_authoring_environment(proot)
+    pin_fixture_sdk(proot, revision)
+    for key in (
+        "VIRTUAL_ENV",
+        "PYTHONPATH",
+        "PYTHONHOME",
+        "UV_ACTIVE",
+        "UV_PROJECT_ENVIRONMENT",
+        "UV_NO_SYNC",
+    ):
+        environment.pop(key, None)
+    environment["UV_PROJECT_ENVIRONMENT"] = str(proot / ".venv")
+    environment["PYTHONPATH"] = os.pathsep.join(
+        item for item in (str(proot / "src"), environment.get("PYTHONPATH", "")) if item
+    )
+    for arguments in (
+        ("lock", "--python", sys.executable),
+        ("sync", "--locked", "--no-default-groups", "--python", sys.executable),
+    ):
+        _run([uv, *arguments], cwd=proot, env=environment)
+    environment["UV_NO_SYNC"] = "1"
 
     # == Compile generated modules and run their package tests
     _run(
@@ -520,7 +563,7 @@ def test_scaffolded_project_runs_pytest(bube_test_project: Path) -> None:
         cwd=proot,
         env=_project_env(proot),
     )
-    _run([sys.executable, "-m", "pytest", "-q"], cwd=proot, env=_project_env(proot))
+    _run([sys.executable, "-m", "pytest", "-q"], cwd=proot, env=environment)
 
 
 def test_scaffolded_release_publisher_runs_without_buildben_installed(
@@ -565,18 +608,18 @@ def test_scaffolded_project_runs_apprc_configuration(bube_test_project: Path) ->
     """Exercise generated AppRC configuration and isolated user preferences."""
     project = bube_test_project
     help_text = _runtime_command(project, "--help")
-    assert "Maintenance" in help_text
-    assert "installation" in help_text
+    assert "app" in help_text
+    assert "launch" in help_text
     diagnose = json.loads(_runtime_command(project, "diagnose", "--json"))
     assert diagnose["paths"]["config"] == str(project / ".test-app" / "config")
-    paths = json.loads(_runtime_command(project, "paths", "--json"))
+    paths = json.loads(_runtime_command(project, "app", "paths", "--json"))
     assert paths["paths"]["config"] == str(project / ".test-app" / "config")
     assert paths["exists"]["config"] is False
     assert not (project / ".test-app" / "config").exists()
-    _runtime_command(project, "config", "doctor")
+    _runtime_command(project, "app", "doctor")
     assert not (project / ".test-app" / "config").exists()
     _runtime_command(project, "config", "setup", "--yes")
-    _runtime_command(project, "config", "doctor")
+    _runtime_command(project, "app", "doctor")
     initial = json.loads(_runtime_command(project, "config", "show", "--json"))
     assert initial["config"]["message"] == "Hello from bube_test_tmp"
     _runtime_command(
@@ -1114,7 +1157,6 @@ def test_scaffolded_publish_pypi_requires_both_committed_policies(
         "  auth:status) exit 0 ;;\n"
         "  release:view)\n"
         '    if [[ "$*" == *"--json isDraft"* ]]; then printf \'false\\n\'; '
-        'elif [[ "$*" == *"--json assets"* ]]; then printf \'1\\n\'; '
         "else exit 90; fi ;;\n"
         "  workflow:run) exit 0 ;;\n"
         "  *) exit 91 ;;\n"
@@ -1196,8 +1238,6 @@ def test_scaffolded_publish_pypi_requires_both_committed_policies(
     assert gh_calls == [
         "auth status",
         "release view v0.1.0 --json isDraft --jq .isDraft",
-        'release view v0.1.0 --json assets --jq [.assets[].name | select(endswith(".whl"))] | length',
-        'release view v0.1.0 --json assets --jq [.assets[].name | select(endswith(".tar.gz"))] | length',
         "workflow run release.yml --raw-field release_tag=v0.1.0",
     ]
 
@@ -1395,13 +1435,12 @@ def test_scaffolded_project_builds_without_missing_readme_warning(
     assert any(
         name.endswith("/src/bube_test_tmp_distr/make_artifacts.py") for name in names
     )
-    assert any(
-        name.endswith("/src/bube_test_tmp_distr/payload/app_lifecycle/install.py")
+    assert any(name.endswith("/src/bube_test_tmp_distr/actions.py") for name in names)
+    assert any(name.endswith("/src/bube_test_tmp/installation.py") for name in names)
+    assert not any(
+        name.endswith(f"/{helper}")
         for name in names
-    )
-    assert all(
-        any(name.endswith(f"/{wrapper}") for name in names)
-        for wrapper in (
+        for helper in (
             "app-install.py",
             "app-launch.py",
             "app-uninstall.sh",

@@ -1,0 +1,9 @@
+"""Installed application lifecycle providers shared by CLI and native setup."""
+
+from __future__ import annotations
+
+import apprc as rc
+
+# Declare importable module:function references in this value and the matching
+# tool.apprc.distribution.hooks table so the CLI and native setup agree.
+INSTALLATION_HOOKS: rc.InstallationHooks = rc.InstallationHooks()

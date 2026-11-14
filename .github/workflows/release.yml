@@ -91,6 +91,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
+          version: "0.13.6"
           python-version: "3.12"
           enable-cache: auto
       - name: Install just
@@ -115,12 +116,19 @@ jobs:
           set -euo pipefail
           mkdir -p release
           printf '%s' "$RELEASE_NOTES_BASE64" | base64 --decode > release/release-notes.md
-      - name: Check tracked management artifacts without rewriting
-        run: just check-artifacts
       - name: Build and validate package once
         run: just build-release-inputs release/release-notes.md
       - name: Smoke the built wheel once on Python 3.12
         run: just release-wheel-smoke
+      - name: Preserve the independent Python release packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-release-packages
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 14
       - name: Install Linux native cross-compilation toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -132,6 +140,8 @@ jobs:
           cargo install cargo-xwin --version 0.23.1 --locked
       - name: Stage release-native entries and integrity manifest
         run: just stage-release-assets "$GITHUB_REF_NAME" "$GITHUB_SHA"
+      - name: Check native outputs without rewriting
+        run: just check-artifacts
       - name: Upload the exact verified release asset set
         env:
           GH_TOKEN: ${{ github.token }}
@@ -187,10 +197,13 @@ jobs:
     steps:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
-      - name: Download package assets from the published release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir dist --pattern '*.whl' --pattern '*.tar.gz'
+        with:
+          python-version: "3.12"
+      - name: Download the independently built Python release packages
+        uses: actions/download-artifact@v8
+        with:
+          name: python-release-packages
+          path: dist
       - name: Publish to PyPI with trusted publishing
         shell: bash
         run: |
@@ -317,34 +330,30 @@ jobs:
             exit 1
           fi
           version="$(cut -c 2- <<< "$RELEASE_TAG")"
-          wheel_count="$(jq '[.assets[].name | select(endswith(".whl"))] | length' "$release_metadata")"
-          sdist_count="$(jq '[.assets[].name | select(endswith(".tar.gz"))] | length' "$release_metadata")"
-          if [[ "$wheel_count" != "1" || "$sdist_count" != "1" ]]; then
-            echo "GitHub Release $RELEASE_TAG must contain exactly one wheel and one source archive." >&2
-            exit 1
-          fi
-          wheel_name="$(jq -er '[.assets[].name | select(endswith(".whl"))][0]' "$release_metadata")"
-          sdist_name="$(jq -er '[.assets[].name | select(endswith(".tar.gz"))][0]' "$release_metadata")"
-          if [[ "$wheel_name" != "$PACKAGE_NAME-$version-"*.whl || "$sdist_name" != "$PACKAGE_NAME-$version.tar.gz" || "$wheel_name" == */* || "$wheel_name" == *$'\n'* || "$wheel_name" == *$'\r'* ]]; then
-            echo "Release asset filenames do not match tag $RELEASE_TAG." >&2
-            exit 1
-          fi
-          wheel_asset_id="$(jq -er --arg name "$wheel_name" '.assets[] | select(.name == $name) | .id | select(type == "number" and . > 0)' "$release_metadata")"
-          sdist_asset_id="$(jq -er --arg name "$sdist_name" '.assets[] | select(.name == $name) | .id | select(type == "number" and . > 0)' "$release_metadata")"
-
           snapshot_dir="manual-pypi-snapshot"
           mkdir "$snapshot_dir"
-          gh api "/repos/$GITHUB_REPOSITORY/releases/assets/$wheel_asset_id" --header "Accept: application/octet-stream" > "$snapshot_dir/$wheel_name"
-          gh api "/repos/$GITHUB_REPOSITORY/releases/assets/$sdist_asset_id" --header "Accept: application/octet-stream" > "$snapshot_dir/$sdist_name"
-          expected_files="$(printf '%s\n%s' "$sdist_name" "$wheel_name" | LC_ALL=C sort)"
-          actual_files="$(find "$snapshot_dir" -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort)"
-          if [[ "$actual_files" != "$expected_files" || ! -f "$snapshot_dir/$wheel_name" || -L "$snapshot_dir/$wheel_name" || ! -f "$snapshot_dir/$sdist_name" || -L "$snapshot_dir/$sdist_name" ]]; then
-            echo "Downloaded release files do not match the selected wheel and source archive." >&2
+          source_dir="$(mktemp -d)"
+          trap 'rm -f "$release_metadata"; rm -rf "$source_dir"' EXIT
+          git archive --format=tar "$target_commit" | tar -xf - -C "$source_dir"
+          source_version="$(cd "$source_dir" && uv version --short)"
+          if [[ "$source_version" != "$version" ]]; then
+            echo "Target source version $source_version does not match $RELEASE_TAG." >&2
             exit 1
           fi
-          PYTHONPATH=src python -m buildben_dev.packaging.release_assets verify-pypi \
-            --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" \
-            --commit "$target_commit" --metadata "$release_metadata" --directory "$snapshot_dir"
+          (cd "$source_dir" && uv build --wheel --sdist --out-dir "$GITHUB_WORKSPACE/$snapshot_dir")
+          package_files=("$snapshot_dir"/*.whl "$snapshot_dir"/*.tar.gz)
+          if [[ "${#package_files[@]}" -ne 2 ]]; then
+            echo "Target source build did not produce exactly one wheel and source archive." >&2
+            exit 1
+          fi
+          wheel_name="$(basename "${package_files[0]}")"
+          sdist_name="$(basename "${package_files[1]}")"
+          (
+            cd "$source_dir"
+            PYTHONPATH="$GITHUB_WORKSPACE/src" python -m buildben_dev.packaging.release_assets verify-pypi \
+              --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" \
+              --commit "$target_commit" --metadata "$release_metadata" --directory "$GITHUB_WORKSPACE/$snapshot_dir"
+          )
           uvx --from twine twine check "$snapshot_dir/$wheel_name" "$snapshot_dir/$sdist_name"
 
           python3 - "$snapshot_dir/manifest.json" "$release_id" "$RELEASE_TAG" "$active_commit" "$tag_object_sha" "$target_commit" "$wheel_name" "$sdist_name" <<'PY'

@@ -1,47 +1,19 @@
-"""Build and stage the exact native AppRC release asset set."""
+"""Stage only the final native setups and SDK SHA256SUMS."""
 
 from __future__ import annotations
 
 import argparse
-import dataclasses
-import hashlib
-import os
 import shutil
-import tempfile
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
-from apprc.distribution import (
-    PayloadTree,
-    install_support_files,
-    read_project_metadata,
-)
-from apprc.distribution.frontends import build_native_installers
+from apprc.distribution import read_project_metadata
 from apprc.distribution.native import NativeTarget
 
-from buildben_distr.make_artifacts import distribution_spec
 from buildben_dev.packaging import release_assets
+from buildben_dev.packaging.release_manifest import validate_directory
+from buildben_distr.make_artifacts import TARGETS, build_artifacts
 
 REPOSITORY = "HisQu/buildben"
-TARGETS: tuple[NativeTarget, ...] = (
-    "x86_64-unknown-linux-gnu",
-    "x86_64-pc-windows-msvc",
-)
-
-
-def _package_files(directory: Path, project: str, version: str) -> tuple[Path, Path]:
-    """Select and validate the unique built wheel and original source archive."""
-    packages = tuple(
-        path for path in directory.iterdir() if path.name.endswith((".whl", ".tar.gz"))
-    )
-    wheels = tuple(path for path in packages if path.name.endswith(".whl"))
-    sdists = tuple(path for path in packages if path.name.endswith(".tar.gz"))
-    if len(wheels) != 1 or len(sdists) != 1:
-        raise ValueError(
-            "Release staging requires exactly one wheel and one source archive."
-        )
-    for path in (*wheels, *sdists):
-        release_assets._validate_package(path, project, version)
-    return wheels[0], sdists[0]
 
 
 def stage_release(
@@ -53,156 +25,57 @@ def stage_release(
     extras: tuple[str, ...] = (),
     targets: tuple[NativeTarget, ...] = TARGETS,
 ) -> tuple[str, ...]:
-    """Build authenticated native files from the original immutable release sdist.
-
-    :param tag: Final release tag, without creating or pushing a tag.
-    :param commit: Full immutable source commit to record in the manifests.
-    :param root: Application repository root, which must be the current directory.
-    :param repository: Immutable OWNER/REPO release identity.
-    :param extras: Explicit application runtime extras to include in the bundle.
-    :param targets: Native targets compiled by AppRC's pinned SDK.
-    :return: Strict manifest validator's exact upload filename set.
-    """
+    """Build the committed snapshot and copy only validated native release assets."""
     root = root.resolve()
     if root != Path.cwd().resolve():
         raise ValueError("Run release staging from the application repository root.")
-    name, version = release_assets._project()
-    if tag != f"v{version}":
-        raise ValueError("Release tag does not match project metadata.")
-    wheel, sdist = _package_files(root / "dist", name, version)
     metadata = read_project_metadata(root)
-    asset = f"https://github.com/{repository}/releases/download/{tag}/{sdist.name}"
-    spec = dataclasses.replace(
-        distribution_spec(root, metadata),
-        source_mode="release",
-        repository_url=f"https://github.com/{repository}.git",
-        release_version=version,
-        release_commit=commit,
-        release_asset=asset,
-        release_digest=hashlib.sha256(sdist.read_bytes()).hexdigest(),
+    release_assets.Identity(
+        release_assets._repository(repository),
+        release_assets._tag(tag),
+        release_assets._sha(commit),
     )
-    uv_command = os.environ.get("UV")
-    if uv_command is None:
-        uv_command = shutil.which("uv")
-    if not uv_command:
-        raise FileNotFoundError(
-            "Release staging requires uv: set UV to its executable or add uv to PATH."
+    if tag != f"v{metadata.version}":
+        raise ValueError("Release tag does not match project metadata.")
+    built = build_artifacts(root, revision=commit, extras=extras, targets=targets)
+    names = tuple(path.name for path in built)
+    destination = root / "release" / "assets"
+    if destination.is_symlink():
+        raise ValueError("Release staging directory cannot be linked.")
+    destination.mkdir(parents=True, exist_ok=True)
+    if {path.name for path in destination.iterdir()} - set(names):
+        raise ValueError(
+            "Release staging directory contains stale or unexpected files."
         )
-    uv_executable = Path(uv_command).expanduser().resolve()
-    if not uv_executable.is_file() or not os.access(uv_executable, os.X_OK):
-        raise FileNotFoundError(
-            f"Release staging uv executable is missing or not executable: {uv_executable}"
-        )
-    payload_root = root / metadata.distribution_path / "payload"
-    modules = tuple(
-        PurePosixPath("app_lifecycle") / filename
-        for filename in (
-            "__init__.py",
-            "install.py",
-            "uninstall.py",
-            "actions.py",
-        )
-    )
-    with tempfile.TemporaryDirectory(prefix="buildben-release-payload-") as temporary:
-        workspace = Path(temporary) / "native-workspace"
-        staged_payload = Path(temporary) / "payload"
-        shutil.copytree(payload_root, staged_payload)
-        base_payload = PayloadTree(staged_payload, modules)
-        for relative, content in install_support_files(spec, base_payload).items():
-            resource = PurePosixPath("app_lifecycle/_support") / relative
-            destination = staged_payload.joinpath(*resource.parts)
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_bytes(content)
-            if relative.name in {"launch.sh", "uninstall.sh"}:
-                destination.chmod(0o700)
-        support_root = staged_payload / "app_lifecycle" / "_support"
-        resources = tuple(
-            PurePosixPath(
-                "app_lifecycle/_support", *path.relative_to(support_root).parts
-            )
-            for path in sorted(support_root.rglob("*"))
-            if path.is_file()
-        )
-        payload = PayloadTree(staged_payload, modules, resources=resources)
-        native = build_native_installers(
-            spec,
-            payload,
-            source_package=sdist,
-            uv=uv_executable,
-            workspace=workspace,
-            targets=targets,
-            extras=extras,
-        )
-        destination = root / "release" / "assets"
-        destination.mkdir(parents=True, exist_ok=True)
-        generated: dict[str, bytes] = {}
-        for artifact in native.frontends:
-            filename = artifact.path.name
-            if filename in generated:
-                raise ValueError(f"AppRC repeated native release asset {filename}.")
-            generated[filename] = artifact.path.read_bytes()
-        for path in native.payload_files:
-            filename = path.name
-            if filename in generated:
-                raise ValueError(f"AppRC repeated native release asset {filename}.")
-            generated[filename] = path.read_bytes()
-        expected = {
-            f"{metadata.identity.app_id}-install-linux-x86_64",
-            f"{metadata.identity.app_id}-install-windows-x86_64.exe",
-            f"{metadata.identity.app_id}-launch-linux-x86_64",
-            f"{metadata.identity.app_id}-launch-windows-x86_64.exe",
-            "main-installer.py"
-            if spec.payload_format == "script"
-            else "main-installer.pyz",
-            "installer-payload.zip",
-        }
-        if spec.payload_format == "zipapp":
-            expected.add("main-installer-requirements.txt")
-        if set(generated) != expected:
-            raise ValueError(
-                "AppRC emitted missing or unexpected native release assets."
-            )
-        staged_names = [wheel.name, sdist.name, *sorted(generated)]
-        allowed = set(staged_names) | {"release-manifest.json"}
-        if {path.name for path in destination.iterdir()} - allowed:
-            raise ValueError(
-                "Release staging directory contains stale or unexpected files."
-            )
-    shutil.copyfile(wheel, destination / wheel.name)
-    shutil.copyfile(sdist, destination / sdist.name)
-    for filename, content in generated.items():
-        (destination / filename).write_bytes(content)
-        if filename in {
-            f"{metadata.identity.app_id}-install-linux-x86_64",
-            f"{metadata.identity.app_id}-launch-linux-x86_64",
-        }:
-            (destination / filename).chmod(0o755)
-    return release_assets.stage(
-        destination,
-        staged_names,
-        repository=repository,
-        tag=tag,
-        commit=commit,
-        payload_format=spec.payload_format,
-    )
+    for name in names:
+        target = destination / name
+        if target.is_symlink() or (target.exists() and not target.is_file()):
+            raise ValueError(f"Release staging output is not a regular file: {name}.")
+        shutil.copyfile(root / "dist" / name, target)
+        if name.endswith("linux-x86_64"):
+            target.chmod(0o755)
+    return validate_directory(destination, app_id=metadata.identity.app_id, exact=True)
 
 
 def main() -> None:
-    """Parse release identity and stage exact SDK outputs."""
+    """Parse immutable release identity and stage exact SDK outputs."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("tag")
     parser.add_argument("commit")
     parser.add_argument("--repository", default=REPOSITORY)
     parser.add_argument("--extra", action="append", default=[])
     arguments = parser.parse_args()
-    files = stage_release(
-        arguments.tag,
-        arguments.commit,
-        root=Path.cwd(),
-        repository=arguments.repository,
-        extras=tuple(arguments.extra),
+    print(
+        "\n".join(
+            stage_release(
+                arguments.tag,
+                arguments.commit,
+                root=Path.cwd(),
+                repository=arguments.repository,
+                extras=tuple(arguments.extra),
+            )
+        )
     )
-    print("\n".join(files))
 
 
 if __name__ == "__main__":
