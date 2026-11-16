@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from rich.text import Text
 from support_native_release import pin_fixture_sdk, sdk_authoring_environment
 
 
@@ -587,7 +588,11 @@ def test_generated_native_release_install_and_retained_repair(
         environment=environment,
     )
     assert editable_refusal.returncode != 0
-    assert "uv run --locked" in (editable_refusal.stdout + editable_refusal.stderr)
+    refusal_output = editable_refusal.stdout + editable_refusal.stderr
+    refusal_message = Text.from_ansi(refusal_output).plain
+    assert "uv run --locked" in refusal_message, (
+        f"Unexpected editable refusal output:\n{refusal_output}"
+    )
     interpreter = runtime_interpreter(directory, slot)
     installed = _run(
         [

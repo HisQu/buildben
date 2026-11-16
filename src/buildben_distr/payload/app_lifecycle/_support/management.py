@@ -73,9 +73,7 @@ def decode_management_binding(content: bytes) -> ManagementBinding:
     if python is not None and (
         not isinstance(python, str) or not Path(python).is_absolute()
     ):
-        raise ValueError(
-            "Management base_python must be null or an absolute path."
-        )
+        raise ValueError("Management base_python must be null or an absolute path.")
     return ManagementBinding(app_id, command, python)
 
 
@@ -93,21 +91,16 @@ def _regular_bytes(path: Path) -> bytes:
 def _installation_directory(app_id: str) -> Path:
     """Locate native authority from portable identity without creating state."""
     home = Path(
-        os.environ.get("USERPROFILE" if os.name == "nt" else "HOME")
-        or Path.home()
+        os.environ.get("USERPROFILE" if os.name == "nt" else "HOME") or Path.home()
     )
     if not home.is_absolute():
         raise ValueError("Native home path must be absolute.")
     if os.name == "nt":
-        data = Path(
-            os.environ.get("LOCALAPPDATA") or home / "AppData" / "Local"
-        )
+        data = Path(os.environ.get("LOCALAPPDATA") or home / "AppData" / "Local")
     elif sys.platform == "darwin":
         data = home / "Library" / "Application Support"
     else:
-        data = Path(
-            os.environ.get("XDG_DATA_HOME") or home / ".local" / "share"
-        )
+        data = Path(os.environ.get("XDG_DATA_HOME") or home / ".local" / "share")
         if not data.is_absolute():
             data = home / ".local" / "share"
     if not data.is_absolute():
@@ -168,9 +161,7 @@ def _authority(
         or binding.command not in identity["commands"]
         or binding.base_python is None
     ):
-        raise ValueError(
-            "Saved management data does not match installation authority."
-        )
+        raise ValueError("Saved management data does not match installation authority.")
     return record, target, binding
 
 
@@ -180,10 +171,7 @@ def _base_python(binding: ManagementBinding, target: dict[str, Any]) -> Path:
         raise ValueError("Saved base Python is unavailable.")
     executable = Path(binding.base_python)
     prefix_value = target.get("prefix")
-    if (
-        not isinstance(prefix_value, str)
-        or not Path(prefix_value).is_absolute()
-    ):
+    if not isinstance(prefix_value, str) or not Path(prefix_value).is_absolute():
         raise ValueError("Saved application prefix is unavailable.")
     lexical_target = Path(os.path.normpath(prefix_value))
     roots = (lexical_target, lexical_target.resolve())
@@ -217,9 +205,7 @@ def _base_python(binding: ManagementBinding, target: dict[str, Any]) -> Path:
     return executable
 
 
-def _inspection(
-    directory: Path, target: dict[str, Any], app_id: str
-) -> dict[str, Any]:
+def _inspection(directory: Path, target: dict[str, Any], app_id: str) -> dict[str, Any]:
     """Use the existing minimal saved inspector, never uv or provisioning."""
     _owned_bytes(directory, target, "inspection.py")
     result = subprocess.run(
@@ -241,9 +227,7 @@ def _inspection(
         or not isinstance(inspection.get("record"), dict)
         or inspection.get("status") == "invalid"
     ):
-        raise ValueError(
-            "Saved installation inspection rejected its authority."
-        )
+        raise ValueError("Saved installation inspection rejected its authority.")
     return inspection
 
 
@@ -270,10 +254,7 @@ def main(*, portable_binding: ManagementBinding | None = None) -> int:
         if not directory.is_absolute():
             raise ValueError("Saved installation directory must be absolute.")
         record, target, binding = _authority(directory)
-        if (
-            portable.app_id != binding.app_id
-            or portable.command != binding.command
-        ):
+        if portable.app_id != binding.app_id or portable.command != binding.command:
             raise ValueError(
                 "Checkout management identity differs from saved authority."
             )
@@ -290,23 +271,16 @@ def main(*, portable_binding: ManagementBinding | None = None) -> int:
             if action.action == "launch" and os.name != "nt":
                 python = str(_base_python(binding, target))
                 os.execv(python, [python, *dispatch[1:], *forwarded])
-            return subprocess.run(
-                [*dispatch, *forwarded], check=False
-            ).returncode
+            return subprocess.run([*dispatch, *forwarded], check=False).returncode
         inspection = _inspection(directory, target, binding.app_id)
         if action.action == "launch":
-            if (
-                record.get("status") != "ready"
-                or record.get("operation") is not None
-            ):
+            if record.get("status") != "ready" or record.get("operation") is not None:
                 raise ValueError(
                     "Application is not installed; repair the installation."
                 )
             commands = target.get("commands")
             identities = target["identity"]["commands"]
-            if not isinstance(commands, list) or len(commands) != len(
-                identities
-            ):
+            if not isinstance(commands, list) or len(commands) != len(identities):
                 raise ValueError("Recorded application command is unavailable.")
             executable_value = commands[identities.index(binding.command)]
             if not isinstance(executable_value, str):
@@ -318,9 +292,7 @@ def main(*, portable_binding: ManagementBinding | None = None) -> int:
                 )
             if os.name != "nt":
                 os.execv(str(executable), [str(executable), *forwarded])
-            return subprocess.run(
-                [str(executable), *forwarded], check=False
-            ).returncode
+            return subprocess.run([str(executable), *forwarded], check=False).returncode
         if args.dry_run:
             print(json.dumps(inspection, ensure_ascii=False, sort_keys=True))
             return 0
@@ -330,15 +302,11 @@ def main(*, portable_binding: ManagementBinding | None = None) -> int:
             and isinstance(operation, dict)
             and operation.get("kind") == "uninstall"
         ):
-            raise ValueError(
-                "Saved installation requires repair before uninstall."
-            )
+            raise ValueError("Saved installation requires repair before uninstall.")
         backend = target.get("backend")
         if not isinstance(backend, dict):
             raise ValueError("Saved uv backend identity is unavailable.")
-        paths = [
-            backend.get(key) for key in ("executable", "tool_dir", "bin_dir")
-        ]
+        paths = [backend.get(key) for key in ("executable", "tool_dir", "bin_dir")]
         if any(
             not isinstance(value, str) or not Path(value).is_absolute()
             for value in paths
