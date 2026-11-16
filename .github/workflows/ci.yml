@@ -99,6 +99,10 @@ jobs:
         env:
           BUILDBEN_FRONTEND_SMOKE: "1"
         run: uv run --locked python -m pytest -o addopts= tests/test_init_proj.py -k frontend
+      - name: Run generated React package consumer test
+        run: >-
+          uv run --locked python -m pytest -o addopts=
+          tests/test_release_install.py::test_generated_react_python_packages_select_one_workspace_without_native_build
 
   installation:
     name: Linux native install / Python 3.12
