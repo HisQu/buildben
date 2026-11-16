@@ -118,7 +118,7 @@ def test_generated_react_python_packages_select_one_workspace_without_native_bui
     tmp_path: Path,
 ) -> None:
     """Build ordinary packages from private React source without native compilation."""
-    if not shutil.which(os.environ.get("BUN", "bun")):
+    if not shutil.which(os.environ.get("BUN") or "bun"):
         pytest.skip("Generated React package consumer requires Bun.")
 
     import buildben.init_proj as scaffolder
