@@ -9,6 +9,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from rich.text import Text
 
 from apprc.definition.installation import EditableCheckout, RuntimeSlot
 from apprc.distribution.metadata import read_project_metadata
@@ -83,8 +84,9 @@ def test_app_paths_and_editable_install_help_are_available_before_setup(
         text=True,
     )
     assert install.returncode == 0, install.stdout + install.stderr
-    assert "--editable" in install.stdout
-    assert "-e" in install.stdout
+    help_output = Text.from_ansi(install.stdout).plain
+    assert "--editable" in help_output
+    assert "-e" in help_output
 
 
 def test_editable_install_registers_the_existing_checkout_and_environment(

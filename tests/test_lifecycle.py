@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from rich.text import Text
 from support_native_release import pin_fixture_sdk, sdk_authoring_environment
 
 
@@ -284,7 +285,8 @@ def test_editable_repair_leaves_environment_management_to_uv(
     configuration = (consumer.root / ".venv" / "pyvenv.cfg").read_bytes()
     repaired = consumer.run("app", "repair")
     output = repaired.stdout + repaired.stderr
-    assert "uv sync --locked" in output, f"Unexpected repair output:\n{output}"
+    message = Text.from_ansi(output).plain
+    assert "uv sync --locked" in message, f"Unexpected repair output:\n{output}"
     assert consumer.record() == before
     assert (consumer.root / ".venv" / "pyvenv.cfg").read_bytes() == configuration
     _assert_checkout_retained(consumer)
