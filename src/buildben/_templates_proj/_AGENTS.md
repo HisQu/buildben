@@ -4,6 +4,7 @@ Before making changes, read [Contributing](CONTRIBUTING.md) and follow its share
 conventions. Consult the relevant [Development](docs/Development.md) guides.
 
 ## Release policy
+- `RELEASE_REQUIRE_CI := "false"` allows development, merges, and releases to proceed when hosted CI fails or cannot run. Before merge/release, run and pass the full local test suite and report hosted CI separately. Set it to `"true"` to require successful exact-commit hosted CI for releases.
 - Treat the committed `RELEASE_PYPI` value in `justfile` as a hard gate. When it is `"false"`, do not recommend or run a manual PyPI publish or retry command.
 - Manual PyPI publication requires `RELEASE_PYPI := "true"` in both the current committed `justfile` and the requested tag's committed `justfile`. A `just --set` override does not satisfy either check.
 - The manual workflow checks the selected workflow ref and target tag before it requests the PyPI environment or OIDC token. GitHub Release creation on a valid tag remains available when PyPI is disabled.

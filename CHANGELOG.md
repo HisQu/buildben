@@ -84,6 +84,7 @@ This project follows Semantic Versioning.
 <br>
 
 ### 💔 Changed
+- CI now runs feature branches through pull requests and cancels superseded checks. Release hosted-CI gating is controlled separately by `RELEASE_REQUIRE_CI`; generated projects retain mandatory local tests.
 
 - Pin authoring and generated projects to the immutable AppRC cutover source,
   while keeping Buildben's argparse business CLI and empty runtime dependency
