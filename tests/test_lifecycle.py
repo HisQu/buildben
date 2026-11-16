@@ -283,7 +283,8 @@ def test_editable_repair_leaves_environment_management_to_uv(
     before = consumer.record()
     configuration = (consumer.root / ".venv" / "pyvenv.cfg").read_bytes()
     repaired = consumer.run("app", "repair")
-    assert "uv sync --locked" in repaired.stdout + repaired.stderr
+    output = repaired.stdout + repaired.stderr
+    assert "uv sync --locked" in output, f"Unexpected repair output:\n{output}"
     assert consumer.record() == before
     assert (consumer.root / ".venv" / "pyvenv.cfg").read_bytes() == configuration
     _assert_checkout_retained(consumer)
