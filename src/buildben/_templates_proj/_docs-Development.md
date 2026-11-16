@@ -295,6 +295,9 @@ The tag workflow builds the Python wheel/sdist through the private locked-source
 preparation, then uses AppRC to produce the two native setup files and
 `SHA256SUMS`. Only native files are uploaded as GitHub Release assets;
 wheel/sdist publication remains governed separately by `RELEASE_PYPI`.
+`RELEASE_REQUIRE_CI` controls whether a release waits for hosted CI. When it is
+`false`, a passing full local test suite is still required before merge/release;
+report hosted CI status separately.
 
 Native authoring runs with the pinned Rust and cross-compilation toolchain.
 Windows setup output is not executed on Linux. No generated Python installer,
@@ -325,6 +328,7 @@ PyPI publication remains independently controlled by the tagged `justfile`
 setting:
 ```just
 RELEASE_PYPI := "true"
+RELEASE_REQUIRE_CI := "false"
 ```
 
 Keep the generated default at `"false"` for private packages and GitHub-only

@@ -5,13 +5,17 @@ run-name: ${{ github.actor }} - ${{ github.event_name }} - CI
 on:
   push:
     branches:
-      - "**"
+      - main
   pull_request:
   workflow_call:
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: "{my_project}-ci-${{ github.event.pull_request.number || github.ref }}"
+  cancel-in-progress: true
 
 jobs:
   checks:
