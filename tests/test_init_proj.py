@@ -978,7 +978,18 @@ def test_scaffolded_project_includes_project_changelog(
     changelog_text = changelog_path.read_text(encoding="utf-8")
     assert "bube_test_tmp" in changelog_text
     assert "0.1.0" in changelog_text
-    assert "# [0.1.0] - " in changelog_text
+    assert "## [Unreleased]" in changelog_text
+    assert "## [0.1.0] - " in changelog_text
+    assert "### ✨ Added" in changelog_text
+    assert "### 🛠️ Changed" in changelog_text
+    assert "### 🗑️ Deprecated" in changelog_text
+    assert "### 🔥 Removed" in changelog_text
+    assert "### 🐛 Fixed" in changelog_text
+    assert "### 🔒 Security" in changelog_text
+    assert "### 💥 Breaking changes" not in changelog_text
+    assert "**Breaking:** 💥" in changelog_text
+    assert "[Unreleased]:" not in changelog_text
+    assert "[0.1.0]:" not in changelog_text
     assert "[\\[0.1.0\\] - " in changelog_text
     assert "(#010---" in changelog_text
     assert "<my_project>" not in changelog_text

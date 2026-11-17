@@ -515,6 +515,17 @@ environment.
 > Edit and commit this setting before the release. Shell variables and
 > `just --set` overrides are not stored in the tag and cannot select PyPI.
 
+`CHANGELOG.md` is the complete release history and source for GitHub Release notes.
+Prepare each release as `## [VERSION] - YYYY-MM-DD`; append `[YANKED]` only when
+a release is yanked. Keep all six category headings under `[Unreleased]` even
+when empty, and omit empty categories from released sections. Put breaking entries
+under their actual category with `**Breaking:** 💥`. Include only curated changes
+with a notable user or contributor effect.
+Add a table-of-contents entry only for a major/minor `X.Y.0` release; omit
+patch releases while keeping their sections in the history. Update comparison
+reference definitions immediately after the TOC. Use existing tags only; do not
+invent links for tagless history.
+
 ```bash
 just release-check
 just release patch
