@@ -84,36 +84,56 @@ def sample_changelog(
 2. [\\[Unreleased\\]](#unreleased)
 {version_toc}
 
-# [Unreleased]
+## [Unreleased]
 
-### 💥 Breaking changes
 
-### ➕ Added
+### ✨ Added
 
 {unreleased_entry}
 
-### 💔 Changed
+### 🛠️ Changed
 
-### ⚠️ Deprecated
+### 🗑️ Deprecated
 
-### 🗑️ Removed
+### 🔥 Removed
 
-### 🔨 Fixed
+### 🐛 Fixed
 
-# [{version}] - 2026-08-31
+### 🔒 Security
 
-### ➕ Added
+## [{version}] - 2026-08-31
+
+### ✨ Added
 
 {release_entry}
 
-# [1.2.2] - 2026-08-30
+## [1.2.2] - 2026-08-30
 """
 
 
 def test_release_notes_extract_a_prepared_release() -> None:
     """Release notes should preserve entries and promote category headings."""
     assert release_notes.build_release_notes(sample_changelog(), "1.2.3") == (
-        "## ➕ Added\n\n- Add a tested release workflow.\n"
+        "## ✨ Added\n\n- Add a tested release workflow.\n"
+    )
+
+
+def test_release_notes_accept_yanked_heading_and_exclude_link_definitions() -> None:
+    """Yanked releases parse, and footer references are not release-note content."""
+    markdown = sample_changelog()
+    markdown = markdown.replace(
+        "## [1.2.3] - 2026-08-31",
+        "## [1.2.3] - 2026-08-31 [YANKED]",
+    )
+    markdown = markdown.replace(
+        "3. [\\[1.2.3\\] - 2026-08-31](#123---2026-08-31)",
+        "3. [\\[1.2.3\\] - 2026-08-31 [YANKED]](#123---2026-08-31-yanked)",
+    )
+    markdown = markdown.replace("\n## [1.2.2] - 2026-08-30\n", "\n")
+    markdown += "\n[Unreleased]: https://example.invalid/compare\n[1.2.3]: https://example.invalid/release\n"
+
+    assert release_notes.build_release_notes(markdown, "1.2.3") == (
+        "## ✨ Added\n\n- Add a tested release workflow.\n"
     )
 
 
@@ -126,28 +146,20 @@ def test_release_notes_reject_unprepared_entries() -> None:
 
 
 @pytest.mark.parametrize(
-    ("helper", "breaking_heading"),
+    "helper",
     [
-        (
-            Path("src/buildben_dev/packaging/release_notes.py"),
-            "### 💥 Breaking changes",
-        ),
-        (
-            Path(
-                "src/buildben/_templates_proj/_src-dev-packaging-release_notes.py.tmpl"
-            ),
-            "### 💥 Breaking Change Summary",
+        Path("src/buildben_dev/packaging/release_notes.py"),
+        Path(
+            "src/buildben/_templates_proj/_src-dev-packaging-release_notes.py.tmpl"
         ),
     ],
 )
 def test_release_note_cli_build_only_allowance_keeps_release_validation(
-    tmp_path: Path, helper: Path, breaking_heading: str
+    tmp_path: Path, helper: Path
 ) -> None:
     """Build-only extraction tolerates unreleased entries, but not bad structure."""
+    changelog = sample_changelog(unreleased_entry="- Work still in progress.")
     repository_root = Path(__file__).resolve().parents[1]
-    changelog = sample_changelog(unreleased_entry="- Work still in progress.").replace(
-        "### 💥 Breaking changes", breaking_heading
-    )
     changelog_path = tmp_path / "CHANGELOG.md"
     changelog_path.write_text(changelog, encoding="utf-8")
     output_path = tmp_path / "release-notes.md"
@@ -172,7 +184,7 @@ def test_release_note_cli_build_only_allowance_keeps_release_validation(
     )
     assert build_only.returncode == 0, build_only.stderr
     assert output_path.read_text(encoding="utf-8") == (
-        "## ➕ Added\n\n- Add a tested release workflow.\n"
+        "## ✨ Added\n\n- Add a tested release workflow.\n"
     )
 
     strict = subprocess.run(
@@ -181,7 +193,7 @@ def test_release_note_cli_build_only_allowance_keeps_release_validation(
     assert strict.returncode != 0
     assert "still contains release entries" in strict.stderr
 
-    malformed = changelog.replace(breaking_heading, "### 💥 Missing category")
+    malformed = changelog.replace("### 🔒 Security", "### 💥 Missing category")
     changelog_path.write_text(malformed, encoding="utf-8")
     invalid_structure = subprocess.run(
         [*command, "--allow-unreleased-entries"],

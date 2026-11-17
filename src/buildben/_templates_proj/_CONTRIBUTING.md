@@ -149,9 +149,11 @@ another pass, checking for existing entries first.
 # Documentation and generated files
 
 Update documentation when a change affects setup, commands, public APIs,
-environment variables, saved formats, or user-visible workflows. Record relevant
-user-visible changes in [CHANGELOG.md](CHANGELOG.md); breaking changes must
-identify affected users and explain migration when possible.
+environment variables, saved formats, or user-visible workflows. Record only
+curated changes with a notable user or contributor effect in [CHANGELOG.md](CHANGELOG.md);
+omit routine internal refactors and test-only work. Put breaking changes under
+their actual category with `**Breaking:** 💥`, identify affected users, and explain
+migration when possible.
 
 Follow the [documentation rules](docs/README.md#documentation-rules) and use the
 [authoring guide](docs/Development.md#documentation-authoring) to carry them out.

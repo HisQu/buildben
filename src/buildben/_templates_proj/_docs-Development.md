@@ -255,10 +255,16 @@ macOS filesystem behavior; use a separately authorized native runner.
 
 ## Releases
 
-`CHANGELOG.md` is the source for GitHub Release notes. Before a release, move
-every entry from `[Unreleased]` into a new `# [MAJOR.MINOR.PATCH] - YYYY-MM-DD`
-section, add its table-of-contents link, and leave a complete empty
-`[Unreleased]` section above it.
+`CHANGELOG.md` is the complete release history and source for GitHub Release notes. Prepare
+released headings as `## [VERSION] - YYYY-MM-DD`; append `[YANKED]` only for a yanked release.
+Keep all six category headings under `[Unreleased]`, even when empty, and omit empty
+categories in released sections. Use `**Breaking:** 💥` inline under the entry's actual
+category. Include only curated changes with a notable user or contributor effect;
+omit routine internal refactors and test-only work.
+
+Update the table of contents and bottom comparison references when preparing
+a release. Use existing tags only; do not invent links for tagless history.
+
 
 Before the first push, create and commit the generated dependency files:
 
