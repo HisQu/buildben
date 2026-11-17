@@ -170,9 +170,7 @@ def test_release_notes_reject_unprepared_entries() -> None:
     "helper",
     [
         Path("src/buildben_dev/packaging/release_notes.py"),
-        Path(
-            "src/buildben/_templates_proj/_src-dev-packaging-release_notes.py.tmpl"
-        ),
+        Path("src/buildben/_templates_proj/_src-dev-packaging-release_notes.py.tmpl"),
     ],
 )
 def test_release_note_cli_build_only_allowance_keeps_release_validation(
@@ -281,9 +279,7 @@ def test_release_notes_require_entries_and_major_minor_toc_only() -> None:
     """All releases need entries; only major/minor releases belong in the TOC."""
     with pytest.raises(ValueError, match="has no changelog entries"):
         release_notes.build_release_notes(sample_changelog(release_entry=""), "1.2.3")
-    assert release_notes.build_release_notes(
-        sample_changelog(toc_entry=False), "1.2.3"
-    )
+    assert release_notes.build_release_notes(sample_changelog(toc_entry=False), "1.2.3")
     with pytest.raises(ValueError, match="major/minor"):
         release_notes.build_release_notes(
             sample_changelog(version="1.2.0", toc_entry=False), "1.2.0"

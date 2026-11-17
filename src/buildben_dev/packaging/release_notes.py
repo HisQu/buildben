@@ -193,9 +193,7 @@ def _validate_toc_entry(markdown: str, match: re.Match[str]) -> None:
     version = match.group("version")
     date = match.group("date")
     yanked = match.group("yanked") or ""
-    anchor = f"#{version.replace('.', '')}---{date}" + (
-        "-yanked" if yanked else ""
-    )
+    anchor = f"#{version.replace('.', '')}---{date}" + ("-yanked" if yanked else "")
     label = rf"[\[{version}\] - {date}{yanked}]"
     entry = f"{label}({anchor})"
     occurrences = markdown.count(entry)
@@ -249,6 +247,7 @@ def _is_layout_line(line: str) -> bool:
         or (line.startswith("<!--") and line.endswith("-->"))
         or re.match(r"^\[[^]]+\]:\s+\S+", line) is not None
     )
+
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """Parse release-note command arguments.
