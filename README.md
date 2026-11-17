@@ -521,8 +521,10 @@ a release is yanked. Keep all six category headings under `[Unreleased]` even
 when empty, and omit empty categories from released sections. Put breaking entries
 under their actual category with `**Breaking:** 💥`. Include only curated changes
 with a notable user or contributor effect.
-Update the table of contents and bottom comparison references when preparing
-a release. Use existing tags only; do not invent links for tagless history.
+Add a table-of-contents entry only for a major/minor `X.Y.0` release; omit
+patch releases while keeping their sections in the history. Update comparison
+reference definitions immediately after the TOC. Use existing tags only; do not
+invent links for tagless history.
 
 ```bash
 just release-check

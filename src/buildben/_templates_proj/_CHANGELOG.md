@@ -14,9 +14,9 @@ This changelog follows Keep a Changelog 2.0.0 and Semantic Versioning 2.0.0.
 > 6. Use the emoji mapping informed by [Gitmoji](https://github.com/carloscuesta/gitmoji) and [conventional-changelog-emoji](https://github.com/favoloso/conventional-changelog-emoji): ✨ Added, 🛠️ Changed, 🗑️ Deprecated, 🔥 Removed, 🐛 Fixed, and 🔒 Security.
 > 7. Describe the final net difference from the previous released version. Do not list intermediate changes that were overwritten before release.
 > 8. Use 🐛 Fixed only for defects in previously released behavior; describe new features under ✨ Added.
-> 9. Maintain the version references at the bottom: [Unreleased] compares the latest existing release tag with HEAD; tagged releases compare with the previous existing tag, or link to the release page when no previous tag exists. Keep tagless historical headings navigable in the TOC without inventing external tag links.
+> 9. List [Unreleased] and major/minor `X.Y.0` releases in the TOC; omit patch releases. Place version reference definitions immediately after the TOC. [Unreleased] compares the latest existing release tag with HEAD; tagged releases compare with the previous existing tag, or link to the release page when no previous tag exists. Use only existing tags.
 >
-> Local presentation exceptions: retain the project header, rules block, table of contents, and `<br>` / `---` layout; use emoji-prefixed category headings and the inline 💥 breaking marker; keep all six category headings under [Unreleased] even when empty. These choices affect presentation only and do not change category meaning or SemVer.
+> Local presentation exceptions: retain the project header, rules block, TOC, and `<br>` / `---` layout; use emoji-prefixed category headings and the inline 💥 breaking marker; keep all six category headings under [Unreleased] even when empty; list only [Unreleased] and `X.Y.0` releases in the TOC, leaving patch releases in history but out of the TOC; place reference definitions immediately after the TOC instead of at the bottom.
 
 <br>
 
@@ -95,6 +95,3 @@ This changelog follows Keep a Changelog 2.0.0 and Semantic Versioning 2.0.0.
 
 - Released `{my_project}`.
 - Added src-layout packaging, Typer CLI entrypoints, AppRC configuration, documentation, tests, and maintainer tooling.
-
-[Unreleased]: https://github.com/{github_username}/{my_project}/compare/v{initial_version}...HEAD
-[{initial_version}]: https://github.com/{github_username}/{my_project}/releases/tag/v{initial_version}

@@ -262,8 +262,10 @@ categories in released sections. Use `**Breaking:** 💥` inline under the entry
 category. Include only curated changes with a notable user or contributor effect;
 omit routine internal refactors and test-only work.
 
-Update the table of contents and bottom comparison references when preparing
-a release. Use existing tags only; do not invent links for tagless history.
+Add a table-of-contents entry only for a major/minor `X.Y.0` release; omit
+patch releases while keeping their sections in the history. Update comparison
+reference definitions immediately after the TOC. Use existing tags only; do not
+invent links for tagless history.
 
 
 Before the first push, create and commit the generated dependency files:

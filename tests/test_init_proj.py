@@ -988,7 +988,8 @@ def test_scaffolded_project_includes_project_changelog(
     assert "### 🔒 Security" in changelog_text
     assert "### 💥 Breaking changes" not in changelog_text
     assert "**Breaking:** 💥" in changelog_text
-    assert "[Unreleased]: https://github.com/" in changelog_text
+    assert "[Unreleased]:" not in changelog_text
+    assert "[0.1.0]:" not in changelog_text
     assert "[\\[0.1.0\\] - " in changelog_text
     assert "(#010---" in changelog_text
     assert "<my_project>" not in changelog_text

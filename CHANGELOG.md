@@ -14,9 +14,9 @@ This changelog follows Keep a Changelog 2.0.0 and Semantic Versioning 2.0.0.
 > 6. Use the emoji mapping informed by [Gitmoji](https://github.com/carloscuesta/gitmoji) and [conventional-changelog-emoji](https://github.com/favoloso/conventional-changelog-emoji): ✨ Added, 🛠️ Changed, 🗑️ Deprecated, 🔥 Removed, 🐛 Fixed, and 🔒 Security.
 > 7. Describe the final net difference from the previous released version. Do not list intermediate changes that were overwritten before release.
 > 8. Use 🐛 Fixed only for defects in previously released behavior; describe new features under ✨ Added.
-> 9. Maintain the version references at the bottom: [Unreleased] compares the latest existing release tag with HEAD; tagged releases compare with the previous existing tag, or link to the release page when no previous tag exists. Keep tagless historical headings navigable in the TOC without inventing external tag links.
+> 9. List [Unreleased] and major/minor `X.Y.0` releases in the TOC; omit patch releases. Place version reference definitions immediately after the TOC. [Unreleased] compares the latest existing release tag with HEAD; tagged releases compare with the previous existing tag, or link to the release page when no previous tag exists. Use only existing tags.
 >
-> Local presentation exceptions: retain the project header, rules block, table of contents, and `<br>` / `---` layout; use emoji-prefixed category headings and the inline 💥 breaking marker; keep all six category headings under [Unreleased] even when empty. These choices affect presentation only and do not change category meaning or SemVer.
+> Local presentation exceptions: retain the project header, rules block, TOC, and `<br>` / `---` layout; use emoji-prefixed category headings and the inline 💥 breaking marker; keep all six category headings under [Unreleased] even when empty; list only [Unreleased] and `X.Y.0` releases in the TOC, leaving patch releases in history but out of the TOC; place reference definitions immediately after the TOC instead of at the bottom.
 
 <br>
 
@@ -25,30 +25,39 @@ This changelog follows Keep a Changelog 2.0.0 and Semantic Versioning 2.0.0.
 1. [Buildben Changelog](#buildben-changelog)
 2. [\[Unreleased\]](#unreleased)
 3. [\[0.13.0\] - 2026-11-11](#0130---2026-11-11)
-4. [\[0.11.3\] - 2026-10-22](#0113---2026-10-22)
-5. [\[0.11.2\] - 2026-10-22](#0112---2026-10-22)
-6. [\[0.11.1\] - 2026-10-21](#0111---2026-10-21)
-7. [\[0.11.0\] - 2026-10-21](#0110---2026-10-21)
-8. [\[0.10.3\] - 2026-10-21](#0103---2026-10-21)
-9. [\[0.10.2\] - 2026-10-21](#0102---2026-10-21)
-10. [\[0.10.1\] - 2026-10-21](#0101---2026-10-21)
-11. [\[0.10.0\] - 2026-10-21](#0100---2026-10-21)
-12. [\[0.9.1\] - 2026-10-02](#091---2026-10-02)
-13. [\[0.9.0\] - 2026-09-28](#090---2026-09-28)
-14. [\[0.8.0\] - 2026-09-28](#080---2026-09-28)
-15. [\[0.7.1\] - 2026-09-07](#071---2026-09-07)
-16. [\[0.7.0\] - 2026-09-07](#070---2026-09-07)
-17. [\[0.6.0\] - 2026-08-31](#060---2026-08-31)
-18. [\[0.5.0\] - 2026-08-31](#050---2026-08-31)
-19. [\[0.4.0\] - 2026-07-03](#040---2026-07-03)
-20. [\[0.3.0\] - 2026-07-01](#030---2026-07-01)
-21. [\[0.2.1\] - 2026-06-26](#021---2026-06-26)
+4. [\[0.11.0\] - 2026-10-21](#0110---2026-10-21)
+5. [\[0.10.0\] - 2026-10-21](#0100---2026-10-21)
+6. [\[0.9.0\] - 2026-09-28](#090---2026-09-28)
+7. [\[0.8.0\] - 2026-09-28](#080---2026-09-28)
+8. [\[0.7.0\] - 2026-09-07](#070---2026-09-07)
+9. [\[0.6.0\] - 2026-08-31](#060---2026-08-31)
+10. [\[0.5.0\] - 2026-08-31](#050---2026-08-31)
+11. [\[0.4.0\] - 2026-07-03](#040---2026-07-03)
+12. [\[0.3.0\] - 2026-07-01](#030---2026-07-01)
 
 <br>
 
 ---
 
 <br>
+
+[Unreleased]: https://github.com/HisQu/buildben/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/HisQu/buildben/compare/v0.11.3...v0.13.0
+[0.11.3]: https://github.com/HisQu/buildben/compare/v0.11.2...v0.11.3
+[0.11.2]: https://github.com/HisQu/buildben/compare/v0.11.1...v0.11.2
+[0.11.1]: https://github.com/HisQu/buildben/compare/v0.11.0...v0.11.1
+[0.11.0]: https://github.com/HisQu/buildben/compare/v0.10.3...v0.11.0
+[0.10.3]: https://github.com/HisQu/buildben/compare/v0.10.2...v0.10.3
+[0.10.2]: https://github.com/HisQu/buildben/compare/v0.10.1...v0.10.2
+[0.10.1]: https://github.com/HisQu/buildben/compare/v0.10.0...v0.10.1
+[0.10.0]: https://github.com/HisQu/buildben/compare/v0.9.1...v0.10.0
+[0.9.1]: https://github.com/HisQu/buildben/compare/v0.9.0...v0.9.1
+[0.9.0]: https://github.com/HisQu/buildben/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/HisQu/buildben/compare/v0.7.1...v0.8.0
+[0.7.1]: https://github.com/HisQu/buildben/compare/v0.7.0...v0.7.1
+[0.7.0]: https://github.com/HisQu/buildben/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/HisQu/buildben/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/HisQu/buildben/releases/tag/v0.5.0
 
 <!-- ======================================================== -->
 
@@ -815,21 +824,3 @@ The previous published release was 0.11.3.
 - Fix generated experiment placeholder substitution for dates and human-readable experiment names.
 
 <br>
-
-[Unreleased]: https://github.com/HisQu/buildben/compare/v0.13.0...HEAD
-[0.13.0]: https://github.com/HisQu/buildben/compare/v0.11.3...v0.13.0
-[0.11.3]: https://github.com/HisQu/buildben/compare/v0.11.2...v0.11.3
-[0.11.2]: https://github.com/HisQu/buildben/compare/v0.11.1...v0.11.2
-[0.11.1]: https://github.com/HisQu/buildben/compare/v0.11.0...v0.11.1
-[0.11.0]: https://github.com/HisQu/buildben/compare/v0.10.3...v0.11.0
-[0.10.3]: https://github.com/HisQu/buildben/compare/v0.10.2...v0.10.3
-[0.10.2]: https://github.com/HisQu/buildben/compare/v0.10.1...v0.10.2
-[0.10.1]: https://github.com/HisQu/buildben/compare/v0.10.0...v0.10.1
-[0.10.0]: https://github.com/HisQu/buildben/compare/v0.9.1...v0.10.0
-[0.9.1]: https://github.com/HisQu/buildben/compare/v0.9.0...v0.9.1
-[0.9.0]: https://github.com/HisQu/buildben/compare/v0.8.0...v0.9.0
-[0.8.0]: https://github.com/HisQu/buildben/compare/v0.7.1...v0.8.0
-[0.7.1]: https://github.com/HisQu/buildben/compare/v0.7.0...v0.7.1
-[0.7.0]: https://github.com/HisQu/buildben/compare/v0.6.0...v0.7.0
-[0.6.0]: https://github.com/HisQu/buildben/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/HisQu/buildben/releases/tag/v0.5.0

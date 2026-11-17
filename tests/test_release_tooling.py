@@ -64,17 +64,20 @@ def sample_changelog(
     version: str = "1.2.3",
     unreleased_entry: str = "",
     release_entry: str = "- Add a tested release workflow.",
-    toc_entry: bool = True,
+    toc_entry: bool | None = None,
 ) -> str:
     """Return a compact changelog accepted by the release-note parser.
 
     :param version: Released version heading and link value.
     :param unreleased_entry: Optional unprepared release entry.
     :param release_entry: Content placed in the released section.
-    :param toc_entry: Whether to include the released version in the ToC.
+    :param toc_entry: Whether to include the released version in the ToC; defaults
+        to whether the version is a major/minor release.
     :return: Changelog fixture text.
     """
     anchor = f"#{version.replace('.', '')}---2026-08-31"
+    if toc_entry is None:
+        toc_entry = version.endswith(".0")
     version_toc = f"3. [\\[{version}\\] - 2026-08-31]({anchor})\n" if toc_entry else ""
     return f"""# Changelog
 
@@ -118,21 +121,39 @@ def test_release_notes_extract_a_prepared_release() -> None:
     )
 
 
+def test_repository_changelog_has_compact_toc_and_nearby_references() -> None:
+    repository_root = Path(__file__).resolve().parents[1]
+    markdown = (repository_root / "CHANGELOG.md").read_text(encoding="utf-8")
+    toc = markdown.index("### Table Of Contents")
+    references = markdown.index("[Unreleased]:")
+    unreleased = markdown.index("## [Unreleased]")
+
+    assert toc < references < unreleased
+    for match in release_notes.RELEASE_HEADING_RE.finditer(markdown):
+        release_notes._validate_toc_entry(markdown, match)
+
+
 def test_release_notes_accept_yanked_heading_and_exclude_link_definitions() -> None:
-    """Yanked releases parse, and footer references are not release-note content."""
-    markdown = sample_changelog()
+    """Yanked releases parse, and reference definitions are not release content."""
+    markdown = sample_changelog(version="1.2.0")
     markdown = markdown.replace(
-        "## [1.2.3] - 2026-08-31",
-        "## [1.2.3] - 2026-08-31 [YANKED]",
+        "## [1.2.0] - 2026-08-31",
+        "## [1.2.0] - 2026-08-31 [YANKED]",
     )
     markdown = markdown.replace(
-        "3. [\\[1.2.3\\] - 2026-08-31](#123---2026-08-31)",
-        "3. [\\[1.2.3\\] - 2026-08-31 [YANKED]](#123---2026-08-31-yanked)",
+        "3. [\\[1.2.0\\] - 2026-08-31](#120---2026-08-31)",
+        "3. [\\[1.2.0\\] - 2026-08-31 [YANKED]](#120---2026-08-31-yanked)",
     )
     markdown = markdown.replace("\n## [1.2.2] - 2026-08-30\n", "\n")
-    markdown += "\n[Unreleased]: https://example.invalid/compare\n[1.2.3]: https://example.invalid/release\n"
+    markdown = markdown.replace(
+        "## [Unreleased]\n",
+        "[Unreleased]: https://example.invalid/compare\n"
+        "[1.2.0]: https://example.invalid/release\n\n"
+        "## [Unreleased]\n",
+        1,
+    )
 
-    assert release_notes.build_release_notes(markdown, "1.2.3") == (
+    assert release_notes.build_release_notes(markdown, "1.2.0") == (
         "## ✨ Added\n\n- Add a tested release workflow.\n"
     )
 
@@ -256,12 +277,21 @@ def test_release_notes_reject_missing_or_duplicate_release() -> None:
         release_notes.build_release_notes(duplicate, "1.2.3")
 
 
-def test_release_notes_reject_empty_release_or_missing_toc() -> None:
-    """A release needs entries and a matching table-of-contents link."""
+def test_release_notes_require_entries_and_major_minor_toc_only() -> None:
+    """All releases need entries; only major/minor releases belong in the TOC."""
     with pytest.raises(ValueError, match="has no changelog entries"):
         release_notes.build_release_notes(sample_changelog(release_entry=""), "1.2.3")
-    with pytest.raises(ValueError, match="table of contents"):
-        release_notes.build_release_notes(sample_changelog(toc_entry=False), "1.2.3")
+    assert release_notes.build_release_notes(
+        sample_changelog(toc_entry=False), "1.2.3"
+    )
+    with pytest.raises(ValueError, match="major/minor"):
+        release_notes.build_release_notes(
+            sample_changelog(version="1.2.0", toc_entry=False), "1.2.0"
+        )
+    with pytest.raises(ValueError, match="Patch release"):
+        release_notes.build_release_notes(
+            sample_changelog(version="1.2.3", toc_entry=True), "1.2.3"
+        )
 
 
 def test_release_notes_require_matching_tag_and_version() -> None:
