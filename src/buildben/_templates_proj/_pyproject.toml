@@ -78,8 +78,8 @@ gui = [
 dev = [
     "apprc-core[distribution] @ git+https://github.com/HisQu/apprc.git@153f97c5eb56779f1ca4c478e2e944d54ba5c625",
     # --- Interactive development -------
-    "jupyterlab",    # < Brings notebook, widgets, ipykernel, etc.
-    "ipywidgets",    # < Needed for interactive widgets; also installs/configures widget frontend support.
+    # "jupyterlab",    # < Brings notebook, widgets, ipykernel, etc.
+    # "ipywidgets",    # < Needed for interactive widgets; also installs/configures widget frontend support.
     # "jupytext",    # < Needed for paired text notebooks / .py notebook workflows.
     # --- Testing ----------------------
     "pytest>=8.2",
