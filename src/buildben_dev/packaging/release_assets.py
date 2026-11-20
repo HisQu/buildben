@@ -1037,6 +1037,14 @@ def smoke(
             installed = str(root / "bin" / command)
             run([installed, "--help"])
             run([installed, "app", "uninstall", "--yes"])
+            authority = root / "data" / app_id / "installation" / "installation.json"
+            deadline = time.monotonic() + 60
+            while Path(installed).exists() or authority.exists():
+                if time.monotonic() >= deadline:
+                    raise ReleaseError(
+                        "Native uninstall did not finish during the release smoke."
+                    )
+                time.sleep(0.25)
         for name in _package_names(names):
             if name.endswith(".whl"):
                 wheel = (directory / name).resolve()
