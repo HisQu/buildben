@@ -402,7 +402,7 @@ release-check:
         exit $?
     fi
     just _ci-check-python 3.12 "$check_root/python-3.12/.venv"
-    just _release-artifact-check "$check_root/release-notes.md"
+    just _release-artifact-check "$check_root/release-notes.md" true
     if [[ "${BUILDBEN_RELEASE_IN_PROGRESS:-}" == 1 ]]; then
         echo "Local release rehearsal passed; nothing was published."
     else

@@ -1171,13 +1171,36 @@ def smoke(
                     ]
                 )
             installed = str(root / "bin" / command)
-            run([installed, "--help"])
-            run([installed, "app", "uninstall", "--yes"])
             authority = (
                 root / "data" / app_id / "installation" / "installation.json"
             )
+            record = json.loads(authority.read_bytes())
+            runtime = record.get("active_runtime")
+            if (
+                record.get("status") != "ready"
+                or not isinstance(runtime, dict)
+                or runtime.get("version") != identity.tag[1:]
+                or runtime.get("source", {}).get("commit") != identity.commit
+            ):
+                raise ReleaseError(
+                    "The native setup did not activate the tagged runtime."
+                )
+            run([installed, "--help"])
+            run([installed, "app", "uninstall", "--yes"])
             deadline = time.monotonic() + 60
-            while Path(installed).exists() or authority.exists():
+            while True:
+                try:
+                    record = json.loads(authority.read_bytes())
+                except FileNotFoundError:
+                    record = None
+                if not os.path.lexists(installed) and (
+                    record is None
+                    or (
+                        record.get("status") == "removed-retained"
+                        and record.get("active_runtime") is None
+                    )
+                ):
+                    break
                 if time.monotonic() >= deadline:
                     raise ReleaseError(
                         "Native uninstall did not finish during the release smoke."
