@@ -203,8 +203,8 @@ application correctness, all quota types, or future quota availability.
 
 ## Native application authoring
 
-The application declaration and typed `InstallationHooks` live in the installed
-package under `src/{my_project}/`. The separate
+Keep lifecycle providers under `src/{my_project}/`. Declare their importable
+references once in `[tool.apprc.distribution.hooks]` in `pyproject.toml`. The separate
 `src/{my_project}_distr/actions.py` contains distribution build actions; it is
 not imported as an installed application hook.
 

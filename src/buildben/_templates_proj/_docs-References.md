@@ -33,7 +33,7 @@
 | [config/app.py](../src/{my_project}/config/app.py) | The shared [AppRC](Explanations.md#apprc) declaration. |
 | [config/sections/app.py](../src/{my_project}/config/sections/app.py) | The `AppSettings` [config section](Explanations.md#config-sections). |
 | [config/bundle.py](../src/{my_project}/config/bundle.py) | The application's [config bundle](Explanations.md#config-bundle). |
-| [<my_project> installation providers](../src/{my_project}/installation.py) | Typed hooks captured by the installed application runtime. |
+| [<my_project> installation providers](../src/{my_project}/installation.py) | Lifecycle provider functions declared in `pyproject.toml`. |
 | [tests](../tests) | Automated checks. |
 | [examples](../examples) | Small user-facing programs, described in [Examples](EXAMPLES.md). |
 | [docs](.) | Documentation, following the [authoring rules](README.md#documentation-rules). |
@@ -73,7 +73,7 @@ checksum inventory, and the final setup bytes.
 
 | Path | Purpose |
 | --- | --- |
-| `src/{my_project}/installation.py` | Installed application's shared typed `InstallationHooks`. |
+| `src/{my_project}/installation.py` | Application-owned lifecycle provider functions. |
 | `src/{my_project}_distr/actions.py` | Authored native build actions; not imported as installed hooks. |
 | `src/{my_project}_distr/make_artifacts.py` | Committed source preparation and ordinary/native package composition. |
 | `src/{my_project}_distr/prepare.py` | Private-copy React build preparation, when enabled. |

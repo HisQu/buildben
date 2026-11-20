@@ -1,9 +1,5 @@
-"""Installed application lifecycle providers shared by CLI and native setup."""
+"""Application lifecycle hook providers.
 
-from __future__ import annotations
-
-import apprc as rc
-
-# Declare importable module:function references in this value and the matching
-# tool.apprc.distribution.hooks table so the CLI and native setup agree.
-INSTALLATION_HOOKS: rc.InstallationHooks = rc.InstallationHooks()
+Declare provider references in `[tool.apprc.distribution.hooks]` in pyproject.toml.
+The default scaffold has no application-specific hooks.
+"""

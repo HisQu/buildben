@@ -14,7 +14,6 @@ import typer
 import <my_project>
 from <my_project>.config.app import APP_RC
 from <my_project>.config.bundle import <MyProject>Config
-from <my_project>.installation import INSTALLATION_HOOKS
 <frontend_web_import>
 
 PACKAGE_NAME = "<my_project>"
@@ -157,7 +156,6 @@ rc.cli.mount_app_cli(
     ),
     setup_logging=_setup_app_logging,
     logger=LOG,
-    installation_hooks=INSTALLATION_HOOKS,
     installation_management=True,
 )
 <frontend_web_command>
