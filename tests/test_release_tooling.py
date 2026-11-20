@@ -9,7 +9,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from support_release import copy_release_tooling
+from support_release import copy_release_tooling, write_package_pair
 
 from buildben_dev.packaging import release_notes
 from buildben_dev.packaging.install_smoke import (
@@ -284,7 +284,7 @@ def test_release_notes_require_entries_and_major_minor_toc_only() -> None:
         release_notes.build_release_notes(
             sample_changelog(version="1.2.0", toc_entry=False), "1.2.0"
         )
-    with pytest.raises(ValueError, match="Patch release"):
+    with pytest.raises(ValueError, match="Patch or preview release"):
         release_notes.build_release_notes(
             sample_changelog(version="1.2.3", toc_entry=True), "1.2.3"
         )
@@ -315,7 +315,7 @@ def test_release_notes_require_matching_tag_and_version() -> None:
         ("true", "true", False, True, False),
     ],
 )
-def test_manual_pypi_preflight_builds_packages_from_tagged_source(
+def test_manual_pypi_preflight_captures_packages_from_the_exact_release(
     tmp_path: Path,
     workflow_policy: str,
     target_policy: str,
@@ -324,7 +324,7 @@ def test_manual_pypi_preflight_builds_packages_from_tagged_source(
     expected_ready: bool,
     workflow_path: str,
 ) -> None:
-    """Build package-only PyPI input from the validated immutable tag commit."""
+    """Capture only the uploaded packages under the committed two-ref policy."""
     repository_root = Path(__file__).resolve().parents[1]
     script = _manual_pypi_preflight_script(repository_root / workflow_path).replace(
         "{my_project}", "buildben"
@@ -438,6 +438,10 @@ case "$1:$2" in
       exit 90
     fi
     ;;
+  release:download)
+    while [[ "$1" != "--dir" ]]; do shift; done
+    cp -- "$MANUAL_PACKAGES/"* "$2/"
+    ;;
   *) exit 91 ;;
 esac
 """,
@@ -455,11 +459,30 @@ exit 0
     fake_uvx.chmod(0o755)
 
     release_json = tmp_path / "release.json"
+    import hashlib
     import json
 
+    attachments = tmp_path / "uploaded-packages"
+    attachments.mkdir()
+    package_names = write_package_pair(
+        attachments, distribution="buildben", version="1.2.3"
+    )
     release_json.write_text(
         json.dumps(
-            {"id": 42, "tag_name": "v1.2.3", "draft": release_draft, "assets": []}
+            {
+                "id": 42,
+                "tag_name": "v1.2.3",
+                "draft": release_draft,
+                "prerelease": False,
+                "assets": [
+                    {
+                        "id": index,
+                        "name": name,
+                        "digest": f"sha256:{hashlib.sha256((attachments / name).read_bytes()).hexdigest()}",
+                    }
+                    for index, name in enumerate(package_names, start=1)
+                ],
+            }
         ),
         encoding="utf-8",
     )
@@ -477,6 +500,7 @@ exit 0
             "GITHUB_WORKSPACE": str(repository),
             "GITHUB_REPOSITORY": "buildben/example",
             "MANUAL_GH_LOG": str(gh_log),
+            "MANUAL_PACKAGES": str(attachments),
             "MANUAL_RELEASE_JSON": str(release_json),
             "MANUAL_UVX_LOG": str(uvx_log),
             "MOVE_TAG_OID": replacement_tag_sha,
@@ -504,7 +528,7 @@ exit 0
 
     if release_draft is not False:
         assert result.returncode != 0
-        assert "non-draft" in result.stderr
+        assert "published stable" in result.stderr
         assert not (repository / "manual-pypi-snapshot").exists()
         return
 
@@ -524,9 +548,6 @@ exit 0
     assert f"tag_object_sha={target_tag_sha}\n" in outputs
     assert f"target_commit_sha={target_commit_sha}\n" in outputs
 
-    import hashlib
-    import json
-
     snapshot = repository / "manual-pypi-snapshot"
     wheel = next(snapshot.glob("*.whl"))
     sdist = next(snapshot.glob("*.tar.gz"))
@@ -537,6 +558,8 @@ exit 0
     assert manifest["tag_object_sha"] == target_tag_sha
     assert manifest["tag_commit_sha"] == target_commit_sha
     assert manifest["repository"] == "buildben/example"
+    assert wheel.read_bytes() == (attachments / wheel.name).read_bytes()
+    assert sdist.read_bytes() == (attachments / sdist.name).read_bytes()
     assert manifest["packages"] == [
         {
             "filename": wheel.name,
@@ -1017,3 +1040,23 @@ def test_publish_pypi_uses_committed_policy_before_github(
     assert "workflow run release.yml --raw-field release_tag=v1.2.3" in (
         gh_log.read_text(encoding="utf-8")
     )
+
+
+@pytest.mark.parametrize("version", ["1.2.3b1", "1.2.3rc2"])
+def test_preview_requires_versioned_changelog_entry_without_toc(version: str) -> None:
+    markdown = sample_changelog(version=version)
+    assert release_notes.latest_release_version(markdown) == version
+    assert "tested release workflow" in release_notes.build_release_notes(
+        markdown, version
+    )
+    with pytest.raises(ValueError, match="must not appear"):
+        release_notes.build_release_notes(
+            sample_changelog(version=version, toc_entry=True), version
+        )
+
+
+def test_preview_order_allows_promoting_to_stable() -> None:
+    release_notes.validate_next_version("1.2.3b12", "1.2.3rc1")
+    release_notes.validate_next_version("1.2.3rc1", "1.2.3")
+    with pytest.raises(ValueError, match="must be newer"):
+        release_notes.validate_next_version("1.2.3", "1.2.3rc2")

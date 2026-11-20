@@ -526,25 +526,34 @@ patch releases while keeping their sections in the history. Update comparison
 reference definitions immediately after the TOC. Use existing tags only; do not
 invent links for tagless history.
 
-```bash
-just release-check
-just release patch
-```
-`just build-release-inputs` accepts an optional positional release-notes path:
+Use a dated changelog entry for each release. Beta versions end in `bN`,
+Pre-release versions end in `rcN`, and stable versions use the three numeric
+parts. A preview entry describes changes since the preceding release. A stable
+entry covers the changes since the previous stable release and links to that
+comparison as well as the preceding tag.
 
 ```bash
-just build-release-inputs release/prepared-notes.md
+just release-prepare 1.2.0rc1
+just release-stage-local v1.2.0rc1
+just release-push v1.2.0rc1
 ```
 
-Use this to reuse notes that have already been validated. The file must be
-outside `dist`, because the recipe rebuilds that directory. Omit the argument
-to generate notes from the changelog; either way, tag and version validation
-still runs.
+Preparation commits the version and creates its annotated tag. Local staging runs
+the full test suite on the minimum supported Python, builds the tagged files,
+and smoke-tests the exact bundle. `release-push` runs staging when needed and
+reuses unchanged files under `.cache/release-bundles/` after an interrupted
+upload. Use `just release 1.2.0rc1` to run preparation and publication in one
+command. Stable bump arguments such as `just release patch` also work.
 
-> [!WARNING]
-> `just release` creates the version commit and annotated tag, then atomically
-> pushes `main` and the tag. Use `just release-prepare patch` when you only want
-> the checked local commit and tag.
+A raw tag push starts source checks. The local release command creates the
+GitHub Release and uploads its files. GitHub Actions checks the uploaded
+artifacts. When committed `RELEASE_REQUIRE_CI` is `"true"`, publication waits
+for source CI on the exact tag. Otherwise, report hosted results separately
+from the required local checks.
+
+GitHub retains the three newest betas and the three newest release candidates.
+The Git tags and changelog entries remain available when older preview
+downloads are removed. GitHub keeps all stable releases.
 
 Manual PyPI publication is available only when both the current committed
 `justfile` and the target tag's committed `justfile` set

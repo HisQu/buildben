@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -15,6 +16,7 @@ import time
 import tomllib
 import zipfile
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Protocol
 
@@ -24,8 +26,9 @@ from .release_manifest import (
     checksum_bytes,
     expected_asset_names,
     validate_checksums,
+    validate_directory,
 )
-from .release_notes import validate_tag_version
+from .release_notes import VERSION_RE, release_channel, validate_tag_version
 
 SHA_RE = re.compile(r"^[0-9a-f]{40,64}$")
 RELEASES_PER_PAGE = 100
@@ -119,10 +122,8 @@ def _repository(value: str) -> str:
 
 
 def _tag(value: str) -> str:
-    if not re.fullmatch(
-        r"v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", value
-    ):
-        raise ReleaseError("Tag must be vMAJOR.MINOR.PATCH.")
+    if not value.startswith("v") or not VERSION_RE.fullmatch(value[1:]):
+        raise ReleaseError("Tag must be vMAJOR.MINOR.PATCH with optional bN or rcN.")
     return value
 
 
@@ -176,64 +177,61 @@ def _tag_commit(api: Api, identity: Identity) -> str:
     return commit
 
 
-def _release(api: Api, identity: Identity) -> dict[str, object]:
-    page = 1
+def _list_releases(api: Api, repository: str) -> list[dict[str, object]]:
+    releases: list[dict[str, object]] = []
     seen_ids: set[int] = set()
-    match: dict[str, object] | None = None
+    page = 1
     while True:
         endpoint = _endpoint(
-            identity.repository,
-            f"releases?per_page={RELEASES_PER_PAGE}&page={page}",
+            repository, f"releases?per_page={RELEASES_PER_PAGE}&page={page}"
         )
         result = _json(api, "GET", endpoint)
         if not isinstance(result, list) or len(result) > RELEASES_PER_PAGE:
             raise ReleaseError("GitHub release listing page is malformed.")
         for item in result:
-            if not isinstance(item, dict):
+            if not isinstance(item, dict) or not isinstance(item.get("tag_name"), str):
                 raise ReleaseError(
                     "GitHub release listing contains a malformed release."
                 )
-            tag_name = item.get("tag_name")
-            if not isinstance(tag_name, str):
-                raise ReleaseError(
-                    "GitHub release listing contains a malformed release."
-                )
-            release_id = item.get("id")
-            if (
-                not isinstance(release_id, int)
-                or isinstance(release_id, bool)
-                or release_id <= 0
-            ):
-                raise ReleaseError(
-                    "GitHub release listing contains an invalid identifier."
-                )
+            release_id = _release_id(item)
             if release_id in seen_ids:
                 raise ReleaseError("GitHub release listing repeats an identifier.")
             seen_ids.add(release_id)
-            if tag_name == identity.tag:
-                if match is not None:
-                    raise ReleaseError(
-                        f"GitHub release listing ambiguously identifies tag "
-                        f"{identity.tag}."
-                    )
-                match = item
+            releases.append(item)
         if len(result) < RELEASES_PER_PAGE:
-            break
+            return releases
         page += 1
+
+
+def _release(
+    api: Api, identity: Identity, *, allow_published: bool = False
+) -> dict[str, object]:
+    matches = [
+        item
+        for item in _list_releases(api, identity.repository)
+        if item["tag_name"] == identity.tag
+    ]
+    if len(matches) > 1:
+        raise ReleaseError(
+            f"GitHub release listing ambiguously identifies tag {identity.tag}."
+        )
+    match = matches[0] if matches else None
     if match is None:
         raise _ReleaseNotFound(f"No GitHub release exists for tag {identity.tag}.")
     if match.get("tag_name") != identity.tag:
         raise ReleaseError(
             f"GitHub release does not identify exact tag {identity.tag}."
         )
-    if match.get("draft") is not True:
+    if match.get("draft") is not True and not (
+        allow_published and match.get("draft") is False
+    ):
         raise ReleaseError(
             f"Release {identity.tag} is published; refusing to mutate it."
         )
     if match.get("target_commitish") != identity.commit:
         raise ReleaseError(f"Draft {identity.tag} has an inconsistent target commit.")
-    if match.get("prerelease") is not False:
-        raise ReleaseError(f"Draft {identity.tag} is marked as a prerelease.")
+    if match.get("prerelease") is not (release_channel(identity.tag[1:]) != "stable"):
+        raise ReleaseError(f"Draft {identity.tag} does not match its release channel.")
     return match
 
 
@@ -403,12 +401,23 @@ def _project_app_id(distribution: str) -> str:
     return value
 
 
+def _package_names(names: list[str]) -> tuple[str, ...]:
+    return tuple(name for name in names if name.endswith((".whl", ".tar.gz")))
+
+
 def _check_asset_names(names: list[str]) -> tuple[str, ...]:
     try:
-        return expected_asset_names(
-            names,
-            app_id=_project_app_id(_project()[0]),
-        )
+        for name in names:
+            asset_basename(name)
+        packages = _package_names(names)
+        if packages and (
+            len(packages) != 2 or sum(name.endswith(".whl") for name in packages) != 1
+        ):
+            raise ValueError("Release must contain one wheel and one source archive.")
+        native = [name for name in names if name not in packages]
+        if native or not packages:
+            expected_asset_names(native, app_id=_project_app_id(_project()[0]))
+        return tuple(sorted(names))
     except ValueError as error:
         raise ReleaseError(str(error)) from error
 
@@ -421,6 +430,8 @@ def _validate_local_files(
     expected_version: str | None = None,
 ) -> dict[str, bytes]:
     _check_asset_names(names)
+    if directory.is_symlink() or not directory.is_dir():
+        raise ReleaseError("Staging directory is missing or linked.")
     name, current_version = _project()
     version = current_version if expected_version is None else expected_version
     if identity.tag != f"v{version}":
@@ -434,9 +445,17 @@ def _validate_local_files(
         path = directory / filename
         if not path.is_file() or path.is_symlink():
             raise ReleaseError(f"Release asset is not a regular file: {filename}.")
+        if filename in _package_names(names):
+            _validate_package(path, name, version)
         payload[filename] = path.read_bytes()
     try:
-        validate_checksums(payload, app_id=_project_app_id(name))
+        native = {
+            key: value
+            for key, value in payload.items()
+            if key not in _package_names(names)
+        }
+        if native:
+            validate_checksums(native, app_id=_project_app_id(name))
     except ValueError as error:
         raise ReleaseError(str(error)) from error
     return payload
@@ -555,6 +574,7 @@ def prepare(
         raise ReleaseError("Release notes must be a regular file.")
     distribution, current_version = _project()
     version = identity.tag[1:]
+    channel = release_channel(version)
     validate_tag_version(identity.tag, current_version)
     _tag_commit(api, identity)
     try:
@@ -571,7 +591,7 @@ def prepare(
                 "name": f"{distribution} {version}",
                 "body": notes.read_text(encoding="utf-8"),
                 "draft": True,
-                "prerelease": False,
+                "prerelease": channel != "stable",
             },
         )
         if not isinstance(release, dict):
@@ -580,6 +600,8 @@ def prepare(
         raise ReleaseError("Prepared release is not the requested tag's draft.")
     if release.get("target_commitish") != identity.commit:
         raise ReleaseError("Draft release has an inconsistent target commit.")
+    if release.get("prerelease") is not (channel != "stable"):
+        raise ReleaseError("Prepared release does not match its release channel.")
     return release
 
 
@@ -600,7 +622,14 @@ def upload(
         release = _release(api, identity)
 
 
-def finalize(api: Api, repository: str, tag: str, commit: str) -> None:
+def finalize(
+    api: Api,
+    repository: str,
+    tag: str,
+    commit: str,
+    *,
+    expected: dict[str, bytes] | None = None,
+) -> None:
     """Validate the exact package/native-helper manifest, then publish its draft."""
     identity = Identity(_repository(repository), _tag(tag), _sha(commit))
     _tag_commit(api, identity)
@@ -614,6 +643,8 @@ def finalize(api: Api, repository: str, tag: str, commit: str) -> None:
             asset_basename(name, "GitHub asset name")
             (directory / name).write_bytes(_asset_bytes(api, identity, asset))
         files = _validate_local_files(directory, sorted(names), identity)
+        if expected is not None and files != expected:
+            raise ReleaseError("Draft assets do not match the local bundle.")
         if set(files) != names:
             raise ReleaseError("Draft asset set changed during finalization.")
     _tag_commit(api, identity)
@@ -621,9 +652,97 @@ def finalize(api: Api, repository: str, tag: str, commit: str) -> None:
         "PATCH",
         _endpoint(identity.repository, f"releases/{_release_id(release)}"),
         data=json.dumps(
-            {"draft": False, "prerelease": False}, separators=(",", ":")
+            {"draft": False, "prerelease": release_channel(tag[1:]) != "stable"},
+            separators=(",", ":"),
         ).encode(),
     )
+
+
+def _prune(api: Api, identity: Identity) -> None:
+    channel = release_channel(identity.tag[1:])
+    if channel == "stable":
+        return
+    previews: list[tuple[datetime, int, str]] = []
+    for release in _list_releases(api, identity.repository):
+        tag = release.get("tag_name")
+        if (
+            release.get("draft") is not False
+            or release.get("prerelease") is not True
+            or not isinstance(tag, str)
+            or not tag.startswith("v")
+            or not VERSION_RE.fullmatch(tag[1:])
+            or release_channel(tag[1:]) != channel
+        ):
+            continue
+        published = release.get("published_at")
+        if not isinstance(published, str):
+            raise ReleaseError(f"Preview {tag} has no publication timestamp.")
+        try:
+            timestamp = datetime.fromisoformat(published)
+        except ValueError as exc:
+            raise ReleaseError(
+                f"Preview {tag} has an invalid publication timestamp."
+            ) from exc
+        if timestamp.tzinfo is None:
+            raise ReleaseError(f"Preview {tag} has no publication timezone.")
+        previews.append((timestamp, _release_id(release), tag))
+    if len({tag for _, _, tag in previews}) != len(previews):
+        raise ReleaseError("Release listing contains duplicate preview tags.")
+    for timestamp, release_id, tag in sorted(previews, reverse=True)[3:]:
+        endpoint = _endpoint(identity.repository, f"releases/{release_id}")
+        current = _json(api, "GET", endpoint)
+        if (
+            not isinstance(current, dict)
+            or current.get("id") != release_id
+            or current.get("tag_name") != tag
+            or current.get("draft") is not False
+            or current.get("prerelease") is not True
+            or not isinstance(published := current.get("published_at"), str)
+            or datetime.fromisoformat(published) != timestamp
+        ):
+            raise ReleaseError(f"Preview {tag} changed during retention.")
+        # > Delete the release record only. Its Git tag remains in the repository.
+        api.request("DELETE", endpoint)
+
+
+def publish(
+    api: Api,
+    repository: str,
+    tag: str,
+    commit: str,
+    directory: Path,
+    notes: Path,
+) -> None:
+    """Publish the verified local bundle and resume safely after an interruption."""
+    identity = Identity(_repository(repository), _tag(tag), _sha(commit))
+    names = sorted(entry.name for entry in directory.iterdir())
+    files = _validate_local_files(directory, names, identity)
+    _tag_commit(api, identity)
+    try:
+        release = _release(api, identity, allow_published=True)
+    except _ReleaseNotFound:
+        release = prepare(api, repository, tag, commit, notes)
+    if release.get("draft") is False:
+        assets = _assets(release)
+        if set(assets) != set(files) or any(
+            _asset_bytes(api, identity, assets[name]) != data
+            for name, data in files.items()
+        ):
+            raise ReleaseError(
+                f"Published release {tag} conflicts with the local bundle."
+            )
+    else:
+        upload(api, repository, tag, commit, directory, names)
+        finalize(api, repository, tag, commit, expected=files)
+    print(f"GitHub release {tag} is published.")
+    try:
+        _prune(api, identity)
+    except (OSError, ReleaseError, ValueError) as exc:
+        print(
+            f"Warning: {tag} is published, but preview retention failed: {exc}",
+            file=sys.stderr,
+        )
+        print(f"Retry with: just release-push {tag}", file=sys.stderr)
 
 
 def wait_ci(
@@ -637,7 +756,7 @@ def wait_ci(
     clock=time.monotonic,
     sleep=time.sleep,
 ) -> int:
-    """Wait for the exact successful main-push or tag-dispatch CI run."""
+    """Wait for the exact successful tag CI run."""
     identity = Identity(_repository(repository), _tag(tag), _sha(commit))
     deadline = clock() + timeout
     run_id: int | None = None
@@ -671,7 +790,7 @@ def wait_ci(
             ):
                 continue
             allowed_push = (
-                run.get("event") == "push" and run.get("head_branch") == "main"
+                run.get("event") == "push" and run.get("head_branch") == identity.tag
             )
             allowed_dispatch = (
                 run.get("event") == "workflow_dispatch"
@@ -709,6 +828,95 @@ def wait_ci(
     return run_id
 
 
+def _release_dependency_state(revision: str) -> tuple[object, ...]:
+    """Read the dependency declarations with only the project version removed."""
+
+    def read_toml(path: str) -> dict[str, object]:
+        return tomllib.loads(
+            subprocess.check_output(["git", "show", f"{revision}:{path}"], text=True)
+        )
+
+    metadata = read_toml("pyproject.toml")
+    project = metadata.get("project")
+    if not isinstance(project, dict):
+        raise ReleaseError("Versioned project metadata is missing.")
+    project.pop("version", None)
+    lock = read_toml("uv.lock")
+    packages = lock.get("package")
+    if not isinstance(packages, list):
+        raise ReleaseError("uv.lock has no package list.")
+    for package in packages:
+        if (
+            isinstance(package, dict)
+            and package.get("name") == project.get("name")
+            and package.get("source") in ({"editable": "."}, {"virtual": "."})
+        ):
+            package.pop("version", None)
+    return metadata, lock, read_toml("pylock.toml")
+
+
+def require_rc_evidence(api: Api, identity: Identity) -> None:
+    """Require successful CI on the newest equivalent candidate from this cycle."""
+    if release_channel(identity.tag[1:]) != "stable":
+        raise ReleaseError("Candidate evidence applies only to a stable release.")
+    tags = subprocess.check_output(
+        ["git", "tag", "--merged", identity.commit, "--list", f"{identity.tag}rc*"],
+        text=True,
+    ).splitlines()
+    candidates = [
+        (int(match[2]), tag)
+        for tag in tags
+        if (match := VERSION_RE.fullmatch(tag[1:])) and match[1] == "rc"
+    ]
+    if not candidates:
+        raise ReleaseError("No release candidate exists for this stable version.")
+    _, tag = max(candidates)
+    commit = subprocess.check_output(
+        ["git", "rev-parse", f"refs/tags/{tag}^{{commit}}"], text=True
+    ).strip()
+    if subprocess.run(
+        [
+            "git",
+            "diff",
+            "--quiet",
+            commit,
+            identity.commit,
+            "--",
+            ".",
+            ":!CHANGELOG.md",
+            ":!pyproject.toml",
+            ":!uv.lock",
+            ":!pylock.toml",
+        ],
+        check=False,
+    ).returncode or _release_dependency_state(commit) != _release_dependency_state(
+        identity.commit
+    ):
+        raise ReleaseError(
+            "Source or dependencies changed since the release candidate."
+        )
+    candidate = Identity(identity.repository, tag, commit)
+    _tag_commit(api, candidate)
+    data = _json(
+        api,
+        "GET",
+        _endpoint(
+            identity.repository, f"actions/workflows/ci.yml/runs?head_sha={commit}"
+        ),
+    )
+    if isinstance(data, dict) and isinstance(runs := data.get("workflow_runs"), list):
+        for run in runs:
+            if (
+                isinstance(run, dict)
+                and run.get("head_sha") == commit
+                and run.get("head_branch") == tag
+                and run.get("event") in {"push", "workflow_dispatch"}
+                and run.get("conclusion") == "success"
+            ):
+                return
+    raise ReleaseError(f"No successful candidate CI found for {tag}.")
+
+
 def verify_pypi_packages(
     api: Api,
     repository: str,
@@ -718,12 +926,7 @@ def verify_pypi_packages(
     metadata: Path,
     directory: Path,
 ) -> tuple[str, ...]:
-    """Validate independently built wheel/sdist inputs for conditional PyPI use.
-
-    Native setup assets are published only to the GitHub Release. Python package
-    files remain ordinary build outputs and are supplied separately to this
-    verifier.
-    """
+    """Validate the stable release's captured wheel and source archive."""
     identity = Identity(_repository(repository), _tag(tag), _sha(commit))
     _tag_commit(api, identity)
     release = json.loads(metadata.read_bytes())
@@ -731,6 +934,8 @@ def verify_pypi_packages(
         not isinstance(release, dict)
         or release.get("tag_name") != tag
         or release.get("draft") is not False
+        or release.get("prerelease") is not False
+        or release_channel(identity.tag[1:]) != "stable"
     ):
         raise ReleaseError("Manual publication requires the exact non-draft release.")
     name, version = _project()
@@ -743,10 +948,144 @@ def verify_pypi_packages(
     sdists = tuple(path for path in entries if path.name.endswith(".tar.gz"))
     if len(entries) != 2 or len(wheels) != 1 or len(sdists) != 1:
         raise ReleaseError("PyPI input must contain exactly one wheel and one sdist.")
+    assets = _assets(release)
+    packages = {asset for asset in assets if asset.endswith((".whl", ".tar.gz"))}
+    if packages != {path.name for path in (*wheels, *sdists)}:
+        raise ReleaseError("PyPI input does not match the published package inventory.")
     for path in (*wheels, *sdists):
         _validate_package(path, name, version)
+        asset = assets[path.name]
+        digest = asset.get("digest")
+        content = path.read_bytes()
+        if isinstance(digest, str) and digest.startswith("sha256:"):
+            matches = digest[7:] == _sha256(content)
+        else:
+            matches = content == _asset_bytes(api, identity, asset)
+        if not matches:
+            raise ReleaseError(
+                f"PyPI input differs from the published asset: {path.name}"
+            )
     _tag_commit(api, identity)
     return tuple(sorted(path.name for path in entries))
+
+
+def smoke(
+    directory: Path,
+    identity: Identity,
+    *,
+    python: str,
+    previous: Path | None = None,
+) -> None:
+    """Install and invoke the actual published wheel or Linux setup."""
+    names = sorted(entry.name for entry in directory.iterdir())
+    _validate_local_files(directory, names, identity)
+    with Path("pyproject.toml").open("rb") as stream:
+        metadata = tomllib.load(stream)
+    distribution, _version = _project()
+    app_id = _project_app_id(distribution)
+    command = (
+        metadata.get("tool", {})
+        .get("apprc", {})
+        .get("distribution", {})
+        .get("command-name")
+    )
+    if not isinstance(command, str):
+        scripts = metadata["project"].get("scripts", {})
+        command = next(iter(scripts), None)
+    if not isinstance(command, str):
+        raise ReleaseError("Project has no command for the release smoke.")
+    asset_basename(command, "Project command name")
+    with tempfile.TemporaryDirectory(prefix="release-smoke-") as temporary:
+        root = Path(temporary)
+        environment = os.environ.copy()
+        for name in ("VIRTUAL_ENV", "UV_PROJECT", "UV_PROJECT_ENVIRONMENT"):
+            environment.pop(name, None)
+        for name, folder in (
+            ("HOME", "home"),
+            ("XDG_DATA_HOME", "data"),
+            ("XDG_CONFIG_HOME", "config"),
+            ("XDG_CACHE_HOME", "cache"),
+            ("XDG_STATE_HOME", "state"),
+            ("UV_TOOL_BIN_DIR", "bin"),
+            ("UV_TOOL_DIR", "uv-tools"),
+            ("TMPDIR", "tmp"),
+        ):
+            (root / folder).mkdir()
+            environment[name] = str(root / folder)
+        environment["PATH"] = os.pathsep.join(
+            (str(root / "bin"), environment.get("PATH", ""))
+        )
+
+        def run(arguments: list[str]) -> None:
+            subprocess.run(arguments, cwd=root, env=environment, check=True)
+
+        native_name = f"{app_id}-setup-linux-x86_64"
+        if native_name in names:
+            if previous is not None:
+                validate_directory(previous, app_id=app_id)
+            setups = [directory] if previous is None else [previous, directory]
+            for setup_dir in setups:
+                setup = (setup_dir / native_name).resolve()
+                setup.chmod(0o755)
+                run(
+                    [
+                        str(setup),
+                        "app",
+                        "install",
+                        "--yes",
+                        "--command-directory",
+                        str(root / "bin"),
+                    ]
+                )
+            installed = str(root / "bin" / command)
+            authority = root / "data" / app_id / "installation" / "installation.json"
+            record = json.loads(authority.read_bytes())
+            runtime = record.get("active_runtime")
+            if (
+                record.get("status") != "ready"
+                or not isinstance(runtime, dict)
+                or runtime.get("version") != identity.tag[1:]
+                or runtime.get("source", {}).get("commit") != identity.commit
+            ):
+                raise ReleaseError(
+                    "The native setup did not activate the tagged runtime."
+                )
+            run([installed, "--help"])
+            run([installed, "app", "uninstall", "--yes"])
+            deadline = time.monotonic() + 60
+            while True:
+                try:
+                    record = json.loads(authority.read_bytes())
+                except FileNotFoundError:
+                    record = None
+                if not os.path.lexists(installed) and (
+                    record is None
+                    or (
+                        record.get("status") == "removed-retained"
+                        and record.get("active_runtime") is None
+                    )
+                ):
+                    break
+                if time.monotonic() >= deadline:
+                    raise ReleaseError(
+                        "Native uninstall did not finish during the release smoke."
+                    )
+                time.sleep(0.25)
+        for name in _package_names(names):
+            if name.endswith(".whl"):
+                wheel = (directory / name).resolve()
+                run(["uv", "venv", "--python", python, str(root / "venv")])
+                run(
+                    [
+                        "uv",
+                        "pip",
+                        "install",
+                        "--python",
+                        str(root / "venv/bin/python"),
+                        str(wheel),
+                    ]
+                )
+                run([str(root / "venv/bin" / command), "--help"])
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -765,7 +1104,7 @@ def _parser() -> argparse.ArgumentParser:
     upload_parser.add_argument("--commit", required=True)
     upload_parser.add_argument("--directory", type=Path, required=True)
     upload_parser.add_argument("--files", nargs="+", required=True)
-    for verb in ("finalize", "wait-ci"):
+    for verb in ("finalize", "wait-ci", "rc-evidence"):
         item = subparsers.add_parser(verb)
         item.add_argument("--repository", required=True)
         item.add_argument("--tag", required=True)
@@ -780,6 +1119,19 @@ def _parser() -> argparse.ArgumentParser:
             item.add_argument("--files", nargs="+", required=True)
         elif verb == "verify-pypi":
             item.add_argument("--metadata", type=Path, required=True)
+    publish_parser = subparsers.add_parser("publish")
+    publish_parser.add_argument("--repository", required=True)
+    publish_parser.add_argument("--tag", required=True)
+    publish_parser.add_argument("--commit", required=True)
+    publish_parser.add_argument("--directory", type=Path, required=True)
+    publish_parser.add_argument("--notes", type=Path, required=True)
+    smoke_parser = subparsers.add_parser("smoke")
+    smoke_parser.add_argument("--repository", required=True)
+    smoke_parser.add_argument("--tag", required=True)
+    smoke_parser.add_argument("--commit", required=True)
+    smoke_parser.add_argument("--directory", type=Path, required=True)
+    smoke_parser.add_argument("--python", default="3.12")
+    smoke_parser.add_argument("--previous", type=Path)
     return parser
 
 
@@ -815,7 +1167,7 @@ def main(argv: list[str] | None = None, *, api: Api | None = None) -> int:
                 metadata=args.metadata,
                 directory=args.directory,
             )
-            print("Verified independently built wheel and sdist inputs.")
+            print("Verified the published wheel and sdist inputs.")
         elif args.command == "prepare":
             release = prepare(
                 client, args.repository, args.tag, args.commit, args.notes
@@ -829,6 +1181,27 @@ def main(argv: list[str] | None = None, *, api: Api | None = None) -> int:
                 args.commit,
                 args.directory,
                 args.files,
+            )
+        elif args.command == "publish":
+            publish(
+                client,
+                args.repository,
+                args.tag,
+                args.commit,
+                args.directory,
+                args.notes,
+            )
+        elif args.command == "smoke":
+            identity = Identity(
+                _repository(args.repository), _tag(args.tag), _sha(args.commit)
+            )
+            smoke(args.directory, identity, python=args.python, previous=args.previous)
+        elif args.command == "rc-evidence":
+            require_rc_evidence(
+                client,
+                Identity(
+                    _repository(args.repository), _tag(args.tag), _sha(args.commit)
+                ),
             )
         elif args.command == "finalize":
             finalize(client, args.repository, args.tag, args.commit)

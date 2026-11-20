@@ -17,7 +17,7 @@
 # Let recipes use Bash features and fail-fast in pipelines
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
-# Include PyPI in normal tag releases. Keep this policy in version control.
+# Include PyPI in stable releases. Keep this policy in version control.
 RELEASE_PYPI := "false"
 # Hosted CI is advisory during allowance outages; local tests remain required.
 RELEASE_REQUIRE_CI := "false"
@@ -519,8 +519,8 @@ build-python-packages:
 
 
 # Build and stage the two SDK-produced native setups.
-stage-release-assets tag commit:
-    PYTHONPATH=src uv run --locked --group dev python -m {my_project}_dev.packaging.release_stage {{quote(tag)}} {{quote(commit)}}
+stage-release-assets tag commit destination="release/assets":
+    PYTHONPATH=src uv run --locked --group dev python -m {my_project}_dev.packaging.release_stage {{quote(tag)}} {{quote(commit)}} --destination {{quote(destination)}}
 
 # Build standard wheel and sdist once without running the full source matrix.
 build-release-inputs notes_file="":
@@ -572,8 +572,8 @@ release-check:
         PROJECT_RELEASE_IN_PROGRESS=1 just release-check
         exit $?
     fi
-    for python_version in 3.12 3.13; do just _ci-check-python "$python_version" "$check_root/python-${python_version}/.venv"; done
-    just _release-artifact-check "$check_root/release-notes.md"
+    just _ci-check-python 3.12 "$check_root/python-3.12/.venv"
+    just _release-artifact-check "$check_root/release-notes.md" true
     if [[ "${PROJECT_RELEASE_IN_PROGRESS:-}" == 1 ]]; then
         echo "Local release rehearsal passed; nothing was published."
     else
@@ -586,14 +586,19 @@ release-prepare level="patch":
     set -euo pipefail
     just _check-uv
     just _check-clean-worktree "preparing the release"
-    next_version="$(uv version --bump "{{level}}" --dry-run --short)"
+    requested={{quote(level)}}
+    case "$requested" in
+        patch|minor|major) next_version="$(uv version --bump "$requested" --dry-run --short)" ;;
+        *) next_version="$requested" ;;
+    esac
+    PYTHONPATH=src python -c 'import sys; from {my_project}_dev.packaging.release_notes import validate_next_version; validate_next_version(*sys.argv[1:])' "$(uv version --short)" "$next_version"
     tag="v${next_version}"
     if git rev-parse --verify --quiet "refs/tags/${tag}" >/dev/null; then
         echo "Tag ${tag} already exists. Choose another release level." >&2
         exit 1
     fi
 
-    echo "Preparing ${tag} locally. Nothing will upload until you push main and ${tag}."
+    echo "Preparing ${tag} locally. Artifacts will be built before publishing."
     release_root="$(mktemp -d)"
     notes_file="$release_root/release-notes.md"
     restore_version_files=false
@@ -602,10 +607,9 @@ release-prepare level="patch":
     python src/{my_project}_dev/packaging/release_notes.py "$next_version" --output "$notes_file"
     cp pyproject.toml uv.lock pylock.toml "$release_root/"
     restore_version_files=true
-    uv version --bump "{{level}}" --no-sync
+    uv version "$next_version" --no-sync
     uv export -o pylock.toml --all-extras --all-groups --quiet
     uv lock --check
-    just _release-artifact-check "$notes_file"
     git commit --only pyproject.toml uv.lock pylock.toml -m "Bump version to ${next_version}"
     restore_version_files=false
     if ! git tag -a "$tag" -m "Release ${tag}"; then
@@ -625,21 +629,74 @@ release-prepare level="patch":
     echo
     echo "  just release-push ${tag}"
     echo
-    echo "GitHub will run CI, validate wheel and sdist artifacts, and create"
-    echo "the GitHub Release. PyPI follows RELEASE_PYPI in the tagged justfile."
+    echo "This builds and checks the local release bundle before uploading it."
     echo "================================================================="
 
-# Push a prepared release commit and tag as one remote operation.
+# Build or validate a commit-bound local release bundle without using GitHub.
+release-stage-local tag:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just _check-clean-worktree "staging the release"
+    tag={{quote(tag)}}
+    version="$(uv version --short)"
+    export PYTHONPATH=src
+    python -c 'import sys; from {my_project}_dev.packaging.release_notes import validate_tag_version; validate_tag_version(*sys.argv[1:])' "$tag" "$version"
+    git cat-file -e "refs/tags/${tag}^{tag}"
+    commit="$(git rev-parse --verify "refs/tags/${tag}^{commit}")"
+    [[ "$commit" == "$(git rev-parse HEAD)" ]] || { echo "Release tag must identify HEAD." >&2; exit 1; }
+    root=".cache/release-bundles"
+    bundle="$root/$tag"
+    identity=(--repository "$RELEASE_REPOSITORY" --tag "$tag" --commit "$commit")
+    if [[ -e "$bundle" || -L "$bundle" ]]; then
+        [[ -d "$bundle" && ! -L "$bundle" && "$(cat "$bundle/commit")" == "$commit" ]] || {
+            echo "Existing release bundle identifies different source." >&2
+            exit 1
+        }
+        (cd "$bundle"; sha256sum --check --strict bundle.sha256)
+        python -m {my_project}_dev.packaging.release_assets verify "${identity[@]}" --directory "$bundle/assets"
+        echo "Reusing verified bundle $bundle."
+        exit 0
+    fi
+    mkdir -p "$root"
+    stage="$(mktemp -d "$root/.stage.XXXXXXXX")"
+    trap 'rm -rf "$stage"' EXIT
+    mkdir -p "$stage/assets"
+    python -m {my_project}_dev.packaging.release_notes "$version" --tag "$tag" \
+        --project-version "$version" --output "$stage/release-notes.md"
+    just _ci-check-python 3.12 "$PWD/$stage/.venv"
+    rm -rf "$stage/.venv"
+    build_packages=false
+    if [[ -f "src/{my_project}_distr/make_artifacts.py" ]] && python -c 'import tomllib; from pathlib import Path; m=tomllib.loads(Path("pyproject.toml").read_text()); raise SystemExit(int("distribution" not in m.get("tool", {}).get("apprc", {})))'; then
+        just stage-release-assets "$tag" "$commit" "$stage/assets"
+        if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$(just _committed-release-pypi-policy "$tag")" == true ]]; then
+            build_packages=true
+        fi
+    else
+        build_packages=true
+    fi
+    if [[ "$build_packages" == true ]]; then
+        if [[ -f frontend/package.json ]]; then
+            uv run --locked --group dev python -m {my_project}_distr.make_artifacts \
+                --python-packages --revision "$commit" --output "$stage/assets"
+        else
+            uv build --python 3.12 --no-sources --no-build-logs --no-create-gitignore --out-dir "$stage/assets"
+        fi
+        uv run --with twine --no-project -- twine check "$stage/assets/"*.whl "$stage/assets/"*.tar.gz
+    fi
+    python -m {my_project}_dev.packaging.release_assets smoke "${identity[@]}" --directory "$stage/assets"
+    printf '%s\n' "$commit" > "$stage/commit"
+    (cd "$stage"; sha256sum commit release-notes.md assets/* > bundle.sha256)
+    mv -T -- "$stage" "$bundle"
+    echo "Verified local bundle $bundle."
+
+# Build, check, and publish the prepared release from local artifacts.
 release-push tag:
     #!/usr/bin/env bash
     set -euo pipefail
     just _check-clean-worktree "pushing the release"
-    tag="{{ tag }}"
+    tag={{quote(tag)}}
 
-    if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-        echo "Invalid release tag '${tag}'; expected vMAJOR.MINOR.PATCH." >&2
-        exit 1
-    fi
+    channel="$(PYTHONPATH=src python -c 'import sys; from {my_project}_dev.packaging.release_assets import _tag, release_channel; print(release_channel(_tag(sys.argv[1])[1:]))' "$tag")"
     if [[ "$(git branch --show-current)" != "main" ]]; then
         echo "Release pushes must run from the main branch." >&2
         exit 1
@@ -654,20 +711,37 @@ release-push tag:
     fi
     release_pypi="$(just _committed-release-pypi-policy "$tag")"
 
+    commit="$(git rev-parse --verify "refs/tags/${tag}^{commit}")"
+    bundle=".cache/release-bundles/$tag"
+    just _check-gh
+    just release-stage-local "$tag"
     echo "Pushing main and ${tag} atomically. RELEASE_PYPI=${release_pypi}."
     if ! git push --atomic origin refs/heads/main:refs/heads/main "refs/tags/${tag}:refs/tags/${tag}"; then
         echo "The remote push failed. The release remains prepared locally." >&2
         echo "Retry with: just release-push ${tag}" >&2
         exit 1
     fi
-    echo "GitHub Actions will create the release. This command does not wait for it."
-    if [[ "$release_pypi" == "true" ]]; then
-        echo "If PyPI publication needs a retry, run: just publish-pypi ${tag}"
-    else
+    policy_file="$(mktemp)"
+    trap 'rm -f "$policy_file"' EXIT
+    git show "$commit:justfile" > "$policy_file"
+    committed_ci="$(just --no-dotenv --justfile "$policy_file" --evaluate RELEASE_REQUIRE_CI)"
+    identity=(--repository "$RELEASE_REPOSITORY" --tag "$tag" --commit "$commit")
+    export PYTHONPATH=src
+    if [[ "$committed_ci" == "true" ]]; then
+        python -m {my_project}_dev.packaging.release_assets wait-ci "${identity[@]}"
+    elif [[ "$committed_ci" != "false" ]]; then
+        echo "Invalid committed RELEASE_REQUIRE_CI: $committed_ci" >&2
+        exit 1
+    fi
+    python -m {my_project}_dev.packaging.release_assets publish "${identity[@]}" \
+        --directory "$bundle/assets" --notes "$bundle/release-notes.md"
+    if [[ "$channel" == stable && "$release_pypi" == true ]]; then
+        just publish-pypi "$tag"
+    elif [[ "$release_pypi" == false ]]; then
         echo "PyPI publication is disabled by RELEASE_PYPI in the tagged justfile."
     fi
 
-# Prepare and push a release. GitHub Actions owns artifact publication.
+# Prepare and publish a release using a locally checked bundle.
 release level="patch":
     #!/usr/bin/env bash
     set -euo pipefail

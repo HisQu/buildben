@@ -14,7 +14,6 @@ from rich.text import Text
 from apprc.definition.installation import EditableCheckout, RuntimeSlot
 from apprc.distribution.metadata import read_project_metadata
 from <my_project>.config.app import APP_RC
-from <my_project>.installation import INSTALLATION_HOOKS
 from <my_project>_distr.make_artifacts import distribution_spec
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,12 +44,11 @@ def _environment(tmp_path: Path) -> dict[str, str]:
     return environment
 
 
-def test_native_declaration_uses_installed_hooks() -> None:
-    """Keep command identity and typed hooks aligned across authoring/runtime."""
+def test_native_declaration_uses_app_identity() -> None:
+    """Keep the native setup bound to the installed application identity."""
     metadata = read_project_metadata(ROOT)
     spec = distribution_spec(ROOT, metadata)
     assert metadata.command_name == metadata.identity.commands[0]
-    assert spec.hooks == INSTALLATION_HOOKS
     assert (
         spec.metadata.identity.apprc_reference
         == "<my_project>.config.app:APP_RC"

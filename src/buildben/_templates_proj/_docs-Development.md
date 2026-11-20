@@ -203,8 +203,8 @@ application correctness, all quota types, or future quota availability.
 
 ## Native application authoring
 
-The application declaration and typed `InstallationHooks` live in the installed
-package under `src/{my_project}/`. The separate
+Keep lifecycle providers under `src/{my_project}/`. Declare their importable
+references once in `[tool.apprc.distribution.hooks]` in `pyproject.toml`. The separate
 `src/{my_project}_distr/actions.py` contains distribution build actions; it is
 not imported as an installed application hook.
 
@@ -263,7 +263,7 @@ category. Include only curated changes with a notable user or contributor effect
 omit routine internal refactors and test-only work.
 
 Add a table-of-contents entry only for a major/minor `X.Y.0` release; omit
-patch releases while keeping their sections in the history. Update comparison
+patch and preview releases while keeping their sections in the history. Update comparison
 reference definitions immediately after the TOC. Use existing tags only; do not
 invent links for tagless history.
 
@@ -279,33 +279,34 @@ git commit -m "Lock project dependencies"
 The CI and release workflows use `uv sync --locked`, so they intentionally
 fail when the committed lock no longer matches `pyproject.toml`.
 
-`just release-check` is the explicit full local rehearsal. The normal
-`release-prepare` path performs fast release validation, updates the locked
-version/export files, builds the wheel and sdist, and validates them; it does
-not run the full rehearsal or browser suite.
+Use a dated changelog entry for each release. Beta versions end in `bN`,
+Pre-release versions end in `rcN`, and stable versions use the three numeric
+parts. A preview entry describes changes since the preceding release. A stable
+entry covers the changes since the previous stable release and links to that
+comparison as well as the preceding tag.
 
 ```bash
-just release-check
+just release-prepare 1.2.0rc1
+just release-stage-local v1.2.0rc1
+just release-push v1.2.0rc1
 ```
 
-Run normal release preparation and push:
+Preparation commits the version and creates its annotated tag. Local staging runs
+the full test suite on the minimum supported Python, builds the tagged files,
+and smoke-tests the exact bundle. `release-push` runs staging when needed and
+reuses unchanged files under `.cache/release-bundles/` after an interrupted
+upload. Use `just release 1.2.0rc1` to run preparation and publication in one
+command. Stable bump arguments such as `just release patch` also work.
 
-```bash
-just release patch
-```
+A raw tag push starts source checks. The local release command creates the
+GitHub Release and uploads its files. GitHub Actions checks the uploaded
+artifacts. When committed `RELEASE_REQUIRE_CI` is `"true"`, publication waits
+for source CI on the exact tag. Otherwise, report hosted results separately
+from the required local checks.
 
-> [!WARNING]
-> `just release` creates the version commit and annotated tag, then atomically
-> pushes `main` and the tag. It returns after the push without waiting for
-> GitHub Actions.
-
-The tag workflow builds the Python wheel/sdist through the private locked-source
-preparation, then uses AppRC to produce the two native setup files and
-`SHA256SUMS`. Only native files are uploaded as GitHub Release assets;
-wheel/sdist publication remains governed separately by `RELEASE_PYPI`.
-`RELEASE_REQUIRE_CI` controls whether a release waits for hosted CI. When it is
-`false`, a passing full local test suite is still required before merge/release;
-report hosted CI status separately.
+GitHub retains the three newest betas and the three newest release candidates.
+The Git tags and changelog entries remain available when older preview
+downloads are removed. GitHub keeps all stable releases.
 
 Native authoring runs with the pinned Rust and cross-compilation toolchain.
 Windows setup output is not executed on Linux. No generated Python installer,
@@ -328,7 +329,7 @@ validated release notes:
 just build-release-inputs release/prepared-notes.md
 ```
 
-Keep the supplied file outside `dist`, which the recipe rebuilds. Omit the
+Keep the supplied file outside the generated package directory. Omit the
 argument to generate notes from the changelog. Tag and version validation runs
 in either case.
 
@@ -347,21 +348,15 @@ before setting it to `"true"`.
 > Edit and commit this setting before the release. Shell variables and
 > `just --set` overrides are not stored in the tag and cannot select PyPI.
 
-To stop after creating the checked local commit and tag, run the steps
-separately:
-
-```bash
-just release-prepare patch
-just release-push vMAJOR.MINOR.PATCH
-```
+To stop after creating the checked local commit and tag, run preparation on its own.
 
 Manual publication and retries require `RELEASE_PYPI := "true"` in both the
 current committed `justfile` and the target tag's committed `justfile`. The
 manual workflow applies that check to its selected workflow ref and target
 tag. If both policies are true and a GitHub Release already exists, the
-workflow validates separately built wheel/sdist inputs against the selected
-tag version and publishes only those two Python packages to PyPI. Native setup
-files remain GitHub Release assets and never enter PyPI publication.
+workflow captures the attached wheel and source archive, verifies their bytes
+and tagged version, and publishes those files to PyPI. Native setup files
+remain GitHub Release assets.
 
 The preflight detects a tag update or deletion during asset capture. Preventing
 an administrator from changing or deleting the tag while preflight is running

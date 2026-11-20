@@ -8,9 +8,10 @@ from collections.abc import Sequence
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-VERSION_RE = re.compile(r"^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$")
+VERSION_PATTERN = r"(?:0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*)){2}(?:(b|rc)([1-9][0-9]*))?"
+VERSION_RE = re.compile(VERSION_PATTERN)
 RELEASE_HEADING_RE = re.compile(
-    r"^## \[(?P<version>\d+\.\d+\.\d+)\] - "
+    rf"^## \[(?P<version>{VERSION_PATTERN})\] - "
     r"(?P<date>\d{4}-\d{2}-\d{2})(?P<yanked> \[YANKED\])?$",
     re.MULTILINE,
 )
@@ -56,15 +57,22 @@ def build_release_notes(
 
 
 def validate_version(version: str) -> None:
-    """Reject identifiers outside Buildben's three-part version scheme.
+    """Reject identifiers outside Buildben's stable and preview version schemes.
 
     :param version: Candidate version without a leading ``v``.
     :return: None.
     """
-    if VERSION_RE.fullmatch(version) is None:
+    _version_match(version)
+
+
+def _version_match(version: str) -> re.Match[str]:
+    match = VERSION_RE.fullmatch(version)
+    if match is None:
         raise ValueError(
-            f"Invalid release version {version!r}; expected MAJOR.MINOR.PATCH."
+            f"Invalid release version {version!r}; expected MAJOR.MINOR.PATCH "
+            "with optional bN or rcN."
         )
+    return match
 
 
 def validate_tag_version(tag: str, project_version: str) -> None:
@@ -83,6 +91,24 @@ def validate_tag_version(tag: str, project_version: str) -> None:
         )
 
 
+def release_channel(version: str) -> str:
+    """Return the release channel for a canonical project version."""
+    match = _version_match(version)
+    return {None: "stable", "b": "beta", "rc": "pre-release"}[match[1]]
+
+
+def _version_key(version: str) -> tuple[int, ...]:
+    """Order betas before candidates and candidates before stable."""
+    match = _version_match(version)
+    base = version[: match.start(1)] if match[1] else version
+    precedence = {"b": 0, "rc": 1, None: 2}
+    return (
+        *(int(part) for part in base.split(".")),
+        precedence[match[1]],
+        int(match[2] or 0),
+    )
+
+
 def validate_next_version(current_version: str, next_version: str) -> None:
     """Require a prepared changelog release to advance project metadata.
 
@@ -92,9 +118,7 @@ def validate_next_version(current_version: str, next_version: str) -> None:
     """
     validate_version(current_version)
     validate_version(next_version)
-    current_key = tuple(int(part) for part in current_version.split("."))
-    next_key = tuple(int(part) for part in next_version.split("."))
-    if next_key <= current_key:
+    if _version_key(next_version) <= _version_key(current_version):
         raise ValueError(
             f"Prepared release {next_version!r} must be newer than the "
             f"current project version {current_version!r}."
@@ -112,7 +136,7 @@ def latest_release_version(markdown: str) -> str:
         raise ValueError("Changelog has no versioned release heading.")
     return max(
         (match.group("version") for match in matches),
-        key=lambda value: tuple(int(part) for part in value.split(".")),
+        key=_version_key,
     )
 
 
@@ -204,7 +228,7 @@ def _validate_toc_entry(markdown: str, match: re.Match[str]) -> None:
         )
     if not version.endswith(".0") and occurrences:
         raise ValueError(
-            f"Patch release {version} must not appear in the table of contents."
+            f"Patch or preview release {version} must not appear in the table of contents."
         )
 
 

@@ -1116,6 +1116,93 @@ def test_scaffolded_release_push_updates_main_and_tag_together(
     assert missing_tag.returncode != 0
     assert "Annotated local tag v0.1.1 does not exist" in missing_tag.stderr
 
+    from support_release import write_release_fixture
+
+    tag = "v0.1.0"
+    commit = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=proot, text=True
+    ).strip()
+    bundle = proot / ".cache" / "release-bundles" / tag
+    assets = bundle / "assets"
+    assets.mkdir(parents=True)
+    names = write_release_fixture(
+        assets,
+        app_id="bube_test_tmp",
+        distribution="bube_test_tmp",
+        version=tag[1:],
+        commit=commit,
+    )
+    (bundle / "commit").write_text(commit + "\n", encoding="utf-8")
+    (bundle / "release-notes.md").write_text(
+        "Fixture release notes\n", encoding="utf-8"
+    )
+    import hashlib
+
+    (bundle / "bundle.sha256").write_text(
+        "".join(
+            f"{hashlib.sha256((bundle / name).read_bytes()).hexdigest()}  {name}\n"
+            for name in (
+                "commit",
+                "release-notes.md",
+                *(f"assets/{name}" for name in names),
+            )
+        ),
+        encoding="utf-8",
+    )
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_gh = fake_bin / "gh"
+    fake_gh.write_text(
+        f"""#!{sys.executable}
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+from urllib.parse import urlsplit
+
+if sys.argv[1:] == ["auth", "status"]:
+    sys.exit(0)
+assert sys.argv[1] == "api"
+method = sys.argv[sys.argv.index("--method") + 1]
+endpoint = urlsplit(sys.argv[-1]).path
+directory = Path(os.environ["FIXTURE_RELEASE_ASSETS"])
+files = sorted(directory.iterdir())
+state = Path(os.environ["FIXTURE_RELEASE_STATE"])
+if endpoint.endswith("/git/ref/tags/v0.1.0"):
+    tag_sha = subprocess.check_output(
+        ["git", "--git-dir", os.environ["FIXTURE_REMOTE"], "rev-parse", "refs/tags/v0.1.0"],
+        text=True,
+    ).strip()
+    print(json.dumps({{"object": {{"type": "tag", "sha": tag_sha}}}}))
+elif "/git/tags/" in endpoint:
+    print(json.dumps({{"object": {{"type": "commit", "sha": os.environ["FIXTURE_COMMIT"]}}}}))
+elif "/releases/assets/" in endpoint:
+    sys.stdout.buffer.write(files[int(endpoint.rsplit("/", 1)[1]) - 1].read_bytes())
+elif endpoint.endswith("/releases") and method == "GET":
+    release = {{
+        "id": 1, "tag_name": "v0.1.0", "draft": False, "prerelease": False,
+        "target_commitish": os.environ["FIXTURE_COMMIT"],
+        "assets": [{{"id": i, "name": f.name}} for i, f in enumerate(files, 1)],
+    }}
+    state.write_text("verified published release")
+    print(json.dumps([release]))
+else:
+    raise AssertionError((method, endpoint))
+""",
+        encoding="utf-8",
+    )
+    fake_gh.chmod(0o755)
+    release_state = tmp_path / "release-state"
+    env.update(
+        {
+            "PATH": os.pathsep.join((str(fake_bin), env.get("PATH", ""))),
+            "FIXTURE_COMMIT": commit,
+            "FIXTURE_REMOTE": str(remote),
+            "FIXTURE_RELEASE_ASSETS": str(assets),
+            "FIXTURE_RELEASE_STATE": str(release_state),
+        }
+    )
     release_push = subprocess.run(
         ["just", "--set", "RELEASE_PYPI", "true", "release-push", "v0.1.0"],
         cwd=proot,
@@ -1124,6 +1211,7 @@ def test_scaffolded_release_push_updates_main_and_tag_together(
         text=True,
         capture_output=True,
     )
+    assert release_state.read_text() == "verified published release"
     assert "PyPI publication is disabled by RELEASE_PYPI" in release_push.stdout
     assert "publish-pypi" not in release_push.stdout
     _run(

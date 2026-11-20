@@ -27,18 +27,18 @@ wheels = [{ url = "https://files.pythonhosted.org/packages/da/35/f2287558c17e29f
 
 [[packages]]
 name = "apprc"
-version = "0.34.0"
-vcs = { type = "git", url = "https://github.com/HisQu/apprc.git", requested-revision = "153f97c5eb56779f1ca4c478e2e944d54ba5c625", commit-id = "153f97c5eb56779f1ca4c478e2e944d54ba5c625", subdirectory = "src/apprc_dev/packaging/terminal" }
+version = "0.39.0"
+vcs = { type = "git", url = "https://github.com/HisQu/apprc.git", requested-revision = "55d7130c886f400bff2610ae1b8521a85e6cb395", commit-id = "55d7130c886f400bff2610ae1b8521a85e6cb395", subdirectory = "src/apprc_dev/packaging/terminal" }
 
 [[packages]]
 name = "apprc-core"
-version = "0.34.0"
-vcs = { type = "git", url = "https://github.com/HisQu/apprc.git", requested-revision = "153f97c5eb56779f1ca4c478e2e944d54ba5c625", commit-id = "153f97c5eb56779f1ca4c478e2e944d54ba5c625" }
+version = "0.39.0"
+vcs = { type = "git", url = "https://github.com/HisQu/apprc.git", requested-revision = "55d7130c886f400bff2610ae1b8521a85e6cb395", commit-id = "55d7130c886f400bff2610ae1b8521a85e6cb395" }
 
 [[packages]]
 name = "apprc-gui"
-version = "0.34.0"
-vcs = { type = "git", url = "https://github.com/HisQu/apprc.git", requested-revision = "153f97c5eb56779f1ca4c478e2e944d54ba5c625", commit-id = "153f97c5eb56779f1ca4c478e2e944d54ba5c625", subdirectory = "src/apprc_dev/packaging/gui" }
+version = "0.39.0"
+vcs = { type = "git", url = "https://github.com/HisQu/apprc.git", requested-revision = "55d7130c886f400bff2610ae1b8521a85e6cb395", commit-id = "55d7130c886f400bff2610ae1b8521a85e6cb395", subdirectory = "src/apprc_dev/packaging/gui" }
 
 [[packages]]
 name = "audioop-lts"
@@ -1131,10 +1131,10 @@ wheels = [{ url = "https://files.pythonhosted.org/packages/e9/52/c293cdd51731f23
 
 [[packages]]
 name = "typer"
-version = "0.26.3"
+version = "0.29.2"
 index = "https://pypi.org/simple"
-sdist = { url = "https://files.pythonhosted.org/packages/cc/15/f5fc7be23b7196bc065b282d9589a372392fb10860c80f9c1dd7eb008662/typer-0.26.3.tar.gz", upload-time = 2026-05-28T20:30:50Z, size = 198326, hashes = { sha256 = "3e2b9352f535e5303ef27806dadc2c8647687bdca5c902f03fec3fb88f46a46a" } }
-wheels = [{ url = "https://files.pythonhosted.org/packages/cd/cc/c6c5dea061e2740355bfeef22ac6a41751bd2f3903e83921295569bdcec4/typer-0.26.3-py3-none-any.whl", upload-time = 2026-05-28T20:30:49Z, size = 122338, hashes = { sha256 = "e70549ec5a403ca8a0bf0802ddd9f3c6ff7a14ccbb859b01b697baa943636f33" } }]
+sdist = { url = "https://files.pythonhosted.org/packages/bf/21/37383ece7d0a4995fb8ea97729207c4292b3ff94085002f37b2387063cfb/typer-0.29.2.tar.gz", upload-time = 2026-11-18T11:09:46Z, size = 205728, hashes = { sha256 = "b1998dc5f2c3dedafa1517a9521fa944cc4dc1fadcea085d81a3b10ebcaeb075" } }
+wheels = [{ url = "https://files.pythonhosted.org/packages/62/f3/864dcb0e165b52e9f75aa3c7e0aeeb9876f139c66eb14d87856bb173b0fa/typer-0.29.2-py3-none-any.whl", upload-time = 2026-11-18T11:09:45Z, size = 121041, hashes = { sha256 = "f30731f8ca758368b836b3714872e58e395cef8fcaff918c853b1969ed5274e7" } }]
 
 [[packages]]
 name = "typing-extensions"

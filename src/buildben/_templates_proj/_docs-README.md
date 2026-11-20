@@ -75,8 +75,8 @@ package descriptions. Contributors and coding agents must follow them.
   optional `--revision`; document `just check-artifacts` as read-only
   declaration and checksum validation. Both final outputs and intermediates
   must match the native authoring contract.
-- Keep application `InstallationHooks` in the installed package. Authored
-  distribution build actions are not installed lifecycle hooks.
+- Keep application lifecycle providers in the installed package and declare
+  them in `[tool.apprc.distribution.hooks]`.
 - Keep ordinary wheel/sdist packaging and the existing conditional PyPI policy
   independent from native setup generation.
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import dataclasses
 import hashlib
 import importlib
 import shutil
@@ -33,7 +32,7 @@ TARGETS: tuple[NativeTarget, ...] = (
 def distribution_spec(
     root: Path, metadata: ProjectMetadata
 ) -> DistributionSpec:
-    """Read the SDK declaration and require installed capabilities and hooks."""
+    """Read the SDK declaration and check the installed capabilities."""
     spec = read_distribution_spec(root)
     if spec.metadata != metadata:
         raise ValueError(
@@ -47,15 +46,7 @@ def distribution_spec(
         raise ValueError(
             "APP_RC capabilities differ from pyproject declaration."
         )
-    hooks_module = importlib.import_module(
-        f"{module_name.split('.', 1)[0]}.installation"
-    )
-    hooks = getattr(hooks_module, "INSTALLATION_HOOKS")
-    if hooks != spec.hooks:
-        raise ValueError(
-            "Installed INSTALLATION_HOOKS differ from pyproject hooks."
-        )
-    return dataclasses.replace(spec, hooks=hooks)
+    return spec
 
 
 def _uv_executable() -> Path:
