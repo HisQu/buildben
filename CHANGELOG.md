@@ -24,16 +24,17 @@ This changelog follows Keep a Changelog 2.0.0 and Semantic Versioning 2.0.0.
 
 1. [Buildben Changelog](#buildben-changelog)
 2. [\[Unreleased\]](#unreleased)
-3. [\[0.13.0\] - 2026-11-11](#0130---2026-11-11)
-4. [\[0.11.0\] - 2026-10-21](#0110---2026-10-21)
-5. [\[0.10.0\] - 2026-10-21](#0100---2026-10-21)
-6. [\[0.9.0\] - 2026-09-28](#090---2026-09-28)
-7. [\[0.8.0\] - 2026-09-28](#080---2026-09-28)
-8. [\[0.7.0\] - 2026-09-07](#070---2026-09-07)
-9. [\[0.6.0\] - 2026-08-31](#060---2026-08-31)
-10. [\[0.5.0\] - 2026-08-31](#050---2026-08-31)
-11. [\[0.4.0\] - 2026-07-03](#040---2026-07-03)
-12. [\[0.3.0\] - 2026-07-01](#030---2026-07-01)
+3. [\[0.14.0\] - 2026-11-20](#0140---2026-11-20)
+4. [\[0.13.0\] - 2026-11-11](#0130---2026-11-11)
+5. [\[0.11.0\] - 2026-10-21](#0110---2026-10-21)
+6. [\[0.10.0\] - 2026-10-21](#0100---2026-10-21)
+7. [\[0.9.0\] - 2026-09-28](#090---2026-09-28)
+8. [\[0.8.0\] - 2026-09-28](#080---2026-09-28)
+9. [\[0.7.0\] - 2026-09-07](#070---2026-09-07)
+10. [\[0.6.0\] - 2026-08-31](#060---2026-08-31)
+11. [\[0.5.0\] - 2026-08-31](#050---2026-08-31)
+12. [\[0.4.0\] - 2026-07-03](#040---2026-07-03)
+13. [\[0.3.0\] - 2026-07-01](#030---2026-07-01)
 
 <br>
 
@@ -41,7 +42,8 @@ This changelog follows Keep a Changelog 2.0.0 and Semantic Versioning 2.0.0.
 
 <br>
 
-[Unreleased]: https://github.com/HisQu/buildben/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/HisQu/buildben/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/HisQu/buildben/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/HisQu/buildben/compare/v0.11.3...v0.13.0
 [0.11.3]: https://github.com/HisQu/buildben/compare/v0.11.2...v0.11.3
 [0.11.2]: https://github.com/HisQu/buildben/compare/v0.11.1...v0.11.2
@@ -69,6 +71,40 @@ This changelog follows Keep a Changelog 2.0.0 and Semantic Versioning 2.0.0.
 
 - Publish Beta and Pre-release builds from local artifacts, with three rolling
   downloads per channel and permanent changelog entries.
+
+<br>
+
+### 🛠️ Changed
+
+<br>
+
+### 🗑️ Deprecated
+
+<br>
+
+### 🔥 Removed
+
+<br>
+
+### 🐛 Fixed
+
+<br>
+
+### 🔒 Security
+
+<br>
+
+---
+
+<br>
+
+<!-- ======================================================== -->
+
+## [0.14.0] - 2026-11-20
+
+<br>
+
+### ✨ Added
 
 - Add opt-in `init-proj NAME --frontend react` scaffolding with project-local
   React, TypeScript, Vite, Bun lockfile, ESLint, and Vitest component testing.
@@ -102,22 +138,6 @@ This changelog follows Keep a Changelog 2.0.0 and Semantic Versioning 2.0.0.
 - Pin authoring and generated projects to the immutable AppRC cutover source,
   while keeping Buildben's argparse business CLI and empty runtime dependency
   list. Normal pip installation remains independent of AppRC.
-
-<br>
-
-### 🗑️ Deprecated
-
-<br>
-
-### 🔥 Removed
-
-<br>
-
-### 🐛 Fixed
-
-<br>
-
-### 🔒 Security
 
 <br>
 
