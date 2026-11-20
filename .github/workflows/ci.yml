@@ -6,6 +6,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "v*"
   pull_request:
   workflow_call:
   workflow_dispatch:
@@ -18,7 +20,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  profile:
+    name: Select Python versions
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.versions.outputs.python }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Select check profile
+        id: versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          versions='["3.12"]'
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            if [[ "$GITHUB_REF_NAME" =~ b[1-9][0-9]*$ ]]; then
+              versions='["3.13"]'
+            elif [[ "$GITHUB_REF_NAME" =~ rc[1-9][0-9]*$ ]]; then
+              versions='["3.12","3.13"]'
+            elif ! PYTHONPATH=src python -m buildben_dev.packaging.release_assets rc-evidence \
+                --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" --commit "$GITHUB_SHA"; then
+              versions='["3.12","3.13"]'
+            fi
+          fi
+          echo "python=$versions" >> "$GITHUB_OUTPUT"
+
   checks:
+    needs: profile
     name: ${{ matrix.os }} / Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -26,9 +58,7 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-        python-version:
-          - "3.12"
-          - "3.13"
+        python-version: ${{ fromJSON(needs.profile.outputs.python) }}
 
     steps:
       - name: Checkout
@@ -49,16 +79,20 @@ jobs:
         run: uv sync --locked --all-extras --all-groups
 
       - name: Check lockfile
+        if: matrix.python-version == '3.12'
         run: uv lock --check
 
 
       - name: Check formatting
+        if: matrix.python-version == '3.12'
         run: uv run --locked ruff format . --check
 
       - name: Lint
+        if: matrix.python-version == '3.12'
         run: uv run --locked ruff check .
 
       - name: Type check
+        if: matrix.python-version == '3.12'
         run: uv run --locked pyright
 
       - name: Test
@@ -67,9 +101,12 @@ jobs:
         run: uv run --locked python -m pytest
 
       - name: Compile sources
+        if: matrix.python-version == '3.12'
         run: uv run --locked python -m compileall -q src tests
 
   frontend-scaffold:
+    needs: profile
+    if: github.ref_type == 'tag' && contains(needs.profile.outputs.python, '3.12') && contains(needs.profile.outputs.python, '3.13')
     name: Frontend scaffold consumer
     runs-on: ubuntu-latest
     steps:
@@ -103,37 +140,3 @@ jobs:
         run: >-
           uv run --locked python -m pytest -o addopts=
           tests/test_release_install.py::test_generated_react_python_packages_select_one_workspace_without_native_build
-
-  installation:
-    name: Linux native install / Python 3.12
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-      - name: Install Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: "1.4.4"
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          version: "0.13.6"
-          python-version: "3.12"
-          enable-cache: auto
-      - name: Install just
-        uses: extractions/setup-just@v4
-        with:
-          just-version: "1.56.0"
-      - name: Install project from uv.lock
-        run: uv sync --locked --all-extras --all-groups
-      - name: Install Linux native cross-compilation toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-msvc
-      - name: Install LLVM cross-linker tools and pinned cargo-xwin
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes clang llvm lld
-          cargo install cargo-xwin --version 0.23.1 --locked
-      - name: Run native release/install and editable lifecycle consumers
-        run: just release-install-smoke

@@ -24,6 +24,7 @@ def stage_release(
     repository: str = REPOSITORY,
     extras: tuple[str, ...] = (),
     targets: tuple[NativeTarget, ...] = TARGETS,
+    destination: Path | None = None,
 ) -> tuple[str, ...]:
     """Build the committed snapshot and copy only validated native release assets."""
     root = root.resolve()
@@ -39,7 +40,7 @@ def stage_release(
         raise ValueError("Release tag does not match project metadata.")
     built = build_artifacts(root, revision=commit, extras=extras, targets=targets)
     names = tuple(path.name for path in built)
-    destination = root / "release" / "assets"
+    destination = destination or root / "release" / "assets"
     if destination.is_symlink():
         raise ValueError("Release staging directory cannot be linked.")
     destination.mkdir(parents=True, exist_ok=True)
@@ -64,6 +65,7 @@ def main() -> None:
     parser.add_argument("commit")
     parser.add_argument("--repository", default=REPOSITORY)
     parser.add_argument("--extra", action="append", default=[])
+    parser.add_argument("--destination", type=Path)
     arguments = parser.parse_args()
     print(
         "\n".join(
@@ -73,6 +75,7 @@ def main() -> None:
                 root=Path.cwd(),
                 repository=arguments.repository,
                 extras=tuple(arguments.extra),
+                destination=arguments.destination,
             )
         )
     )

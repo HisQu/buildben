@@ -35,6 +35,9 @@ class StatefulReleaseApi:
 
     def __init__(self) -> None:
         self.commit = COMMIT
+        self.tag = TAG
+        self.other_releases: dict[int, dict[str, object]] = {}
+        self.deleted_releases: list[int] = []
         self.release: dict[str, object] | None = None
         self.deleted: list[str] = []
         self.assets: dict[int, tuple[str, bytes]] = {}
@@ -64,14 +67,15 @@ class StatefulReleaseApi:
     ) -> bytes:
         parsed = urlsplit(endpoint)
         path = parsed.path
-        if path.endswith(f"/git/ref/tags/{TAG}"):
+        if path.endswith(f"/git/ref/tags/{self.tag}"):
             return json.dumps({"object": {"type": "tag", "sha": TAG_OBJECT}}).encode()
         if path.endswith(f"/git/tags/{TAG_OBJECT}"):
             return json.dumps(
                 {"object": {"type": "commit", "sha": self.commit}}
             ).encode()
         if path.endswith("/releases") and method == "GET" and "page=1" in parsed.query:
-            return json.dumps([self._body()] if self.release else []).encode()
+            entries = [self._body()] if self.release else []
+            return json.dumps(entries + list(self.other_releases.values())).encode()
         if path.endswith("/releases") and method == "POST":
             payload = json.loads(data or b"{}")
             self.release = {"id": 22, **payload}
@@ -100,7 +104,16 @@ class StatefulReleaseApi:
         if path.endswith("/releases/22") and method == "PATCH":
             assert self.release is not None
             self.release.update(json.loads(data or b"{}"))
+            self.release["published_at"] = "2026-01-10T00:00:00Z"
             return json.dumps(self._body()).encode()
+        if "/releases/" in path:
+            release_id = int(path.rsplit("/", 1)[1])
+            if method == "GET":
+                return json.dumps(self.other_releases[release_id]).encode()
+            if method == "DELETE":
+                self.deleted_releases.append(release_id)
+                del self.other_releases[release_id]
+                return b"{}"
         raise AssertionError(f"Unexpected API request: {method} {endpoint}")
 
     def watch_ci(self, repository: str, run_id: int) -> int:
@@ -426,12 +439,14 @@ def test_manual_pypi_uses_separate_wheel_and_sdist_inputs(
     assert api.release is not None
     api.release["draft"] = False
     metadata = tmp_path / "github-release.json"
-    metadata.write_text(json.dumps(api._body()), encoding="utf-8")
     package_directory = tmp_path / "pypi"
     package_directory.mkdir()
     package_names = write_package_pair(
         package_directory, distribution=PROJECT["name"], version=VERSION
     )
+    for offset, name in enumerate(package_names, start=100):
+        api.assets[offset] = (name, (package_directory / name).read_bytes())
+    metadata.write_text(json.dumps(api._body()), encoding="utf-8")
     (package_directory / ".gitignore").write_text("*\n", encoding="utf-8")
     assert release_assets.verify_pypi_packages(
         api,
@@ -556,3 +571,54 @@ def test_native_checksum_inventory_accepts_only_final_setup_assets(
     with pytest.raises(ValueError, match="SHA-256"):
         release_manifest.validate_directory(tmp_path, app_id=app_id, exact=True)
     assert changed.read_bytes() == b"tampered setup"
+
+
+@pytest.mark.parametrize(("suffix", "other"), [("b", "rc"), ("rc", "b")])
+def test_preview_publish_retries_and_prunes_only_its_channel(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, suffix: str, other: str
+) -> None:
+    version = f"2.0.0{suffix}4"
+    monkeypatch.setattr(release_assets, "_project", lambda: (PROJECT["name"], version))
+    api = StatefulReleaseApi()
+    api.tag = f"v{version}"
+    notes = tmp_path / "notes.md"
+    notes.write_text("Preview notes", encoding="utf-8")
+    directory = tmp_path / "assets"
+    directory.mkdir()
+    names = write_release_fixture(
+        directory,
+        app_id=PROJECT["name"],
+        distribution=PROJECT["name"],
+        version=version,
+        commit=COMMIT,
+    )
+    for release_id, tag, draft, prerelease in (
+        (1, f"v2.0.0{suffix}1", False, True),
+        (2, f"v2.0.0{suffix}2", False, True),
+        (3, f"v2.0.0{suffix}3", False, True),
+        (4, f"v2.0.0{other}1", False, True),
+        (5, f"v2.0.0{suffix}5", True, True),
+        (6, "v1.9.0", False, False),
+        (7, "preview-legacy", False, True),
+    ):
+        api.other_releases[release_id] = {
+            "id": release_id,
+            "tag_name": tag,
+            "draft": draft,
+            "prerelease": prerelease,
+            "published_at": f"2026-01-{release_id:02d}T00:00:00Z",
+        }
+
+    api.fail_upload_name = names[-1]
+    with pytest.raises(release_assets.ReleaseError, match="Injected upload"):
+        release_assets.publish(api, "HisQu/buildben", api.tag, COMMIT, directory, notes)
+    assert api.deleted_releases == []
+
+    api.fail_upload_name = None
+    for _ in range(2):
+        release_assets.publish(api, "HisQu/buildben", api.tag, COMMIT, directory, notes)
+    assert api.release is not None and api.release["prerelease"] is True
+    assert api.release["draft"] is False
+    assert api.created == 1
+    assert api.deleted_releases == [1]
+    assert set(api.other_releases) == {2, 3, 4, 5, 6, 7}
