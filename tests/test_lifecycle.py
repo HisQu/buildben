@@ -292,37 +292,36 @@ def test_editable_repair_leaves_environment_management_to_uv(
     _assert_checkout_retained(consumer)
 
 
-def test_editable_uninstall_retains_checkout_environment_and_user_data(
+def test_editable_uninstall_retains_checkout_environment_and_config(
     consumer: Consumer, tmp_path: Path
 ) -> None:
-    """Remove only owned integrations, then reconnect retained resource placement."""
+    """Remove managed program and data while keeping the selected config and checkout."""
     _succeeded(consumer.register())
     record = consumer.record()
-    appdata = Path(record["placement"]["appdata_dir"])
-    data = appdata / "user-data.txt"
-    data.write_bytes(b"retain application data\n")
-    unknown = consumer.directory / "unknown-user-file"
-    unknown.write_bytes(b"do not sweep installation children\n")
+    data = Path(record["placement"]["appdata_dir"]) / "managed-data.txt"
+    data.write_bytes(b"remove managed application data\n")
+    config = Path(record["placement"]["config_dir"]) / "config-note.txt"
+    config.write_bytes(b"keep user configuration\n")
+    old_support_file = consumer.directory / "old-installation-support"
+    old_support_file.write_bytes(b"retire installation contents\n")
     unrelated = Path(consumer.environment["UV_TOOL_BIN_DIR"]) / "unrelated-command"
     unrelated.write_bytes(b"not an AppRC integration\n")
-    removed = consumer.run("app", "uninstall", "--yes", cwd=tmp_path)
+    removed = consumer.run("app", "uninstall", "--yes", "--keep-config", cwd=tmp_path)
     _succeeded(removed)
-    retained = consumer.record()
-    assert retained["status"] == "removed-retained"
-    assert retained["active_runtime"] is None
-    assert retained["operation"] is None
     assert not os.path.lexists(consumer.global_command)
-    assert data.read_bytes() == b"retain application data\n"
-    assert unknown.read_bytes() == b"do not sweep installation children\n"
+    assert not data.exists()
+    assert not old_support_file.exists()
+    assert config.read_bytes() == b"keep user configuration\n"
     assert unrelated.read_bytes() == b"not an AppRC integration\n"
     _assert_checkout_retained(consumer)
     _succeeded(consumer.register())
     assert consumer.record()["placement"] == record["placement"]
+    assert config.read_bytes() == b"keep user configuration\n"
     shown = consumer.run("config", "show", "--json")
     _succeeded(shown)
 
 
-def test_installed_consumer_hooks_initialize_and_purge_exact_owned_data(
+def test_installed_consumer_hooks_initialize_and_remove_managed_data(
     consumer: Consumer, tmp_path: Path
 ) -> None:
     """Run installed providers before removing integrations, never the developer env."""
@@ -334,38 +333,12 @@ def test_installed_consumer_hooks_initialize_and_purge_exact_owned_data(
             import sys
             from pathlib import Path
 
-            import apprc as rc
-            from apprc.definition.installation import CleanupInventory, InventoryEntry
-            from apprc.distribution.runtime.controllers import default_cleanup_inventory
-            from apprc.user_files.app_home.writes import file_revision
-
             def initialize(context):
                 root = context.placement.appdata_dir
                 assert root is not None
                 marker = root / "consumer-owned.txt"
                 if not marker.exists():
                     marker.write_bytes(b"initialized by installed provider")
-
-            def inventory(inspection, categories, forget_retained):
-                base = default_cleanup_inventory(
-                    inspection, categories=categories, forget_retained=True
-                )
-                entries, retained = list(base.entries), list(base.retained)
-                root = inspection.record.placement.appdata_dir
-                if "appdata" in categories and root is not None:
-                    marker = root / "consumer-owned.txt"
-                    entries.append(
-                        InventoryEntry(marker, "file", file_revision(marker), "appdata")
-                    )
-                    unknown = set(root.iterdir()) - {
-                        marker, root / ".apprc-owner.json"
-                    }
-                    if unknown and not forget_retained:
-                        raise rc.InstallationError("Unknown appdata is not owned.")
-                    if not unknown:
-                        retained = [item for item in retained if item.path != root]
-                        entries.append(InventoryEntry(root, "directory", None, "appdata"))
-                return CleanupInventory(tuple(entries), tuple(retained))
 
             def cleanup(context):
                 sentinel = Path(os.environ["LIFECYCLE_ENV_SENTINEL"])
@@ -375,11 +348,6 @@ def test_installed_consumer_hooks_initialize_and_purge_exact_owned_data(
                     encoding="utf-8",
                 )
 
-            INSTALLATION_HOOKS = rc.InstallationHooks(
-                initialize="lifecycle_consumer.installation:initialize",
-                inventory="lifecycle_consumer.installation:inventory",
-                cleanup="lifecycle_consumer.installation:cleanup",
-            )
             '''),
         encoding="utf-8",
     )
@@ -388,7 +356,6 @@ def test_installed_consumer_hooks_initialize_and_purge_exact_owned_data(
         stream.write(
             "\n[tool.apprc.distribution.hooks]\n"
             'initialize = "lifecycle_consumer.installation:initialize"\n'
-            'inventory = "lifecycle_consumer.installation:inventory"\n'
             'cleanup = "lifecycle_consumer.installation:cleanup"\n'
         )
     log = tmp_path / "provider-cleanup.log"
@@ -403,16 +370,7 @@ def test_installed_consumer_hooks_initialize_and_purge_exact_owned_data(
     marker.write_bytes(b"preserve later application changes")
     _succeeded(consumer.register())
     assert marker.read_bytes() == b"preserve later application changes"
-    removed = consumer.run(
-        "app",
-        "uninstall",
-        "--complete",
-        "--category",
-        "config",
-        "--category",
-        "appdata",
-        "--yes",
-    )
+    removed = consumer.run("app", "uninstall", "--yes")
     _succeeded(removed)
     assert log.read_text(encoding="utf-8").splitlines() == [
         str((consumer.root / ".venv").resolve()),

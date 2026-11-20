@@ -1012,6 +1012,9 @@ def smoke(
         ):
             (root / folder).mkdir()
             environment[name] = str(root / folder)
+        environment["PATH"] = os.pathsep.join(
+            (str(root / "bin"), environment.get("PATH", ""))
+        )
 
         def run(arguments: list[str]) -> None:
             subprocess.run(arguments, cwd=root, env=environment, check=True)
