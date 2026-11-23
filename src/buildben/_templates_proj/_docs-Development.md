@@ -279,11 +279,13 @@ git commit -m "Lock project dependencies"
 The CI and release workflows use `uv sync --locked`, so they intentionally
 fail when the committed lock no longer matches `pyproject.toml`.
 
-Use a dated changelog entry for each release. Beta versions end in `bN`,
-Pre-release versions end in `rcN`, and stable versions use the three numeric
-parts. A preview entry describes changes since the preceding release. A stable
-entry covers the changes since the previous stable release and links to that
-comparison as well as the preceding tag.
+Keep one cumulative section per target version. Start with
+`## [1.2.0] - YYYY-MM-DD (b1)` for `1.2.0b1`, update the same heading and entries
+for `rc1`, then remove the stage marker for stable. Use one beta and one release
+candidate by default, with `b2` or `rc2` available when a fix needs another
+public test. Move release entries out of `[Unreleased]` before tagging. Each
+GitHub Release snapshots the changes that ship since the previous stable
+version. Link stable entries to that comparison.
 
 ```bash
 just release-prepare 1.2.0rc1

@@ -1006,6 +1006,60 @@ def test_scaffolded_project_includes_project_changelog(
     assert "{bb_today}" not in changelog_text
 
 
+def test_scaffolded_release_helper_extracts_cumulative_beta_notes(
+    bube_test_project: Path, tmp_path: Path
+) -> None:
+    """Generate the exact beta's GitHub notes with the scaffolded helper."""
+    changelog = (bube_test_project / "CHANGELOG.md").read_text(encoding="utf-8")
+    initial = re.search(r"^## \[0\.1\.0\] - ", changelog, re.MULTILINE)
+    assert initial is not None
+    unreleased_start = changelog.index("## [Unreleased]")
+    categories = re.findall(
+        r"^### .+$", changelog[unreleased_start : initial.start()], re.MULTILINE
+    )
+    empty_unreleased = "\n\n".join(("## [Unreleased]", *categories))
+    target_notes = (
+        "## [0.2.0] - 2026-11-23 (b2)\n\n"
+        "### ✨ Added\n\n- Introduce Preview installs.\n\n"
+        "### 🐛 Fixed\n\n- Fix a preview update issue.\n\n"
+    )
+    prepared = tmp_path / "CHANGELOG.md"
+    prepared.write_text(
+        changelog[:unreleased_start]
+        + empty_unreleased
+        + "\n\n"
+        + target_notes
+        + changelog[initial.start() :],
+        encoding="utf-8",
+    )
+    notes = tmp_path / "notes.md"
+    helper = bube_test_project / "src/bube_test_tmp_dev/packaging/release_notes.py"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(helper),
+            "0.2.0b2",
+            "--changelog",
+            str(prepared),
+            "--tag",
+            "v0.2.0b2",
+            "--project-version",
+            "0.2.0b2",
+            "--output",
+            str(notes),
+        ],
+        cwd=bube_test_project,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert notes.read_text(encoding="utf-8") == (
+        "## ✨ Added\n\n- Introduce Preview installs.\n\n"
+        "## 🐛 Fixed\n\n- Fix a preview update issue.\n"
+    )
+
+
 def test_scaffold_copy_preserves_active_pass_artifacts(tmp_path: Path) -> None:
     """Keep active pass artifacts unchanged when copying scaffold templates."""
     import buildben.init_proj as scaffolder

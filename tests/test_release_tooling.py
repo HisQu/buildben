@@ -1055,6 +1055,36 @@ def test_preview_requires_versioned_changelog_entry_without_toc(version: str) ->
         )
 
 
+def test_cumulative_release_notes_follow_the_prepared_stage() -> None:
+    notes = release_notes
+    heading = "## [1.2.3] - 2026-08-31"
+    original = sample_changelog(release_entry="- Introduce Preview installs.")
+    beta = original.replace(heading, f"{heading} (b1)")
+    beta2 = beta.replace("(b1)", "(b2)").replace(
+        "- Introduce Preview installs.",
+        "- Introduce Preview installs.\n- Fix a preview update issue.",
+    )
+    candidate = beta2.replace("(b2)", "(rc1)")
+    stable = candidate.replace(" (rc1)", "")
+    assert notes.build_release_notes(beta, "1.2.3b1") == (
+        "## ✨ Added\n\n- Introduce Preview installs.\n"
+    )
+    cumulative = notes.build_release_notes(beta2, "1.2.3b2")
+    assert cumulative == (
+        "## ✨ Added\n\n- Introduce Preview installs.\n- Fix a preview update issue.\n"
+    )
+    assert notes.build_release_notes(candidate, "1.2.3rc1") == cumulative
+    assert notes.build_release_notes(stable, "1.2.3") == cumulative
+    assert notes.latest_release_version(beta2) == "1.2.3b2"
+    assert notes.latest_release_version(candidate) == "1.2.3rc1"
+
+    with pytest.raises(ValueError, match="exactly one release heading"):
+        notes.build_release_notes(beta2, "1.2.3b1")
+    duplicate = beta2.replace("## [1.2.2] - 2026-08-30", f"{heading} (b1)")
+    with pytest.raises(ValueError, match="one cumulative heading"):
+        notes.build_release_notes(duplicate, "1.2.3b2")
+
+
 def test_preview_order_allows_promoting_to_stable() -> None:
     release_notes.validate_next_version("1.2.3b12", "1.2.3rc1")
     release_notes.validate_next_version("1.2.3rc1", "1.2.3")
