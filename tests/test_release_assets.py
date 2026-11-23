@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import os
 import shutil
@@ -573,12 +574,31 @@ def test_native_checksum_inventory_accepts_only_final_setup_assets(
     assert changed.read_bytes() == b"tampered setup"
 
 
-@pytest.mark.parametrize(("suffix", "other"), [("b", "rc"), ("rc", "b")])
+@pytest.mark.parametrize("scaffold", (False, True))
+@pytest.mark.parametrize(
+    ("suffix", "other", "expired"),
+    [("b", "rc", [3, 2, 1]), ("rc", "b", [1])],
+)
 def test_preview_publish_retries_and_prunes_only_its_channel(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, suffix: str, other: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    scaffold: bool,
+    suffix: str,
+    other: str,
+    expired: list[int],
 ) -> None:
+    publisher = release_assets
+    if scaffold:
+        module = copy_release_tooling(
+            tmp_path,
+            Path(__file__).resolve().parents[1],
+            scaffold=True,
+            package=f"retention_{suffix}_dev",
+        )
+        monkeypatch.syspath_prepend(str(tmp_path / "src"))
+        publisher = importlib.import_module(module)
     version = f"2.0.0{suffix}4"
-    monkeypatch.setattr(release_assets, "_project", lambda: (PROJECT["name"], version))
+    monkeypatch.setattr(publisher, "_project", lambda: (PROJECT["name"], version))
     api = StatefulReleaseApi()
     api.tag = f"v{version}"
     notes = tmp_path / "notes.md"
@@ -611,14 +631,14 @@ def test_preview_publish_retries_and_prunes_only_its_channel(
 
     api.fail_upload_name = names[-1]
     with pytest.raises(release_assets.ReleaseError, match="Injected upload"):
-        release_assets.publish(api, "HisQu/buildben", api.tag, COMMIT, directory, notes)
+        publisher.publish(api, "HisQu/buildben", api.tag, COMMIT, directory, notes)
     assert api.deleted_releases == []
 
     api.fail_upload_name = None
     for _ in range(2):
-        release_assets.publish(api, "HisQu/buildben", api.tag, COMMIT, directory, notes)
+        publisher.publish(api, "HisQu/buildben", api.tag, COMMIT, directory, notes)
     assert api.release is not None and api.release["prerelease"] is True
     assert api.release["draft"] is False
     assert api.created == 1
-    assert api.deleted_releases == [1]
-    assert set(api.other_releases) == {2, 3, 4, 5, 6, 7}
+    assert api.deleted_releases == expired
+    assert set(api.other_releases) == set(range(1, 8)) - set(expired)

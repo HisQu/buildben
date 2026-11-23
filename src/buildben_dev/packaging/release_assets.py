@@ -688,7 +688,8 @@ def _prune(api: Api, identity: Identity) -> None:
         previews.append((timestamp, _release_id(release), tag))
     if len({tag for _, _, tag in previews}) != len(previews):
         raise ReleaseError("Release listing contains duplicate preview tags.")
-    for timestamp, release_id, tag in sorted(previews, reverse=True)[3:]:
+    keep = 1 if channel == "beta" else 3
+    for timestamp, release_id, tag in sorted(previews, reverse=True)[keep:]:
         endpoint = _endpoint(identity.repository, f"releases/{release_id}")
         current = _json(api, "GET", endpoint)
         if (

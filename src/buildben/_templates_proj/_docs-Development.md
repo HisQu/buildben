@@ -255,17 +255,17 @@ macOS filesystem behavior; use a separately authorized native runner.
 
 ## Releases
 
-`CHANGELOG.md` is the complete release history and source for GitHub Release notes. Prepare
-released headings as `## [VERSION] - YYYY-MM-DD`; append `[YANKED]` only for a yanked release.
+`CHANGELOG.md` supplies GitHub Release notes. Use
+`## [VERSION] - YYYY-MM-DD` for stable releases. Append `[YANKED]` only for a
+yanked release.
 Keep all six category headings under `[Unreleased]`, even when empty, and omit empty
 categories in released sections. Use `**Breaking:** 💥` inline under the entry's actual
 category. Include only curated changes with a notable user or contributor effect;
 omit routine internal refactors and test-only work.
 
-Add a table-of-contents entry only for a major/minor `X.Y.0` release; omit
-patch and preview releases while keeping their sections in the history. Update comparison
-reference definitions immediately after the TOC. Use existing tags only; do not
-invent links for tagless history.
+Add a table-of-contents entry only for a stable major/minor `X.Y.0` release.
+Place comparison reference definitions immediately after the TOC and use
+existing tags.
 
 
 Before the first push, create and commit the generated dependency files:
@@ -280,12 +280,13 @@ The CI and release workflows use `uv sync --locked`, so they intentionally
 fail when the committed lock no longer matches `pyproject.toml`.
 
 Keep one cumulative section per target version. Start with
-`## [1.2.0] - YYYY-MM-DD (b1)` for `1.2.0b1`, update the same heading and entries
-for `rc1`, then remove the stage marker for stable. Use one beta and one release
-candidate by default, with `b2` or `rc2` available when a fix needs another
-public test. Move release entries out of `[Unreleased]` before tagging. Each
-GitHub Release snapshots the changes that ship since the previous stable
-version. Link stable entries to that comparison.
+`## [1.2.0] - YYYY-MM-DD (b1)` for `1.2.0b1`. Update the date, stage, and
+entries in that section for each preview, then remove the stage marker for
+stable. Plan one beta and one release candidate per target version. Use `b2`
+or `rc2` when a fix needs another public test. Move release entries out of
+`[Unreleased]` before tagging. Each GitHub Release snapshots the changes
+that ship since the previous stable version. Use existing tags to link the
+cumulative section to that comparison.
 
 ```bash
 just release-prepare 1.2.0rc1
@@ -306,9 +307,10 @@ artifacts. When committed `RELEASE_REQUIRE_CI` is `"true"`, publication waits
 for source CI on the exact tag. Otherwise, report hosted results separately
 from the required local checks.
 
-GitHub retains the three newest betas and the three newest release candidates.
-The Git tags and changelog entries remain available when older preview
-downloads are removed. GitHub keeps all stable releases.
+Publishing a beta keeps only the latest published beta on GitHub. Publishing
+a release candidate keeps the latest three published release candidates.
+Pruning removes the older GitHub Releases and their downloads. Their Git tags
+preserve the original changelog snapshots. All stable releases stay available.
 
 Native authoring runs with the pinned Rust and cross-compilation toolchain.
 Windows setup output is not executed on Linux. No generated Python installer,

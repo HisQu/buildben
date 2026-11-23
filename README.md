@@ -527,11 +527,12 @@ reference definitions immediately after the TOC. Use existing tags only; do not
 invent links for tagless history.
 
 Keep one cumulative section per target version. Start with
-`## [1.2.0] - YYYY-MM-DD (b1)` for `1.2.0b1`, update the same heading and entries
-for `rc1`, then remove the stage marker for stable. Use one beta and one release
-candidate by default, with `b2` or `rc2` available when a fix needs another
-public test. Each GitHub Release snapshots the changes that ship since the
-previous stable version. Link stable entries to that comparison.
+`## [1.2.0] - YYYY-MM-DD (b1)` for `1.2.0b1`. Update the date, stage, and
+entries in that section for each preview, then remove the stage marker for
+stable. Plan one beta and one release candidate per target version. Use `b2`
+or `rc2` when a fix needs another public test. Each GitHub Release snapshots
+the changes that ship since the previous stable version. Use existing tags
+to link the cumulative section to that comparison.
 
 ```bash
 just release-prepare 1.2.0rc1
@@ -552,9 +553,10 @@ artifacts. When committed `RELEASE_REQUIRE_CI` is `"true"`, publication waits
 for source CI on the exact tag. Otherwise, report hosted results separately
 from the required local checks.
 
-GitHub retains the three newest betas and the three newest release candidates.
-The Git tags and changelog entries remain available when older preview
-downloads are removed. GitHub keeps all stable releases.
+Publishing a beta keeps only the latest published beta on GitHub. Publishing
+a release candidate keeps the latest three published release candidates.
+Pruning removes the older GitHub Releases and their downloads. Their Git tags
+preserve the original changelog snapshots. All stable releases stay available.
 
 Manual PyPI publication is available only when both the current committed
 `justfile` and the target tag's committed `justfile` set
