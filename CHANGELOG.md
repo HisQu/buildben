@@ -70,8 +70,8 @@ This changelog follows Keep a Changelog 2.0.0 and Semantic Versioning 2.0.0.
 ### ✨ Added
 
 - Publish Beta and Pre-release builds from local artifacts with cumulative
-  notes for each target version. Keep the latest beta and the latest three
-  release-candidate downloads for Buildben and newly scaffolded projects.
+  notes for each target version. Buildben and newly scaffolded projects keep
+  one published beta and one published release candidate per repository.
 
 <br>
 

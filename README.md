@@ -553,8 +553,9 @@ artifacts. When committed `RELEASE_REQUIRE_CI` is `"true"`, publication waits
 for source CI on the exact tag. Otherwise, report hosted results separately
 from the required local checks.
 
-Publishing a beta keeps only the latest published beta on GitHub. Publishing
-a release candidate keeps the latest three published release candidates.
+GitHub keeps the latest published beta and the latest published release
+candidate per repository. Publishing a new beta or release candidate prunes
+older releases in the same channel across target versions.
 Pruning removes the older GitHub Releases and their downloads. Their Git tags
 preserve the original changelog snapshots. All stable releases stay available.
 

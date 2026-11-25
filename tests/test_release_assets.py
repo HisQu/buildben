@@ -575,17 +575,13 @@ def test_native_checksum_inventory_accepts_only_final_setup_assets(
 
 
 @pytest.mark.parametrize("scaffold", (False, True))
-@pytest.mark.parametrize(
-    ("suffix", "other", "expired"),
-    [("b", "rc", [3, 2, 1]), ("rc", "b", [1])],
-)
+@pytest.mark.parametrize(("suffix", "other"), [("b", "rc"), ("rc", "b")])
 def test_preview_publish_retries_and_prunes_only_its_channel(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     scaffold: bool,
     suffix: str,
     other: str,
-    expired: list[int],
 ) -> None:
     publisher = release_assets
     if scaffold:
@@ -615,7 +611,7 @@ def test_preview_publish_retries_and_prunes_only_its_channel(
     for release_id, tag, draft, prerelease in (
         (1, f"v2.0.0{suffix}1", False, True),
         (2, f"v2.0.0{suffix}2", False, True),
-        (3, f"v2.0.0{suffix}3", False, True),
+        (3, f"v1.9.0{suffix}1", False, True),
         (4, f"v2.0.0{other}1", False, True),
         (5, f"v2.0.0{suffix}5", True, True),
         (6, "v1.9.0", False, False),
@@ -640,5 +636,5 @@ def test_preview_publish_retries_and_prunes_only_its_channel(
     assert api.release is not None and api.release["prerelease"] is True
     assert api.release["draft"] is False
     assert api.created == 1
-    assert api.deleted_releases == expired
-    assert set(api.other_releases) == set(range(1, 8)) - set(expired)
+    assert api.deleted_releases == [3, 2, 1]
+    assert set(api.other_releases) == {4, 5, 6, 7}
