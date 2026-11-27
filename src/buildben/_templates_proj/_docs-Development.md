@@ -2,11 +2,13 @@
 
 [Documentation](README.md) · [Explanations](Explanations.md) · [How-to user guides](How-To-User-Guides.md) · [References](References.md) · [Examples](EXAMPLES.md)
 
-Read [Contributing](../CONTRIBUTING.md) for shared expectations, the normal setup
-and checks, and submission guidance. This page explains the deeper procedures.
+Read [Contributing](../CONTRIBUTING.md) for the contribution workflow and shared repository rules. This page covers setup, checks, and detailed technical procedures.
 
 - [Work in the project](#work-in-the-project)
+  - [Set up development](#set-up-development)
+  - [Run checks](#run-checks)
   - [Maintainer environment](#maintainer-environment)
+  - [GitHub repository setup](#github-repository-setup)
   - [Use Git worktrees](#use-git-worktrees)
   - [Repository routing](#repository-routing)
 - [Document the project](#document-the-project)
@@ -26,9 +28,69 @@ and checks, and submission guidance. This page explains the deeper procedures.
 
 # Work in the project
 
+## Set up development
+
+From the project root, use Python 3.12 or newer. Dependency groups require pip
+25.1 or newer; upgrade pip inside the virtual environment before installing.
+
+### For Linux & macOS
+
+```shell
+python -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -e "." --group dev
+```
+
+### For Windows PowerShell
+
+```powershell
+py -m venv .venv
+& '.\.venv\Scripts\python.exe' -m pip install --upgrade pip
+& '.\.venv\Scripts\python.exe' -m pip install -e "." --group dev
+```
+
+This path does not require uv. The [maintainer environment](#maintainer-environment)
+guide covers uv, optional extras, and dependency declarations.
+
+## Run checks
+
+Run checks from the project root using the development environment.
+
+### For Linux & macOS
+
+```shell
+.venv/bin/ruff format --check .
+.venv/bin/ruff check .
+.venv/bin/pyright
+.venv/bin/python -m pytest
+```
+
+### For Windows PowerShell
+
+```powershell
+& '.\.venv\Scripts\ruff.exe' format --check .
+& '.\.venv\Scripts\ruff.exe' check .
+& '.\.venv\Scripts\pyright.exe'
+& '.\.venv\Scripts\python.exe' -m pytest
+```
+
+Formatting checks do not modify files. Apply formatting fixes only to files you
+edited; do not include unrelated formatting changes. The [verification guide](#verification)
+explains check selection and how to validate changed documentation and examples.
+For Windows installer changes, follow the canonical
+[Windows installer verification procedure](#windows-installer-verification-procedure).
+Run Windows checks only in an independent native Windows environment; never
+launch native Windows verification executables from WSL. The existing Windows
+CI package-install smoke does not execute the installer entrypoints.
+
+For Unix staging changes, follow the
+[Unix installer staging verification procedure](#unix-installer-staging-verification).
+Keep lifecycle link checks intact; direct-package smoke does not establish
+installer staging or saved-uninstaller behavior.
+
 ## Maintainer environment
 
-Follow the [normal development setup](../CONTRIBUTING.md#set-up-development)
+Follow the [normal development setup](#set-up-development)
 for a pip-based editable install. For a locked uv environment, use `just sync`
 after [creating and committing the lock files](#releases). On Windows, Python
 executables live under `.venv\Scripts`; on POSIX they live under `.venv/bin`.
@@ -44,13 +106,30 @@ python -m pip install -e ".[rag]"
 python -m pip install -e ".[rag]" --group dev
 ```
 
+## GitHub repository setup
+
+After creating the GitHub repository, use its actual owner and repository name
+for `REPO`. List existing labels and run only the missing label creation
+commands before merging the issue workflow to the default branch.
+
+```bash
+REPO='OWNER/REPO'
+gh label list --repo "$REPO"
+gh label create accepted --repo "$REPO" --description 'Focused work' --color 0e8a16
+gh label create 'needs info' --repo "$REPO" --description 'A specific information gap blocks the next step' --color fbca04
+gh label create Deferred --repo "$REPO" --description 'Deliberately retained for later' --color cfd3d7
+```
+
+When Actions is unavailable, add a label directly with
+`gh issue edit NUMBER --repo OWNER/REPO --add-label LABEL`.
+
 ## Use Git worktrees
 
 The optional `worktree-create` recipe makes a separate checkout from a Git
 branch, tag, or commit and installs its locked dependencies into that checkout's
 `.venv`. Run `just lock`, then commit `uv.lock` and `pylock.toml` on the base
 branch first. This workflow needs uv, while the
-[normal contributor setup](../CONTRIBUTING.md#set-up-development) does not.
+[normal contributor setup](#set-up-development) does not.
 
 Run the command from the project repository. The recipe adds the new checkout
 without changing your shell's directory. The destination's parent directory
@@ -144,7 +223,7 @@ a numbered caption. Keep theme swatches in Graphigs rather than duplicating them
 
 ## Verification
 
-Use the [normal checks](../CONTRIBUTING.md#run-checks), selecting the tests that
+Use the [normal checks](#run-checks), selecting the tests that
 exercise changed behavior and running the project's required checks before
 submission. Do not treat an unrelated passing test as evidence for an unexercised
 path.
@@ -255,18 +334,8 @@ macOS filesystem behavior; use a separately authorized native runner.
 
 ## Releases
 
-`CHANGELOG.md` supplies GitHub Release notes. Use
-`## [VERSION] - YYYY-MM-DD` for stable releases. Append `[YANKED]` only for a
-yanked release.
-Keep all six category headings under `[Unreleased]`, even when empty, and omit empty
-categories in released sections. Use `**Breaking:** 💥` inline under the entry's actual
-category. Include only curated changes with a notable user or contributor effect;
-omit routine internal refactors and test-only work.
-
-Add a table-of-contents entry only for a stable major/minor `X.Y.0` release.
-Place comparison reference definitions immediately after the TOC and use
-existing tags.
-
+Follow the [changelog rules](../CONTRIBUTING.md#changelog) when preparing
+`CHANGELOG.md` for GitHub Release notes.
 
 Before the first push, create and commit the generated dependency files:
 
@@ -279,14 +348,9 @@ git commit -m "Lock project dependencies"
 The CI and release workflows use `uv sync --locked`, so they intentionally
 fail when the committed lock no longer matches `pyproject.toml`.
 
-Keep one cumulative section per target version. Start with
-`## [1.2.0] - YYYY-MM-DD (b1)` for `1.2.0b1`. Update the date, stage, and
-entries in that section for each preview, then remove the stage marker for
-stable. Plan one beta and one release candidate per target version. Use `b2`
-or `rc2` when a fix needs another public test. Move release entries out of
-`[Unreleased]` before tagging. Each GitHub Release snapshots the changes
-that ship since the previous stable version. Use existing tags to link the
-cumulative section to that comparison.
+Plan one beta and one release candidate per target version. Use `b2` or
+`rc2` when a fix needs another public test. Move release entries out of
+`[Unreleased]` before tagging.
 
 ```bash
 just release-prepare 1.2.0rc1

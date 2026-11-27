@@ -515,24 +515,10 @@ environment.
 > Edit and commit this setting before the release. Shell variables and
 > `just --set` overrides are not stored in the tag and cannot select PyPI.
 
-`CHANGELOG.md` is the source for GitHub Release notes. Use
-`## [VERSION] - YYYY-MM-DD` for stable and append `[YANKED]` only when a release
-is yanked. Keep all six category headings under `[Unreleased]` even
-when empty, and omit empty categories from released sections. Put breaking entries
-under their actual category with `**Breaking:** 💥`. Include only curated changes
-with a notable user or contributor effect.
-Add a table-of-contents entry only for a major/minor `X.Y.0` release; omit
-patch releases while keeping their sections in the history. Update comparison
-reference definitions immediately after the TOC. Use existing tags only; do not
-invent links for tagless history.
-
-Keep one cumulative section per target version. Start with
-`## [1.2.0] - YYYY-MM-DD (b1)` for `1.2.0b1`. Update the date, stage, and
-entries in that section for each preview, then remove the stage marker for
-stable. Plan one beta and one release candidate per target version. Use `b2`
-or `rc2` when a fix needs another public test. Each GitHub Release snapshots
-the changes that ship since the previous stable version. Use existing tags
-to link the cumulative section to that comparison.
+Follow the [changelog rules](CONTRIBUTING.md#changelog) when preparing
+`CHANGELOG.md` for GitHub Release notes. Plan one beta and one release
+candidate per target version. Use `b2` or `rc2` when a fix needs another
+public test.
 
 ```bash
 just release-prepare 1.2.0rc1

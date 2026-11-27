@@ -987,7 +987,8 @@ def test_scaffolded_project_includes_project_changelog(
     assert "### 🐛 Fixed" in changelog_text
     assert "### 🔒 Security" in changelog_text
     assert "### 💥 Breaking changes" not in changelog_text
-    assert "**Breaking:** 💥" in changelog_text
+    contributing = (bube_test_project / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    assert "**Breaking:** 💥" in contributing
     assert "[Unreleased]:" not in changelog_text
     assert "[0.1.0]:" not in changelog_text
     assert "[\\[0.1.0\\] - " in changelog_text
@@ -1402,6 +1403,9 @@ def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> N
         "README.md",
         "CONTRIBUTING.md",
         "AGENTS.md",
+        "BACKLOG.md",
+        ".github/ISSUE_TEMPLATE/work-item.md",
+        ".github/workflows/issue-accept.yml",
         "docs/README.md",
         "docs/Explanations.md",
         "docs/How-To-User-Guides.md",
@@ -1410,6 +1414,10 @@ def test_scaffolded_project_includes_docs_scaffold(bube_test_project: Path) -> N
         "docs/Development.md",
     ):
         assert (bube_test_project / filename).is_file()
+    issue_template = bube_test_project / ".github/ISSUE_TEMPLATE/work-item.md"
+    assert "/bube_test_tmp/blob/main/CONTRIBUTING.md#issues-and-backlog" in (
+        issue_template.read_text(encoding="utf-8")
+    )
     ET.parse(docs / "assets" / "docs-reading-map.svg")
     _run(
         [sys.executable, "-m", "pytest", "-q", "tests/test_documentation.py"],
