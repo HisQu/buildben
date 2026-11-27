@@ -3,6 +3,11 @@
 Before making changes, read [Contributing](CONTRIBUTING.md) and follow its shared
 conventions. Consult the relevant [Development](docs/Development.md) guides.
 
+## Project stage
+
+This project is a prototype. Apply the `prototype-development` skill when
+planning and carrying out changes.
+
 ## Release policy
 - `RELEASE_REQUIRE_CI := "false"` allows development, merges, and releases to proceed when hosted CI fails or cannot run. Before merge/release, run and pass the full local test suite and report hosted CI separately. Set it to `"true"` to require successful exact-commit hosted CI for releases.
 - Treat the committed `RELEASE_PYPI` value in `justfile` as a hard gate. When it is `"false"`, do not recommend or run a manual PyPI publish or retry command.

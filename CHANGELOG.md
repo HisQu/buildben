@@ -77,6 +77,8 @@ This changelog follows Keep a Changelog 2.0.0 and Semantic Versioning 2.0.0.
 
 ### 🛠️ Changed
 
+- New project scaffolds declare prototype stage in the generated `AGENTS.md`.
+
 <br>
 
 ### 🗑️ Deprecated
