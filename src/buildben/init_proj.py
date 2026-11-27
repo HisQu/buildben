@@ -88,6 +88,7 @@ def _project_directories(
         project_root / "docs",
         project_root / "docs" / "assets",
         project_root / ".codex",
+        project_root / ".github" / "ISSUE_TEMPLATE",
         project_root / ".github" / "workflows",
         project_root / ".github" / "workflows_inactive",
         project_root / "src" / name,
@@ -147,6 +148,14 @@ def _project_template_transfers(
         / ".github"
         / "workflows_inactive"
         / "codecov.yml",
+        "_github-issue-template-work-item.md": project_root
+        / ".github"
+        / "ISSUE_TEMPLATE"
+        / "work-item.md",
+        "_github-issue-accept.yml": project_root
+        / ".github"
+        / "workflows"
+        / "issue-accept.yml",
         "_github-ci.yml": project_root / ".github" / "workflows" / "ci.yml",
         "_github-diagnostics.yml": project_root
         / ".github"

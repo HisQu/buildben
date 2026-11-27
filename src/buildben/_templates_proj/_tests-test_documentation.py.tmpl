@@ -58,6 +58,8 @@ def _markdown_anchors(text: str) -> set[str]:
         ROOT / "README.md",
         ROOT / "CONTRIBUTING.md",
         ROOT / "AGENTS.md",
+        ROOT / "BACKLOG.md",
+        ROOT / "CHANGELOG.md",
         *sorted(DOCS.glob("*.md")),
     ],
     ids=lambda path: path.relative_to(ROOT).as_posix(),

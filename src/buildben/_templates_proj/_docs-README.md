@@ -162,7 +162,7 @@ Place the marker alone on its blockquote line; GitHub ignores custom titles.
   README, CONTRIBUTING, AGENTS, and the docs pages.
 - Review prose for undefined terms, naming drift, unsupported claims, and lists
   that fail to explain relationships. Link checks cannot judge explanation quality.
-- Run the [normal checks](../CONTRIBUTING.md#run-checks), follow the detailed
+- Run the [normal checks](Development.md#run-checks), follow the detailed
   [verification guide](Development.md#verification), and execute changed examples.
   Verify source precedence and which files each operation changes.
 - Preserve [Graphigs styling](References.md#figure-visual-tokens). Regenerate

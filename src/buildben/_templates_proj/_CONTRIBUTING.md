@@ -12,9 +12,9 @@ in-depth procedures and maintenance guides.
 
 1. [Before starting](#before-starting)
 2. [Quick start](#quick-start)
-   1. [Set up development](#set-up-development)
-   2. [Run checks](#run-checks)
 3. [Working conventions](#working-conventions)
+   1. [Issues and backlog](#issues-and-backlog)
+   2. [Changelog](#changelog)
 4. [Documentation and generated files](#documentation-and-generated-files)
    1. [README maintenance](#readme-maintenance)
    2. [Generated files](#generated-files)
@@ -39,65 +39,9 @@ change before editing several files. Coding agents must also follow [AGENTS.md](
 
 # Quick start
 
-## Set up development
-
-From the project root, use Python 3.12 or newer. Dependency groups require pip
-25.1 or newer; upgrade pip inside the virtual environment before installing.
-
-### For Linux & macOS
-
-```shell
-python -m venv .venv
-.venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -e "." --group dev
-```
-
-### For Windows PowerShell
-
-```powershell
-py -m venv .venv
-& '.\.venv\Scripts\python.exe' -m pip install --upgrade pip
-& '.\.venv\Scripts\python.exe' -m pip install -e "." --group dev
-```
-
-This path does not require uv. The [maintainer environment](docs/Development.md#maintainer-environment)
-guide covers uv, optional extras, and dependency declarations.
-
-## Run checks
-
-Run checks from the project root using the development environment.
-
-### For Linux & macOS
-
-```shell
-.venv/bin/ruff format --check .
-.venv/bin/ruff check .
-.venv/bin/pyright
-.venv/bin/python -m pytest
-```
-
-### For Windows PowerShell
-
-```powershell
-& '.\.venv\Scripts\ruff.exe' format --check .
-& '.\.venv\Scripts\ruff.exe' check .
-& '.\.venv\Scripts\pyright.exe'
-& '.\.venv\Scripts\python.exe' -m pytest
-```
-
-Formatting checks do not modify files. Apply formatting fixes only to files you
-edited; do not include unrelated formatting changes. The [verification guide](docs/Development.md#verification)
-explains check selection and how to validate changed documentation and examples.
-For Windows installer changes, follow the canonical
-[Windows installer verification procedure](docs/Development.md#windows-installer-verification-procedure).
-Run Windows checks only in an independent native Windows environment; never
-launch native Windows verification executables from WSL. The existing Windows
-CI package-install smoke does not execute the installer entrypoints.
-
-For Unix staging changes, follow the
-[Unix installer staging verification procedure](docs/Development.md#unix-installer-staging-verification).
-Keep lifecycle link checks intact; direct-package smoke does not establish
-installer staging or saved-uninstaller behavior.
+Follow the [development setup](docs/Development.md#set-up-development) for your
+platform. Run the [project checks](docs/Development.md#run-checks) before
+submitting a change.
 
 ---
 
@@ -135,12 +79,101 @@ installer staging or saved-uninstaller behavior.
   abstractions and preserve public contracts unless the change explicitly
   includes their migration.
 
-[BACKLOG.md](BACKLOG.md) holds durable actionable work not being handled now.
-Keep an active pass's `TODO.md` execution checklist beside its `PLAN.md`; do not
-create empty active artifacts or use TODO as a second backlog. Keep one
-authoritative checklist per action, not duplicate editable checkboxes in a plan.
-Before closing or archiving a pass, transfer unfinished work to the backlog or
-another pass, checking for existing entries first.
+## Issues and backlog
+
+> [!CAUTION]
+> These records can be published: Never record secrets, absolute paths, credentials, private host data, or speculative security claims. Use repository-relative source paths and full GitHub issue URLs. 
+
+
+> [!IMPORTANT]
+> 
+> ## Rules
+> 1) Preserve BACKLOG.md's header and TOC.
+> 1) Order planned Passes and entries by intended execution. Use priorities, dependencies, shared work, checks, and effort to group entries. Keep Deferred last.
+> 1) Do not suggest issues for paths that are under `## Ignore`
+> 1) Create or update an issue for real, actionable, out-of-scope work. Add a concise linked backlog entry when selected. Reorder, batch, reconcile, or remove entries when useful.
+> 1) Search open and closed issues and the backlog for the same work. Keep two-way links between related issues using their full URLs. Preserve relevant closed history.
+> 1) For a complete fix, use a closing issue reference in the PR to main and remove the backlog entry in the same change. Use an ordinary reference for a partial fix and keep unresolved scope open. Add a CHANGELOG.md entry only when the change has a notable user- or contributor-facing effect.
+> 1) **Types:**
+>       - **Bug risk**: Potential defect with concrete evidence, not yet confirmed.
+>       - **Code smell**: Implementation, architectural, maintainability or clarity issue that is not currently a defect.
+>       - **Docs drift**: Documentation is stale, incomplete, or inconsistent.
+>       - **Tooling**: Issue with build, test, lint, type-check, and general slowdown of developer workflow.
+>       - **Security**: Evidence-backed security risk. Use Question for uncertainty.
+>       - **Question**: Design, behavior, or ownership uncertainty needing investigation & maybe decision.
+> 
+> 1) **Priorities:**
+>       - **P1**: Should be handled ASAP.
+>       - **P2**: Should be handled before next release or milestone.
+>       - **P3**: Useful cleanup for a later focused pass.
+> 1) **Effort:**
+>       - **E1**: Issue deserves its own focused pass.
+>       - **E2**: Can be batched with a few other issues.
+>       - **E3**: Can be batched with many other issues.
+> 1) **Format:**
+> ```markdown
+> 
+> <br>
+> 
+> # Pass: short name
+>
+> ## <Priority> / <Effort> [<Type>] - *Short problem title*
+> - **Issue:** https://github.com/OWNER/REPO/issues/NUMBER
+> - **Area:**  `path/or/symbol`
+> - **Observed while:** short context
+> - **Why not fixed now:** scope, risk, uncertainty, or user decision needed
+> - **Evidence:** concrete observation
+> - **Context:** explanation to ensure the problem is understood in the big-picture of the repo.
+> - **Suggested next step:** smallest reasonable follow-up. If applicable, reference related issues by URL.
+> 
+> ## <Priority> / <Effort> [<Type>] - *Short problem title*
+> - **Issue:** https://github.com/OWNER/REPO/issues/NUMBER
+> - **Area:** `path/or/symbol`
+> - ...
+> 
+> <br>
+> 
+> # Pass: another name
+>
+> ## <Priority> / <Effort> [<Type>] - *Short problem title*
+> - **Issue:** https://github.com/OWNER/REPO/issues/NUMBER
+> - **Area:** `path/or/symbol`
+> - ...
+> ```
+
+`accepted` marks focused work. `needs info` marks a concrete information gap
+and is cleared when the missing information is supplied. `Deferred` marks work
+deliberately retained for later. These labels are independent. BACKLOG.md sets
+the schedule. Keep incoming reports out of the queue until selected.
+
+If a Task is blocked, record the blocker on its issue and update the order as
+needed. Independent Tasks within an authorized Pass may continue. A planned
+Pass heading does not authorize starting it. Scheduling reopened issues
+requires a fresh decision.
+
+Keep one active checklist in `TODO.md` beside `PLAN.md`. Several checklist
+steps may serve one issue. Before closing or archiving the checklist, transfer
+durable follow-up to the appropriate issue and linked backlog entry when
+selected. Carry any unfinished GitHub operation, its source evidence, and its
+current outcome through the Pass's existing unfinished-work handoff. When
+GitHub is unavailable, retain findings locally as pending publication and
+continue independent authorized work.
+
+## Changelog
+
+> [!IMPORTANT]
+> ## Rules
+> 1. Follow [Keep a Changelog 2.0.0](https://keepachangelog.com/en/2.0.0/) and [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
+> 2. Keep stable sections and the current cumulative section for each in-progress target. Git tags preserve earlier preview snapshots.
+> 3. Use `## [X.Y.Z] - YYYY-MM-DD (b1)` or `## [X.Y.Z] - YYYY-MM-DD (rc1)` for a preview. Update the date and stage in the same heading as the target progresses. For stable, use `## [X.Y.Z] - YYYY-MM-DD`. Append `[YANKED]` only for a yanked release. Keep all six categories under [Unreleased] and omit empty categories from released sections.
+> 4. Include only curated changes with a notable effect on users or contributors. Exclude routine internal refactors, test-only work, and other changes without a user- or contributor-facing effect; resolving an issue alone does not require an entry.
+> 5. File entries under their actual category. Start every breaking entry with `**Breaking:** 💥` under that category, identify affected users, and include migration guidance when possible.
+> 6. Use the emoji mapping informed by [Gitmoji](https://github.com/carloscuesta/gitmoji) and [conventional-changelog-emoji](https://github.com/favoloso/conventional-changelog-emoji): ✨ Added, 🛠️ Changed, 🗑️ Deprecated, 🔥 Removed, 🐛 Fixed, and 🔒 Security.
+> 7. Keep one cumulative section per target version. Describe the changes that ship since the previous stable release, including earlier preview changes still present in the current build. Each GitHub Release gets a snapshot of that section. Keep only the latest published beta download.
+> 8. Use 🐛 Fixed only for defects in previously released behavior; describe new features under ✨ Added.
+> 9. List [Unreleased] and stable major/minor `X.Y.0` releases in the TOC. Place version reference definitions immediately after the TOC. [Unreleased] compares the latest existing release tag with HEAD. For cumulative sections, compare the previous stable tag with the current tagged build. Use only existing tags.
+>
+> Local presentation exceptions: retain the project header, contribution guide link, TOC, and `<br>` / `---` layout; use emoji-prefixed category headings and the inline 💥 breaking marker; keep all six category headings under [Unreleased] even when empty; list only [Unreleased] and stable `X.Y.0` releases in the TOC; place reference definitions immediately after the TOC instead of at the bottom.
 
 ---
 
@@ -149,11 +182,8 @@ another pass, checking for existing entries first.
 # Documentation and generated files
 
 Update documentation when a change affects setup, commands, public APIs,
-environment variables, saved formats, or user-visible workflows. Record only
-curated changes with a notable user or contributor effect in [CHANGELOG.md](CHANGELOG.md);
-omit routine internal refactors and test-only work. Put breaking changes under
-their actual category with `**Breaking:** 💥`, identify affected users, and explain
-migration when possible.
+environment variables, saved formats, or user-visible workflows. Follow the
+[changelog rules](#changelog) for notable changes.
 
 Follow the [documentation rules](docs/README.md#documentation-rules) and use the
 [authoring guide](docs/Development.md#documentation-authoring) to carry them out.
@@ -201,7 +231,6 @@ passed.
 
 A pull request should explain the problem, intended behavior, verification, and
 compatibility implications. Include affected documentation and changelog updates,
-and migration instructions for breaking changes. Transfer real unfinished work
-to the durable backlog instead of leaving misleading placeholders or claiming it
-is complete. Coding agents must respect the user's commit and publication
+and migration instructions for breaking changes. Follow the
+[unfinished-work guidance](#issues-and-backlog) before closing the Pass. Coding agents must respect the user's commit and publication
 permissions; a contribution guide does not grant release authorization.

@@ -3,6 +3,11 @@
 Before making changes, read [Contributing](CONTRIBUTING.md) and follow its shared
 conventions. Consult the relevant [Development](docs/Development.md) guides.
 
+GitHub Issues hold durable work. `BACKLOG.md` orders planned Passes.
+`TODO.md` beside `PLAN.md` holds the active Pass checklist. `CHANGELOG.md`
+records notable delivered changes. `CONTRIBUTING.md` owns the shared rules
+for these records.
+
 ## Project stage
 
 This project is a prototype. Apply the `prototype-development` skill when
