@@ -8,12 +8,6 @@ conventions. Consult the relevant [Development](docs/Development.md) guides.
 This project is a prototype. Apply the `prototype-development` skill when
 planning and carrying out changes.
 
-Plan to integrate working changes into `main` in the same Pass after required
-review and local checks. Name the governing instruction or enforced protection
-for each merge prerequisite. Schedule independent evaluations, pilots, and
-colleague feedback as follow-up unless the user explicitly requires them before
-merging.
-
 ## Release policy
 - `RELEASE_REQUIRE_CI := "false"` allows development, merges, and releases to proceed when hosted CI fails or cannot run. Before merge/release, run and pass the full local test suite and report hosted CI separately. Set it to `"true"` to require successful exact-commit hosted CI for releases.
 - Treat the committed `RELEASE_PYPI` value in `justfile` as a hard gate. When it is `"false"`, do not recommend or run a manual PyPI publish or retry command.
