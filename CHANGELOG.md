@@ -57,6 +57,9 @@ See the [changelog rules](CONTRIBUTING.md#changelog).
 
 ### ✨ Added
 
+- Scaffold an issue template and acceptance workflow with linked contribution,
+  backlog, and changelog guidance.
+
 - Publish Beta and Pre-release builds from local artifacts with cumulative
   notes for each target version. Buildben and newly scaffolded projects keep
   one published beta and one published release candidate per repository.
